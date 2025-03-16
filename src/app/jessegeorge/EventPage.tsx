@@ -2,13 +2,65 @@
 
 import { useState } from 'react'
 import Image from 'next/image'
+import Toast from '../components/Toast'
 
 export default function EventPage() {
   const [showRsvpModal, setShowRsvpModal] = useState(false)
   const [showBanner, setShowBanner] = useState(true)
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    aide: false,
+    driver: false,
+    plus1: false
+  })
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
   const handleRsvp = () => {
     setShowRsvpModal(true)
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsSubmitting(true)
+    
+    try {
+      const response = await fetch('https://eojz9fwevhvi4u1.m.pipedream.net', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData)
+      })
+      
+      if (response.ok) {
+        setShowRsvpModal(false)
+        setFormData({ name: '', email: '', aide: false, driver: false, plus1: false }) // Reset form
+        setToast({
+          type: 'success',
+          message: 'Thank you for your RSVP! We look forward to seeing you.'
+        })
+      } else {
+        throw new Error('Failed to submit RSVP')
+      }
+    } catch (error) {
+      console.error('Error submitting RSVP:', error)
+      setToast({
+        type: 'error',
+        message: 'Sorry, there was a problem submitting your RSVP. Please try again.'
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }))
   }
 
   const handleAddToCalendar = () => {
@@ -144,7 +196,7 @@ END:VCALENDAR`
               <div>
                 <p className="font-medium mb-3 text-gray-700">Attend Virtually</p>
                 <button 
-                  className="w-full bg-gray-600 text-white py-3 px-4 rounded text-sm font-medium hover:bg-gray-700 transition-colors"
+                  className="w-full bg-gray-600 text-white py-3 px-4 rounded text-sm font-medium hover:bg-gray-700"
                   onClick={handleRsvp}
                 >
                   SUBMIT YOUR RSVP
@@ -169,50 +221,101 @@ END:VCALENDAR`
         </div>
       </div>
 
+      {/* Toast Notification */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
+
       {/* RSVP Modal */}
       {showRsvpModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full">
             <h2 className="text-2xl font-light mb-4">RSVP for Cocktails + Conversation</h2>
-            <form className="space-y-4">
+            <form className="space-y-4" onSubmit={handleSubmit}>
               <div>
                 <label className="block text-sm text-gray-600 mb-1">Name</label>
                 <input 
                   type="text" 
+                  name="name"
+                  value={formData.name}
+                  onChange={handleInputChange}
                   className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   placeholder="Your full name"
+                  required
                 />
               </div>
               <div>
                 <label className="block text-sm text-gray-600 mb-1">Email</label>
                 <input 
                   type="email" 
+                  name="email"
+                  value={formData.email}
+                  onChange={handleInputChange}
                   className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   placeholder="your@email.com"
+                  required
                 />
               </div>
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">Number of Guests</label>
-                <select className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                  <option>1</option>
-                  <option>2</option>
-                  <option>3</option>
-                  <option>4</option>
-                </select>
+              <div className="space-y-3">
+                <label className="block text-sm text-gray-600">Options</label>
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="plus1"
+                    name="plus1"
+                    checked={formData.plus1}
+                    onChange={(e) => setFormData(prev => ({ ...prev, plus1: e.target.checked }))}
+                    className="h-4 w-4 text-emerald-500 rounded border-gray-300 focus:ring-emerald-500"
+                  />
+                  <label htmlFor="plus1" className="ml-2 text-sm text-gray-700">
+                    I'll bring a plus one
+                  </label>
+                </div>
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="driver"
+                    name="driver"
+                    checked={formData.driver}
+                    onChange={(e) => setFormData(prev => ({ ...prev, driver: e.target.checked }))}
+                    className="h-4 w-4 text-emerald-500 rounded border-gray-300 focus:ring-emerald-500"
+                  />
+                  <label htmlFor="driver" className="ml-2 text-sm text-gray-700">
+                    I can be a designated driver
+                  </label>
+                </div>
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="aide"
+                    name="aide"
+                    checked={formData.aide}
+                    onChange={(e) => setFormData(prev => ({ ...prev, aide: e.target.checked }))}
+                    className="h-4 w-4 text-emerald-500 rounded border-gray-300 focus:ring-emerald-500"
+                  />
+                  <label htmlFor="aide" className="ml-2 text-sm text-gray-700">
+                    I can help with setup/cleanup
+                  </label>
+                </div>
               </div>
-              <div className="flex gap-4 mt-6">
+              <div className="flex gap-3 mt-6">
                 <button 
                   type="button"
-                  className="flex-1 bg-gray-200 text-gray-800 px-4 py-2 rounded hover:bg-gray-300 transition-colors"
                   onClick={() => setShowRsvpModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50"
                 >
                   Cancel
                 </button>
                 <button 
                   type="submit"
-                  className="flex-1 bg-emerald-500 text-white px-4 py-2 rounded hover:bg-emerald-600 transition-colors"
+                  disabled={isSubmitting}
+                  className="flex-1 bg-emerald-500 text-white px-4 py-2 rounded font-medium hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Submit RSVP
+                  {isSubmitting ? 'Submitting...' : 'Submit RSVP'}
                 </button>
               </div>
             </form>
