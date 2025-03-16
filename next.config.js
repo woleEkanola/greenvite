@@ -9,16 +9,6 @@ const nextConfig = {
       },
     ]
   },
-  async redirects() {
-    
-    return [
-      {
-        source: '/jessegeorge',
-        destination: 'jessegeorge.greenvites.online',
-        permanent: true,
-      },
-    ]
-  },
 }
 
 module.exports = nextConfig
