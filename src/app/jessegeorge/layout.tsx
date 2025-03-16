@@ -1,3 +1,10 @@
+import { Metadata } from 'next'
+
+export const metadata: Metadata = {
+  title: 'Greenvites | jessegeorge',
+  description: 'Church dedication of Jesse Oghenekome George',
+}
+
 export default function EventLayout({
   children,
 }: {

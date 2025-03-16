@@ -16,7 +16,6 @@ interface RsvpFormData {
 
 export default function InteractiveEventPage() {
   const [isRsvpModalOpen, setIsRsvpModalOpen] = useState(false)
-  const [showBanner, setShowBanner] = useState(true)
   const [showCodeModal, setShowCodeModal] = useState(false)
   const [rsvpCode, setRsvpCode] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -122,25 +121,6 @@ END:VCALENDAR`
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Top Banner */}
-      {showBanner && (
-        <div className="fixed top-0 left-0 right-0 bg-emerald-500/90 backdrop-blur-sm text-white py-3 px-4 flex justify-between items-center z-50 shadow-md">
-          <div className="flex items-center gap-3 mx-auto pr-8">
-            <span className="text-lg">✝️</span>
-            <p className="text-sm font-light tracking-wider">
-              Join us in celebrating the dedication of Jesse Oghenekome George
-            </p>
-          </div>
-          <button 
-            onClick={() => setShowBanner(false)}
-            className="text-white/80 hover:text-white transition-colors ml-4 text-xl"
-            aria-label="Dismiss banner"
-          >
-            ×
-          </button>
-        </div>
-      )}
-
       {/* Main Content */}
       <div className="relative min-h-screen">
         {/* Image Container - 70% on large screens, 100% on mobile */}
@@ -161,7 +141,7 @@ END:VCALENDAR`
         <div className={`absolute bottom-0 md:right-0 w-full md:w-[30%] md:h-screen md:top-0 
                       bg-white/95 backdrop-blur-sm md:shadow-lg transition-all duration-300
                       h-[40%] md:h-screen overflow-hidden
-                      hover:h-[85%] md:hover:h-screen ${showBanner ? 'mt-10' : ''}`}>
+                      hover:h-[85%] md:hover:h-screen`}>
           <div className="h-full overflow-y-auto px-6 md:px-8 py-6 md:py-10 scrollbar-thin scrollbar-thumb-gray-300">
             {/* Mobile Pull Indicator */}
             <div className="md:hidden w-12 h-1 bg-gray-300 rounded-full mx-auto mb-6" />
@@ -184,10 +164,10 @@ END:VCALENDAR`
                   <h3 className="text-xl text-gray-600 font-light tracking-wider uppercase mb-6 text-center">LOCATIONS</h3>
                   <div className="text-center">
                     <h4 className="text-gray-700 font-light tracking-wider uppercase mb-4">Church Dedication</h4>
-                    <p className="text-gray-700 tracking-wide">RCCG Church, Champion Cathedral Parish</p>
-                    <p className="text-gray-700 tracking-wide">#80 airport road Warri, Delta State</p>
+                    <p className="text-gray-700 tracking-wide">RCCG Church, Champions Cathedral </p>
+                    <p className="text-gray-700 tracking-wide">#16-18 Airport Road, Effurun, Warri Delta</p>
                     <p className="text-gray-700 tracking-wide mb-4">Nigeria</p>
-                    <p className="text-gray-600 text-sm tracking-wider">9:00 AM</p>
+                    <p className="text-gray-600 text-sm tracking-wider">10:00 AM</p>
                     <p className="text-gray-600 text-sm tracking-wider mb-8">Saturday, April 13, 2025</p>
 
                     <h4 className="text-gray-700 font-light tracking-wider uppercase mt-8 mb-4">Reception</h4>
@@ -222,21 +202,16 @@ END:VCALENDAR`
             </div>
 
             {/* RSVP Section */}
-            <div className="mb-8">
+            <div className="text-center mt-12">
               {formData.reg_code && (
-                <button 
-                  onClick={handleRsvp}
-                  className="w-full bg-emerald-500 text-white px-8 py-4 md:py-5 rounded-full text-sm font-light tracking-widest uppercase
-                           hover:bg-emerald-600 transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]
-                           shadow-[0_4px_12px_-2px_rgba(16,185,129,0.3)] hover:shadow-[0_8px_16px_-4px_rgba(16,185,129,0.4)]"
-                >
-                  Confirm Your Attendance
-                </button>
-              )}
-              {!formData.reg_code && (
-                <p className="text-center text-sm text-gray-500/70 mt-3 tracking-wider font-light">
-                  Please provide a registration code to confirm attendance.
-                </p>
+                <div className="fixed bottom-8 left-0 w-full flex justify-center z-30">
+                  <button 
+                    className="bg-emerald-500 text-white px-6 py-3 rounded-full text-sm font-medium hover:bg-emerald-600 transition-colors shadow-lg"
+                    onClick={handleRsvp}
+                  >
+                    Confirm Your Attendance
+                  </button>
+                </div>
               )}
             </div>
           </div>
