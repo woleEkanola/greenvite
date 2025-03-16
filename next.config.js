@@ -10,10 +10,11 @@ const nextConfig = {
     ]
   },
   async redirects() {
+    
     return [
       {
-        source: '/event',
-        destination: 'https://jessegeorge.greenvites.online',
+        source: '/jessegeorge',
+        destination: 'jessegeorge.greenvites.online',
         permanent: true,
       },
     ]
