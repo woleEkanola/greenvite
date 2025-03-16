@@ -1,7 +1,24 @@
-import type { NextConfig } from "next";
+import { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
-  /* config options here */
-};
+  async rewrites() {
+    return [
+      {
+        source: '/:path*',
+        destination: '/:path*',
+        has: [{ type: 'host', value: 'jessegeorge.greenvites.online' }],
+      },
+    ]
+  },
+  async redirects() {
+    return [
+      {
+        source: '/event',
+        destination: 'https://jessegeorge.greenvites.online',
+        permanent: true,
+      },
+    ]
+  },
+}
 
-export default nextConfig;
+export default nextConfig
