@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import Toast from '../components/Toast'
+import RsvpModal from '../components/RsvpModal'
 
 export default function EventPage() {
   const [showRsvpModal, setShowRsvpModal] = useState(false)
@@ -12,13 +13,25 @@ export default function EventPage() {
     email: '',
     aide: false,
     driver: false,
-    plus1: false
+    plus1: false,
+    reg_code: ''
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
+  useEffect(() => {
+    const hash = window.location.hash.substring(1) // Remove the '#' character
+    if (hash) {
+      setFormData(prev => ({ ...prev, reg_code: hash }))
+    }
+  }, [])
+
   const handleRsvp = () => {
-    setShowRsvpModal(true)
+    if (formData.reg_code) {
+      setShowRsvpModal(true)
+    } else {
+      alert('Registration code is required to confirm attendance.')
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -36,7 +49,7 @@ export default function EventPage() {
       
       if (response.ok) {
         setShowRsvpModal(false)
-        setFormData({ name: '', email: '', aide: false, driver: false, plus1: false }) // Reset form
+        setFormData({ name: '', email: '', aide: false, driver: false, plus1: false, reg_code: '' }) // Reset form
         setToast({
           type: 'success',
           message: 'Thank you for your RSVP! We look forward to seeing you.'
@@ -101,29 +114,18 @@ END:VCALENDAR`
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Top Banner */}
-      {showBanner && (
-        <div className="bg-gray-800 text-white text-center py-3 px-4 relative">
-          <p className="text-sm">Please Enjoy this Greenvelope Sample</p>
-          <button 
-            className="absolute right-4 top-1/2 -translate-y-1/2 text-xl" 
-            aria-label="Close"
-            onClick={() => setShowBanner(false)}
-          >
-            &times;
-          </button>
-        </div>
-      )}
 
       {/* RSVP Banner */}
       <div className="bg-white shadow-md py-4 px-4 text-center border-b">
         <p className="text-gray-700 inline-block mr-4">Please RSVP for this Event</p>
-        <button 
-          className="bg-emerald-500 text-white px-6 py-2 rounded-full text-sm font-medium hover:bg-emerald-600 transition-colors"
-          onClick={handleRsvp}
-        >
-          RSVP NOW
-        </button>
+        {formData.reg_code.length > 0 && (
+          <button 
+            className="bg-emerald-500 text-white px-6 py-2 rounded-full text-sm font-medium hover:bg-emerald-600 transition-colors"
+            onClick={handleRsvp}
+          >
+          xxxx ({formData.reg_code})
+          </button>
+        )}
       </div>
 
       {/* Main Content */}
@@ -154,173 +156,54 @@ END:VCALENDAR`
         </div>
 
         {/* Right Column - Details */}
-        <div className="space-y-10 pt-4">
-          <section>
-            <h2 className="text-gray-500 text-lg mb-6 tracking-wide">DETAILS</h2>
-            <div className="space-y-8">
-              <div>
-                <h3 className="font-medium mb-3 text-gray-700">SUMMARY</h3>
-                <p className="text-gray-600 leading-relaxed">
-                  Join us for cocktails and conversations with drinks, good company, and live music.
-                </p>
-                <p className="text-gray-600 mt-3 leading-relaxed">
-                  Live musical entertainment will be provided by La Toya and The Burnett Sisters. With hosted appetizers
-                  and buffet there will be plenty of food, and with a full hosted bar you can have the whiles and purses at home.
-                </p>
-              </div>
-
-              <div>
-                <h3 className="font-medium mb-3 text-gray-700">LOCATION</h3>
-                <div className="space-y-1">
-                  <p className="font-medium text-gray-800">Cocktails + Conversation</p>
-                  <p className="text-gray-700">The Alumnae Bar</p>
-                  <p className="text-gray-700">224 W Ontario Street, Chicago</p>
-                  <p className="text-gray-600 mt-2">5:00 PM - 8:00 PM, Tuesday, November 18, 2025</p>
-                  <div className="flex gap-6 mt-3">
-                    <button 
-                      className="text-blue-600 hover:underline text-sm"
-                      onClick={handleViewMap}
-                    >
-                      View Map
-                    </button>
-                    <button 
-                      className="text-blue-600 hover:underline text-sm"
-                      onClick={handleAddToCalendar}
-                    >
-                      Add to calendar
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <p className="font-medium mb-3 text-gray-700">Attend Virtually</p>
-                <button 
-                  className="w-full bg-gray-600 text-white py-3 px-4 rounded text-sm font-medium hover:bg-gray-700"
-                  onClick={handleRsvp}
-                >
-                  SUBMIT YOUR RSVP
-                </button>
-              </div>
-            </div>
-          </section>
-        </div>
-      </div>
-
-      {/* Footer */}
-      <div className="fixed bottom-0 left-0 right-0 bg-black/60 text-white py-2 px-4 text-sm backdrop-blur-sm">
-        <div className="flex items-center gap-2">
-          <span>Powered by</span>
-          <Image
-            src="/logo.svg"
-            alt="Greenvelope"
-            width={100}
-            height={20}
-            className="h-5 w-auto brightness-0 invert"
-          />
+        <div className="space-y-8">
+          <div>
+            <h2 className="text-2xl font-light tracking-widest text-gray-700 uppercase">Event Details</h2>
+            <p className="mt-4 text-gray-600">Join us for an evening of cocktails and conversation at The Alumnae Bar. Enjoy drinks, good company, and live music in the heart of Chicago's West Loop.</p>
+          </div>
+          <div>
+            <h3 className="text-xl font-light tracking-widest text-gray-700 uppercase">Location</h3>
+            <p className="mt-2 text-gray-600">The Alumnae Bar, 224 W Ontario Street, Chicago</p>
+            <button 
+              className="mt-4 bg-emerald-500 text-white px-4 py-2 rounded-full text-sm font-medium hover:bg-emerald-600 transition-colors"
+              onClick={handleViewMap}
+            >
+              View Map
+            </button>
+          </div>
+          <div>
+            <h3 className="text-xl font-light tracking-widest text-gray-700 uppercase">Add to Calendar</h3>
+            <button 
+              className="mt-2 bg-emerald-500 text-white px-4 py-2 rounded-full text-sm font-medium hover:bg-emerald-600 transition-colors"
+              onClick={handleAddToCalendar}
+            >
+              Add to Calendar
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Toast Notification */}
       {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
+        <div className={`fixed bottom-4 right-4 bg-${toast.type === 'success' ? 'green' : 'red'}-500 text-white p-4 rounded shadow-lg`}>
+          <p>{toast.message}</p>
+          <button 
+            className="absolute top-2 right-2 text-xl"
+            aria-label="Close"
+            onClick={() => setToast(null)}
+          >
+            &times;
+          </button>
+        </div>
       )}
 
       {/* RSVP Modal */}
       {showRsvpModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full">
-            <h2 className="text-2xl font-light mb-4">RSVP for Cocktails + Conversation</h2>
-            <form className="space-y-4" onSubmit={handleSubmit}>
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">Name</label>
-                <input 
-                  type="text" 
-                  name="name"
-                  value={formData.name}
-                  onChange={handleInputChange}
-                  className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  placeholder="Your full name"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">Email</label>
-                <input 
-                  type="email" 
-                  name="email"
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  placeholder="your@email.com"
-                  required
-                />
-              </div>
-              <div className="space-y-3">
-                <label className="block text-sm text-gray-600">Options</label>
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    id="plus1"
-                    name="plus1"
-                    checked={formData.plus1}
-                    onChange={(e) => setFormData(prev => ({ ...prev, plus1: e.target.checked }))}
-                    className="h-4 w-4 text-emerald-500 rounded border-gray-300 focus:ring-emerald-500"
-                  />
-                  <label htmlFor="plus1" className="ml-2 text-sm text-gray-700">
-                    I'll bring a plus one
-                  </label>
-                </div>
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    id="driver"
-                    name="driver"
-                    checked={formData.driver}
-                    onChange={(e) => setFormData(prev => ({ ...prev, driver: e.target.checked }))}
-                    className="h-4 w-4 text-emerald-500 rounded border-gray-300 focus:ring-emerald-500"
-                  />
-                  <label htmlFor="driver" className="ml-2 text-sm text-gray-700">
-                    I can be a designated driver
-                  </label>
-                </div>
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    id="aide"
-                    name="aide"
-                    checked={formData.aide}
-                    onChange={(e) => setFormData(prev => ({ ...prev, aide: e.target.checked }))}
-                    className="h-4 w-4 text-emerald-500 rounded border-gray-300 focus:ring-emerald-500"
-                  />
-                  <label htmlFor="aide" className="ml-2 text-sm text-gray-700">
-                    I can help with setup/cleanup
-                  </label>
-                </div>
-              </div>
-              <div className="flex gap-3 mt-6">
-                <button 
-                  type="button"
-                  onClick={() => setShowRsvpModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="flex-1 bg-emerald-500 text-white px-4 py-2 rounded font-medium hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isSubmitting ? 'Submitting...' : 'Submit RSVP'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <RsvpModal
+          isOpen={showRsvpModal}
+          onClose={() => setShowRsvpModal(false)}
+          onSubmit={handleSubmit}
+        />
       )}
     </div>
   )

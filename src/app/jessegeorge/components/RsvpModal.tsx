@@ -1,5 +1,8 @@
 'use client'
 
+import { useState } from 'react'
+import Swal from 'sweetalert2'
+
 interface RsvpModalProps {
   isOpen: boolean
   onClose: () => void
@@ -17,18 +20,44 @@ interface RsvpFormData {
 export default function RsvpModal({ isOpen, onClose, onSubmit }: RsvpModalProps) {
   if (!isOpen) return null
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const form = e.currentTarget as HTMLFormElement
     const formData = new FormData(form)
-    
-    onSubmit({
+
+    const data = {
       name: formData.get('name') as string,
       email: formData.get('email') as string,
-      hasGuest: formData.get('hasGuest') === 'on',
-      hasDriver: formData.get('hasDriver') === 'on',
-      hasAide: formData.get('hasAide') === 'on'
-    })
+      plus1: formData.get('hasGuest') === 'on',
+      driver: formData.get('hasDriver') === 'on',
+      aide: formData.get('hasAide') === 'on',
+      code: window.location.hash.substring(1)
+    }
+
+    setIsSubmitting(true)
+    try {
+      const response = await fetch('https://eojz9fwevhvi4u1.m.pipedream.net', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      })
+
+      if (response.ok) {
+        // Navigate to success page
+        window.location.href = '/success'
+      } else {
+        Swal.fire('Error', 'There was an error submitting the form. Please try again.', 'error')
+      }
+    } catch (error) {
+      console.error('Error submitting form:', error)
+      Swal.fire('Error', 'There was an error submitting the form. Please try again.', 'error')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -159,12 +188,13 @@ export default function RsvpModal({ isOpen, onClose, onSubmit }: RsvpModalProps)
               </button>
               <button
                 type="submit"
-                className="flex-1 bg-emerald-500 text-white px-6 py-3.5 rounded-full hover:bg-emerald-600 
+                className={`flex-1 bg-emerald-500 text-white px-6 py-3.5 rounded-full hover:bg-emerald-600 
                          transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]
                          shadow-[0_4px_12px_-2px_rgba(16,185,129,0.3)] hover:shadow-[0_8px_16px_-4px_rgba(16,185,129,0.4)]
-                         font-light tracking-widest uppercase text-sm"
+                         font-light tracking-widest uppercase text-sm ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                disabled={isSubmitting}
               >
-                Confirm
+                {isSubmitting ? 'Submitting...' : 'Confirm'}
               </button>
             </div>
           </form>

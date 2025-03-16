@@ -1,8 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import RsvpModal from './RsvpModal'
+import Modal from '../../components/Modal'
+import Swal from 'sweetalert2'
 
 interface RsvpFormData {
   name: string
@@ -15,16 +17,42 @@ interface RsvpFormData {
 export default function InteractiveEventPage() {
   const [isRsvpModalOpen, setIsRsvpModalOpen] = useState(false)
   const [showBanner, setShowBanner] = useState(true)
+  const [showCodeModal, setShowCodeModal] = useState(false)
+  const [rsvpCode, setRsvpCode] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    hasGuest: false,
+    hasDriver: false,
+    hasAide: false,
+    reg_code: ''
+  })
+
+  useEffect(() => {
+    const hash = window.location.hash.substring(1) // Remove the '#' character
+    if (hash) {
+      setFormData(prev => ({ ...prev, reg_code: hash }))
+    } else {
+      setShowCodeModal(true)
+    }
+  }, [])
 
   const handleRsvp = () => {
-    setIsRsvpModalOpen(true)
+    if (formData.reg_code) {
+      setIsRsvpModalOpen(true)
+    } else {
+      alert('Registration code is required to confirm attendance.')
+    }
   }
 
   const handleRsvpSubmit = (data: RsvpFormData) => {
-    // Here you would typically send this data to your backend
-    console.log('RSVP Data:', data)
+    const rsvpData = {
+      ...data,
+      code: formData.reg_code
+    }
+    console.log('RSVP Data:', rsvpData)
     setIsRsvpModalOpen(false)
-    // You could also show a success message
   }
 
   const handleAddToCalendar = () => {
@@ -62,6 +90,34 @@ END:VCALENDAR`
       reception: 'KFT+Event+Hall+Warri+Delta+State+Nigeria'
     }
     window.open(`https://maps.google.com/?q=${addresses[location]}`, '_blank')
+  }
+
+  const handleCodeSubmit = async () => {
+    setIsSubmitting(true)
+    try {
+      const response = await fetch('https://eo1zqlolqvh99nb.m.pipedream.net', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ code: rsvpCode })
+      })
+
+      if (response.ok) {
+        window.location.hash = rsvpCode
+        setFormData(prev => ({ ...prev, reg_code: rsvpCode }))
+        setShowCodeModal(false)
+        setIsRsvpModalOpen(true)
+        Swal.fire('Success', 'Code accepted. You can now RSVP!', 'success')
+      } else if (response.status === 400) {
+        Swal.fire('Error', 'Invalid code or the code has been used.', 'error')
+      }
+    } catch (error) {
+      console.error('Error verifying code:', error)
+      Swal.fire('Error', 'There was an error verifying the code. Please try again.', 'error')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -167,17 +223,21 @@ END:VCALENDAR`
 
             {/* RSVP Section */}
             <div className="mb-8">
-              <button 
-                onClick={handleRsvp}
-                className="w-full bg-emerald-500 text-white px-8 py-4 md:py-5 rounded-full text-sm font-light tracking-widest uppercase
-                         hover:bg-emerald-600 transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]
-                         shadow-[0_4px_12px_-2px_rgba(16,185,129,0.3)] hover:shadow-[0_8px_16px_-4px_rgba(16,185,129,0.4)]"
-              >
-                Confirm Your Attendance
-              </button>
-              <p className="text-center text-sm text-gray-500/70 mt-3 tracking-wider font-light">
-                Please indicate if you&apos;re bringing a guest, driver, or aide
-              </p>
+              {formData.reg_code && (
+                <button 
+                  onClick={handleRsvp}
+                  className="w-full bg-emerald-500 text-white px-8 py-4 md:py-5 rounded-full text-sm font-light tracking-widest uppercase
+                           hover:bg-emerald-600 transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]
+                           shadow-[0_4px_12px_-2px_rgba(16,185,129,0.3)] hover:shadow-[0_8px_16px_-4px_rgba(16,185,129,0.4)]"
+                >
+                  Confirm Your Attendance
+                </button>
+              )}
+              {!formData.reg_code && (
+                <p className="text-center text-sm text-gray-500/70 mt-3 tracking-wider font-light">
+                  Please provide a registration code to confirm attendance.
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -196,6 +256,27 @@ END:VCALENDAR`
         onClose={() => setIsRsvpModalOpen(false)}
         onSubmit={handleRsvpSubmit}
       />
+
+      {/* RSVP Code Modal */}
+      {showCodeModal && (
+        <Modal isOpen={showCodeModal} onClose={() => setShowCodeModal(false)}>
+          <h2 className="text-xl font-light mb-4">Enter RSVP Code</h2>
+          <input 
+            type="text" 
+            value={rsvpCode} 
+            onChange={(e) => setRsvpCode(e.target.value)} 
+            className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            placeholder="Enter your RSVP code"
+          />
+          <button 
+            className={`mt-4 bg-emerald-500 text-white px-4 py-2 rounded-full text-sm font-medium hover:bg-emerald-600 transition-colors ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+            onClick={handleCodeSubmit}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? 'Submitting...' : 'Submit Code'}
+          </button>
+        </Modal>
+      )}
     </div>
   )
 }
