@@ -8,11 +8,11 @@
     "start": "next start",
     "lint": "next lint",
     "setup-admin": "ts-node scripts/setup-admin.ts",
-    "seed": "ts-node prisma/seed.ts",
+    "seed": "node prisma/seed.cjs",
     "prisma:seed": "prisma db seed"
   },
   "prisma": {
-    "seed": "ts-node prisma/seed.ts"
+    "seed": "node prisma/seed.cjs"
   },
   "dependencies": {
     "@prisma/client": "^6.5.0",
