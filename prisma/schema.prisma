@@ -1,0 +1,73 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Admin users for the dashboard
+model User {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  password  String   // Will store hashed password
+  role      String   @default("admin") // "superadmin" or "admin"
+  email     String?  @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Registration codes for RSVP
+model RegistrationCode {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  used      Boolean   @default(false)
+  usedAt    DateTime?
+  status    String    @default("available") // "available", "pending", "used", "canceled"
+  createdAt DateTime  @default(now())
+  rsvp      Rsvp?     // Relation to RSVP if code is used
+  invite    Invite?   // Relation to Invite if code is assigned to an invite
+}
+
+// RSVP responses
+model Rsvp {
+  id                String          @id @default(cuid())
+  name             String
+  email            String
+  hasGuest         Boolean         @default(false)
+  hasDriver        Boolean         @default(false)
+  hasAide          Boolean         @default(false)
+  registrationCode RegistrationCode @relation(fields: [codeId], references: [id])
+  codeId           String          @unique
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+}
+
+// Sent invites tracking
+model Invite {
+  id                String   @id @default(cuid())
+  name              String
+  email             String?
+  phone             String?
+  sent              Boolean  @default(true)
+  sentAt            DateTime @default(now())
+  type              String   // "email", "sms", or "both"
+  status            String   // "sent", "delivered", "failed", "pending", "canceled"
+  emailStatus       String? // "sent", "delivered", "failed", "pending"
+  smsStatus         String? // "sent", "delivered", "failed", "pending"
+  smsProvider       String? // "africas_talking", "termii"
+  errorMessage      String? // Error message if any
+  code              String?  // The registration code text
+  registrationCode  RegistrationCode? @relation(fields: [registrationCodeId], references: [id])
+  registrationCodeId String? @unique
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
