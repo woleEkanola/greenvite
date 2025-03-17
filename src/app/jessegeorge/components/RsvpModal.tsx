@@ -12,6 +12,7 @@ interface RsvpModalProps {
 interface RsvpFormData {
   name: string
   email: string
+  phone?: string
   hasGuest: boolean
   hasDriver: boolean
   hasAide: boolean
@@ -30,15 +31,16 @@ export default function RsvpModal({ isOpen, onClose, onSubmit }: RsvpModalProps)
     const data = {
       name: formData.get('name') as string,
       email: formData.get('email') as string,
-      plus1: formData.get('hasGuest') === 'on',
-      driver: formData.get('hasDriver') === 'on',
-      aide: formData.get('hasAide') === 'on',
+      phone: formData.get('phone') as string,
+      hasGuest: formData.get('hasGuest') === 'on',
+      hasDriver: formData.get('hasDriver') === 'on',
+      hasAide: formData.get('hasAide') === 'on',
       code: window.location.hash.substring(1)
     }
 
     setIsSubmitting(true)
     try {
-      const response = await fetch('https://eojz9fwevhvi4u1.m.pipedream.net', {
+      const response = await fetch('/api/rsvp/submit', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -50,7 +52,8 @@ export default function RsvpModal({ isOpen, onClose, onSubmit }: RsvpModalProps)
         // Navigate to success page
         window.location.href = '/success'
       } else {
-        Swal.fire('Error', 'There was an error submitting the form. Please try again.', 'error')
+        const errorData = await response.json();
+        Swal.fire('Error', errorData.error || 'There was an error submitting the form. Please try again.', 'error')
       }
     } catch (error) {
       console.error('Error submitting form:', error)
@@ -114,6 +117,22 @@ export default function RsvpModal({ isOpen, onClose, onSubmit }: RsvpModalProps)
                          transition-all duration-300 font-light tracking-wide placeholder:text-gray-400/80
                          hover:border-gray-300/80"
                 placeholder="your@email.com"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="phone" className="block text-sm text-gray-600 mb-2 tracking-widest uppercase font-light">
+                Phone Number
+              </label>
+              <input
+                type="tel"
+                id="phone"
+                name="phone"
+                className="w-full bg-white/70 border border-gray-200/80 rounded-xl px-4 py-3.5 
+                         focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 
+                         transition-all duration-300 font-light tracking-wide placeholder:text-gray-400/80
+                         hover:border-gray-300/80"
+                placeholder="Your phone number"
               />
             </div>
 

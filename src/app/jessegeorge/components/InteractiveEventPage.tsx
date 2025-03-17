@@ -94,7 +94,7 @@ END:VCALENDAR`
   const handleCodeSubmit = async () => {
     setIsSubmitting(true)
     try {
-      const response = await fetch('https://eo1zqlolqvh99nb.m.pipedream.net', {
+      const response = await fetch('/api/rsvp/validate-code', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -108,8 +108,9 @@ END:VCALENDAR`
         setShowCodeModal(false)
         setIsRsvpModalOpen(true)
         Swal.fire('Success', 'Code accepted. You can now RSVP!', 'success')
-      } else if (response.status === 400) {
-        Swal.fire('Error', 'Invalid code or the code has been used.', 'error')
+      } else {
+        const errorData = await response.json();
+        Swal.fire('Error', errorData.error || 'Invalid code or the code has been used.', 'error')
       }
     } catch (error) {
       console.error('Error verifying code:', error)
