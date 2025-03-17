@@ -3,6 +3,17 @@ import { hash } from 'bcryptjs'
 
 const prisma = new PrismaClient()
 
+export interface User {
+  id: string
+  username: string
+  password: string
+  role: string
+  email?: string | null
+  name?: string | null
+  createdAt: Date
+  updatedAt: Date
+}
+
 export interface RsvpData {
   name: string
   email: string
@@ -84,12 +95,12 @@ export async function createUser(username: string, password: string) {
   }
 }
 
-export async function getUser(username: string) {
+export async function getUser(username: string): Promise<User | null> {
   console.log(`[getUser] Fetching user: ${username}`)
   try {
     const user = await prisma.user.findUnique({
       where: { username },
-    })
+    }) as User | null
     console.log(`[getUser] User found: ${!!user}`)
     return user
   } catch (error) {

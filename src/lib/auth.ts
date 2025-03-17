@@ -2,6 +2,33 @@ import { NextAuthOptions } from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import { compare } from 'bcryptjs'
 import { getUser } from './db'
+import { JWT } from 'next-auth/jwt'
+import { Session } from 'next-auth'
+
+// Extend the Session type to include our custom properties
+declare module 'next-auth' {
+  interface Session {
+    user: {
+      id?: string
+      name?: string | null
+      email?: string | null
+      image?: string | null
+      role?: string
+    }
+  }
+  interface User {
+    username: string
+    role?: string
+  }
+}
+
+// Extend the JWT type to include our custom properties
+declare module 'next-auth/jwt' {
+  interface JWT {
+    username?: string
+    role?: string
+  }
+}
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -29,7 +56,8 @@ export const authOptions: NextAuthOptions = {
         return {
           id: user.id,
           username: user.username,
-          role: user.role,
+          // Use the role from the user object if available, otherwise default to 'admin'
+          role: user.role || 'admin',
         }
       }
     })
@@ -47,7 +75,7 @@ export const authOptions: NextAuthOptions = {
         session.user = {
           id: token.sub,
           name: token.username as string,
-          role: token.role as string,
+          role: token.role as string || 'admin',
         }
       }
       return session
@@ -55,7 +83,7 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.username = user.username
-        token.role = user.role
+        token.role = user.role || 'admin'
       }
       return token
     }
