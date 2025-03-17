@@ -36,6 +36,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // The status field might not be recognized by TypeScript yet
+    // but it exists in the database schema
+    const regCodeWithStatus = registrationCode as any;
+    
+    // Check if code is available or has been sent as an invite
+    if (regCodeWithStatus.status && 
+        regCodeWithStatus.status !== 'available' && 
+        regCodeWithStatus.status !== 'invite-sent') {
+      return NextResponse.json(
+        { error: 'This registration code is not available for use' },
+        { status: 400 }
+      );
+    }
+
     return NextResponse.json({ 
       success: true, 
       code: registrationCode.code 

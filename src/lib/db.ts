@@ -309,7 +309,7 @@ export async function cancelInvite(id: string) {
   }
 }
 
-export async function markRegistrationCodeAsUsed(code: string, status: 'pending' | 'used' | 'available' = 'used') {
+export async function markRegistrationCodeAsUsed(code: string, status: 'pending' | 'used' | 'available' | 'invite-sent' = 'used') {
   console.log(`[markRegistrationCodeAsUsed] Marking registration code ${code} as ${status}`)
   try {
     const regCode = await prismaClient.registrationCode.findFirst({
@@ -324,7 +324,10 @@ export async function markRegistrationCodeAsUsed(code: string, status: 'pending'
     // For 'used' status, mark as used with timestamp
     // For 'available' status, mark as not used with null timestamp
     // For 'pending' status, we don't change anything (code is reserved but not marked as used yet)
-    const updateData: any = {}
+    // For 'invite-sent' status, mark the status as invite-sent but not used yet
+    const updateData: any = {
+      status: status // Always update the status field
+    }
     
     if (status === 'used') {
       updateData.used = true
@@ -332,8 +335,11 @@ export async function markRegistrationCodeAsUsed(code: string, status: 'pending'
     } else if (status === 'available') {
       updateData.used = false
       updateData.usedAt = null
+    } else if (status === 'invite-sent') {
+      updateData.used = false
+      updateData.usedAt = null
     }
-    // For 'pending', we don't update the database - it remains in its current state
+    // For 'pending', we only update the status field
 
     // Only update if we have changes to make
     if (Object.keys(updateData).length > 0) {

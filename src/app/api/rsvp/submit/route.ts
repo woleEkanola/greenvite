@@ -60,8 +60,9 @@ export async function POST(request: NextRequest) {
         where: { id: registrationCode.id },
         data: {
           used: true,
-          usedAt: new Date()
-        }
+          usedAt: new Date(),
+          status: 'used'
+        } as any // Type assertion to bypass TypeScript error until Prisma client is regenerated
       });
 
       return newRsvp;

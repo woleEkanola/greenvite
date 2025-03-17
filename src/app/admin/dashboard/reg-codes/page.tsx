@@ -5,10 +5,12 @@ import Swal from 'sweetalert2'
 import DataTable from '@/components/DataTable'
 
 interface RegCode {
+  id: string
   code: string
   used: boolean
   usedBy?: string
   usedAt?: string
+  status?: 'available' | 'used' | 'pending' | 'invite-sent'
 }
 
 export default function RegCodes() {
@@ -68,6 +70,42 @@ export default function RegCodes() {
     }
   }
 
+  const handleDeleteCode = async (codeId: string, codeValue: string) => {
+    // Confirm deletion
+    const result = await Swal.fire({
+      title: 'Delete Registration Code',
+      text: `Are you sure you want to delete code ${codeValue}?`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      confirmButtonText: 'Yes, delete it!'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        const response = await fetch('/api/admin/reg-codes', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ codeId }),
+        });
+        
+        if (response.ok) {
+          await fetchRegCodes(); // Refresh the list
+          Swal.fire('Deleted!', `Registration code ${codeValue} has been deleted.`, 'success');
+        } else {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to delete code');
+        }
+      } catch (error) {
+        console.error('Error deleting code:', error);
+        Swal.fire('Error', 'Failed to delete registration code', 'error');
+      }
+    }
+  };
+
   // Define table columns
   const columns = [
     {
@@ -77,12 +115,27 @@ export default function RegCodes() {
     },
     {
       header: 'Status',
-      accessor: (code: RegCode) => (
-        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full
-                      ${code.used ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
-          {code.used ? 'Used' : 'Available'}
-        </span>
-      ),
+      accessor: (code: RegCode) => {
+        let statusText = 'Available';
+        let colorClass = 'bg-green-100 text-green-800';
+        
+        if (code.status === 'used' || code.used) {
+          statusText = 'Used';
+          colorClass = 'bg-red-100 text-red-800';
+        } else if (code.status === 'invite-sent') {
+          statusText = 'Invite Sent';
+          colorClass = 'bg-blue-100 text-blue-800';
+        } else if (code.status === 'pending') {
+          statusText = 'Pending';
+          colorClass = 'bg-yellow-100 text-yellow-800';
+        }
+        
+        return (
+          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${colorClass}`}>
+            {statusText}
+          </span>
+        );
+      },
       searchable: false
     },
     {
@@ -94,6 +147,24 @@ export default function RegCodes() {
       header: 'Used At',
       accessor: 'usedAt' as keyof RegCode,
       searchable: true
+    },
+    {
+      header: 'Actions',
+      accessor: (code: RegCode) => {
+        // Only show delete button for available codes
+        if (code.status === 'available' && !code.used) {
+          return (
+            <button
+              onClick={() => handleDeleteCode(code.id, code.code)}
+              className="text-red-600 hover:text-red-900"
+            >
+              Delete
+            </button>
+          );
+        }
+        return null;
+      },
+      searchable: false
     }
   ];
 

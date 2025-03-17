@@ -44,14 +44,14 @@ export default function SendInvites() {
   
   <div style="margin: 30px 0; text-align: center;">
     <p>Your personal registration code is: <strong>{{code}}</strong></p>
-    <a href="{{link}}#{{code}}" style="display: inline-block; background-color: #16a085; color: white; padding: 12px 25px; text-decoration: none; border-radius: 4px; font-weight: bold;">Confirm Your Attendance</a>
+    <a href="{{link}}" style="display: inline-block; background-color: #16a085; color: white; padding: 12px 25px; text-decoration: none; border-radius: 4px; font-weight: bold;">Confirm Your Attendance</a>
     <p style="margin-top: 15px; font-size: 14px; color: #7f8c8d;">Please click the button above to confirm your attendance or visit <a href="{{link}}#{{code}}" style="color: #16a085;">{{link}}#{{code}}</a></p>
   </div>
   
   <p style="text-align: center; margin-top: 30px; color: #7f8c8d; font-size: 14px;">We look forward to celebrating this special occasion with you.</p>
 </div>
   `)
-  const [smsMessage, setSMSMessage] = useState(`You're invited to Jesse Oghenekome George's Church Dedication at RCCG Church, Champions Cathedral, #16-18 Airport Road, Effurun, Warri Delta, Nigeria. 10:00 AM, Saturday, April 13, 2025. Your code: {{code}}. RSVP: {{link}}#{{code}}`)
+  const [smsMessage, setSMSMessage] = useState(`You're invited to Jesse Oghenekome George's Church Dedication at RCCG Church, Champions Cathedral, #16-18 Airport Road, Effurun, Warri Delta, Nigeria. 10:00 AM, Saturday, April 13, 2025. Your code: {{code}}. RSVP: {{link}}`)
   const [eventLink, setEventLink] = useState('https://greenvites.online/jessegeorge')
   const [emailSubject, setEmailSubject] = useState('Invitation to Jesse Oghenekome George\'s Church Dedication')
   const [emailImage, setEmailImage] = useState<File | null>(null)

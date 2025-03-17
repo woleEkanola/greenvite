@@ -43,6 +43,7 @@ export default function DataTable<T>({
       if (searchTerm.trim() === '') {
         setFilteredData(data);
       } else {
+        // Create a stable reference to searchable columns
         const searchableColumns = columns.filter(column => column.searchable !== false);
         
         const filtered = data.filter(item => {
@@ -68,7 +69,14 @@ export default function DataTable<T>({
       // When using server pagination, just use the data as is
       setFilteredData(data);
     }
-  }, [searchTerm, data, columns, useServerPagination]);
+  }, [searchTerm, data, useServerPagination]);
+  
+  // Handle column changes separately to avoid infinite re-renders
+  useEffect(() => {
+    // This effect only runs when columns change
+    // It doesn't need to do anything, just ensures we're aware of column changes
+    // without causing re-renders in the main data filtering effect
+  }, [columns]);
 
   // Calculate pagination for client-side
   const totalPages = useServerPagination 

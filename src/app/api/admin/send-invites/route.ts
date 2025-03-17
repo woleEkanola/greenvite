@@ -475,9 +475,9 @@ export async function POST(request: Request) {
           if (successfulChannels.length > 0) {
             status = successfulChannels.length === (type === 'both' ? 2 : 1) ? 'sent' : 'partial';
             
-            // Mark the registration code as used if the invite was successfully sent
+            // Mark the registration code as invite-sent if the invite was successfully sent
             if (status === 'sent' || status === 'partial') {
-              await markRegistrationCodeAsUsed(codeValue, 'used');
+              await markRegistrationCodeAsUsed(codeValue, 'invite-sent');
             }
           } else {
             status = 'failed';
