@@ -42,6 +42,7 @@ model Rsvp {
   id                String          @id @default(cuid())
   name             String
   email            String
+  phone            String?
   hasGuest         Boolean         @default(false)
   hasDriver        Boolean         @default(false)
   hasAide          Boolean         @default(false)

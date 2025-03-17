@@ -65,6 +65,30 @@ export default function DashboardLayout({
                 Send Invites
               </Link>
             </li>
+            <li>
+              <Link
+                href="/admin/dashboard/rsvps"
+                className={`block px-4 py-2 rounded-lg transition-colors ${
+                  isActive('/admin/dashboard/rsvps')
+                    ? 'bg-emerald-500 text-white'
+                    : 'hover:bg-gray-100'
+                }`}
+              >
+                RSVP Management
+              </Link>
+            </li>
+            <li>
+              <Link
+                href="/admin/dashboard/rsvps?action=send-message"
+                className={`block px-4 py-2 rounded-lg transition-colors ${
+                  pathname.includes('/admin/dashboard/rsvps') && pathname.includes('?action=send-message')
+                    ? 'bg-emerald-500 text-white'
+                    : 'hover:bg-gray-100'
+                }`}
+              >
+                Send Messages
+              </Link>
+            </li>
           </ul>
         </nav>
       </aside>

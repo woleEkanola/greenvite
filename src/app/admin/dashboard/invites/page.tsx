@@ -8,6 +8,8 @@ import { toast } from 'sonner'
 import { AlertCircle, CheckCircle, Clock, RefreshCcw, Send, X } from 'lucide-react'
 import Papa from 'papaparse'
 import { z } from 'zod'
+import RichTextEditor from '@/components/RichTextEditor'
+import DataTable from '@/components/DataTable'
 
 interface Recipient {
   name: string
@@ -42,14 +44,14 @@ export default function SendInvites() {
   
   <div style="margin: 30px 0; text-align: center;">
     <p>Your personal registration code is: <strong>{{code}}</strong></p>
-    <a href="{{link}}" style="display: inline-block; background-color: #16a085; color: white; padding: 12px 25px; text-decoration: none; border-radius: 4px; font-weight: bold;">Confirm Your Attendance</a>
-    <p style="margin-top: 15px; font-size: 14px; color: #7f8c8d;">Please click the button above to confirm your attendance or visit <a href="{{link}}" style="color: #16a085;">{{link}}</a></p>
+    <a href="{{link}}#{{code}}" style="display: inline-block; background-color: #16a085; color: white; padding: 12px 25px; text-decoration: none; border-radius: 4px; font-weight: bold;">Confirm Your Attendance</a>
+    <p style="margin-top: 15px; font-size: 14px; color: #7f8c8d;">Please click the button above to confirm your attendance or visit <a href="{{link}}#{{code}}" style="color: #16a085;">{{link}}#{{code}}</a></p>
   </div>
   
   <p style="text-align: center; margin-top: 30px; color: #7f8c8d; font-size: 14px;">We look forward to celebrating this special occasion with you.</p>
 </div>
   `)
-  const [smsMessage, setSMSMessage] = useState(`You're invited to Jesse Oghenekome George's Church Dedication at RCCG Church, Champions Cathedral, #16-18 Airport Road, Effurun, Warri Delta, Nigeria. 10:00 AM, Saturday, April 13, 2025. Your code: {{code}}. RSVP: {{link}}`)
+  const [smsMessage, setSMSMessage] = useState(`You're invited to Jesse Oghenekome George's Church Dedication at RCCG Church, Champions Cathedral, #16-18 Airport Road, Effurun, Warri Delta, Nigeria. 10:00 AM, Saturday, April 13, 2025. Your code: {{code}}. RSVP: {{link}}#{{code}}`)
   const [eventLink, setEventLink] = useState('https://greenvites.online/jessegeorge')
   const [emailSubject, setEmailSubject] = useState('Invitation to Jesse Oghenekome George\'s Church Dedication')
   const [emailImage, setEmailImage] = useState<File | null>(null)
@@ -586,14 +588,11 @@ export default function SendInvites() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Email Message
                   </label>
-                  <div className="text-xs text-gray-500 mb-2">
-                    Use {"{{name}}"}, {"{{code}}"}, and {"{{link}}"} as placeholders
-                  </div>
-                  <textarea
+                  <RichTextEditor
                     value={emailMessage}
-                    onChange={(e) => setEmailMessage(e.target.value)}
-                    rows={8}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono text-sm"
+                    onChange={setEmailMessage}
+                    placeholder="Enter your email message. You can use {{name}}, {{code}}, and {{link}} as placeholders."
+                    height={300}
                     disabled={!enableEmail}
                   />
                 </div>
@@ -754,97 +753,106 @@ export default function SendInvites() {
             onClick={fetchSentInvites}
             className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-md flex items-center"
           >
-            <span className="mr-2">↻</span> Refresh
+            <RefreshCcw className="h-4 w-4 mr-2" /> Refresh
           </button>
         </div>
         
         {sentInvites.length > 0 ? (
-          <div className="bg-white shadow-md rounded-lg overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Recipient
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Contact Info
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    SMS Status
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Email Status
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {sentInvites.map((invite: any) => (
-                  <tr key={invite.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{invite.name}</div>
-                      <div className="text-sm text-gray-500">Code: {invite.code || 'N/A'}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {invite.phone && (
-                        <div className="text-sm text-gray-500">
-                          📱 {invite.phone}
-                        </div>
-                      )}
-                      {invite.email && (
-                        <div className="text-sm text-gray-500">
-                          ✉️ {invite.email}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {invite.smsStatus ? (
-                        <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadgeColor(invite.smsStatus)}`}>
-                          {getStatusIcon(invite.smsStatus)} {invite.smsStatus}
-                        </span>
-                      ) : (
-                        <span className="text-gray-400">N/A</span>
-                      )}
-                      {invite.smsProvider && (
-                        <div className="text-xs text-gray-500 mt-1">
-                          via {invite.smsProvider === 'africas_talking' ? 'Africa\'s Talking' : 'Termii'}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {invite.emailStatus ? (
-                        <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadgeColor(invite.emailStatus)}`}>
-                          {getStatusIcon(invite.emailStatus)} {invite.emailStatus}
-                        </span>
-                      ) : (
-                        <span className="text-gray-400">N/A</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      {(invite.smsStatus === 'failed' || invite.emailStatus === 'failed') && (
-                        <button
-                          onClick={() => handleResendInvite(invite)}
-                          className="text-indigo-600 hover:text-indigo-900 mr-4"
-                        >
-                          Edit & Resend
-                        </button>
-                      )}
-                      {invite.errorMessage && (
-                        <button
-                          onClick={() => Swal.fire('Error Details', invite.errorMessage, 'error')}
-                          className="text-red-600 hover:text-red-900"
-                        >
-                          View Error
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            data={sentInvites}
+            columns={[
+              {
+                header: 'Recipient',
+                accessor: (invite: any) => (
+                  <div>
+                    <div className="text-sm font-medium text-gray-900">{invite.name}</div>
+                    <div className="text-sm text-gray-500">Code: {invite.code || 'N/A'}</div>
+                  </div>
+                ),
+                searchable: false
+              },
+              {
+                header: 'Contact Info',
+                accessor: (invite: any) => (
+                  <div>
+                    {invite.phone && (
+                      <div className="text-sm text-gray-500">
+                        📱 {invite.phone}
+                      </div>
+                    )}
+                    {invite.email && (
+                      <div className="text-sm text-gray-500">
+                        ✉️ {invite.email}
+                      </div>
+                    )}
+                  </div>
+                ),
+                searchable: false
+              },
+              {
+                header: 'SMS Status',
+                accessor: (invite: any) => (
+                  <div>
+                    {invite.smsStatus ? (
+                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadgeColor(invite.smsStatus)}`}>
+                        {getStatusIcon(invite.smsStatus)} {invite.smsStatus}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">N/A</span>
+                    )}
+                    {invite.smsProvider && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        via {invite.smsProvider === 'africas_talking' ? 'Africa\'s Talking' : 'Termii'}
+                      </div>
+                    )}
+                  </div>
+                ),
+                searchable: false
+              },
+              {
+                header: 'Email Status',
+                accessor: (invite: any) => (
+                  <div>
+                    {invite.emailStatus ? (
+                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadgeColor(invite.emailStatus)}`}>
+                        {getStatusIcon(invite.emailStatus)} {invite.emailStatus}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">N/A</span>
+                    )}
+                  </div>
+                ),
+                searchable: false
+              },
+              {
+                header: 'Actions',
+                accessor: (invite: any) => (
+                  <div className="text-right">
+                    {(invite.smsStatus === 'failed' || invite.emailStatus === 'failed') && (
+                      <button
+                        onClick={() => handleResendInvite(invite)}
+                        className="text-indigo-600 hover:text-indigo-900 mr-4"
+                      >
+                        Edit & Resend
+                      </button>
+                    )}
+                    {invite.errorMessage && (
+                      <button
+                        onClick={() => Swal.fire('Error Details', invite.errorMessage, 'error')}
+                        className="text-red-600 hover:text-red-900"
+                      >
+                        View Error
+                      </button>
+                    )}
+                  </div>
+                ),
+                searchable: false
+              }
+            ]}
+            itemsPerPage={10}
+            searchPlaceholder="Search invites by name, email, or phone..."
+            emptyMessage="No invites sent yet or no data available."
+          />
         ) : (
           <div className="bg-white p-6 rounded-lg shadow-md text-center">
             <p className="text-gray-500">No invites sent yet or no data available.</p>

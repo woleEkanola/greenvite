@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Swal from 'sweetalert2'
+import DataTable from '@/components/DataTable'
 
 interface RegCode {
   code: string
@@ -67,6 +68,35 @@ export default function RegCodes() {
     }
   }
 
+  // Define table columns
+  const columns = [
+    {
+      header: 'Code',
+      accessor: 'code' as keyof RegCode,
+      searchable: true
+    },
+    {
+      header: 'Status',
+      accessor: (code: RegCode) => (
+        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full
+                      ${code.used ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
+          {code.used ? 'Used' : 'Available'}
+        </span>
+      ),
+      searchable: false
+    },
+    {
+      header: 'Used By',
+      accessor: 'usedBy' as keyof RegCode,
+      searchable: true
+    },
+    {
+      header: 'Used At',
+      accessor: 'usedAt' as keyof RegCode,
+      searchable: true
+    }
+  ];
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -99,47 +129,13 @@ export default function RegCodes() {
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Code
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Status
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Used By
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Used At
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {regCodes.map((code, index) => (
-              <tr key={code.code} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                  {code.code}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full
-                                ${code.used ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
-                    {code.used ? 'Used' : 'Available'}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {code.usedBy || '-'}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {code.usedAt || '-'}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTable 
+        data={regCodes}
+        columns={columns}
+        itemsPerPage={10}
+        searchPlaceholder="Search registration codes..."
+        emptyMessage="No registration codes found"
+      />
     </div>
   )
 }
