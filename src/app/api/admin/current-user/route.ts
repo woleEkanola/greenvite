@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '@/lib/prisma'
+import { User } from '@/lib/db'
 
-const prisma = new PrismaClient()
-
-export async function GET(request: Request) {
+export async function GET(request: Request): Promise<NextResponse> {
   try {
     // Check authentication
     const session = await getServerSession(authOptions)
@@ -21,7 +20,7 @@ export async function GET(request: Request) {
       where: {
         username: session.user?.name as string
       }
-    })
+    }) as User | null
 
     if (!user) {
       return NextResponse.json(

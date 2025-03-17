@@ -1,7 +1,15 @@
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcrypt');
 
-const prisma = new PrismaClient();
+// Create a singleton instance of PrismaClient
+let prisma;
+
+if (global.prisma) {
+  prisma = global.prisma;
+} else {
+  prisma = new PrismaClient();
+  global.prisma = prisma;
+}
 
 async function main() {
   console.log('Starting seed process...');

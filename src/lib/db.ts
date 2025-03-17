@@ -1,7 +1,8 @@
 import { PrismaClient } from '@prisma/client'
 import { hash } from 'bcryptjs'
+import { prisma } from './prisma'
 
-const prisma = new PrismaClient()
+const prismaClient = prisma as PrismaClient
 
 export interface User {
   id: string
@@ -51,7 +52,7 @@ async function generateUniqueCodes(count: number): Promise<string[]> {
   console.log(`[generateUniqueCodes] Generating ${count} unique codes`)
   try {
     const codes = new Set<string>()
-    const existingCodes = new Set((await prisma.registrationCode.findMany()).map((rc: { code: string }) => rc.code))
+    const existingCodes = new Set((await prismaClient.registrationCode.findMany()).map((rc: { code: string }) => rc.code))
     console.log(`[generateUniqueCodes] Found ${existingCodes.size} existing codes`)
 
     let attempts = 0
@@ -81,7 +82,7 @@ export async function createUser(username: string, password: string) {
   console.log(`[createUser] Creating user with username: ${username}`)
   try {
     const hashedPassword = await hash(password, 12)
-    const user = await prisma.user.create({
+    const user = await prismaClient.user.create({
       data: {
         username,
         password: hashedPassword,
@@ -98,7 +99,7 @@ export async function createUser(username: string, password: string) {
 export async function getUser(username: string): Promise<User | null> {
   console.log(`[getUser] Fetching user: ${username}`)
   try {
-    const user = await prisma.user.findUnique({
+    const user = await prismaClient.user.findUnique({
       where: { username },
     }) as User | null
     console.log(`[getUser] User found: ${!!user}`)
@@ -113,7 +114,7 @@ export async function createRegistrationCodes(count: number) {
   console.log(`[createRegistrationCodes] Creating ${count} registration codes`)
   try {
     const codes = await generateUniqueCodes(count)
-    const result = await prisma.registrationCode.createMany({
+    const result = await prismaClient.registrationCode.createMany({
       data: codes.map(code => ({ code })),
     })
     console.log(`[createRegistrationCodes] Successfully created ${result.count} codes`)
@@ -127,7 +128,7 @@ export async function createRegistrationCodes(count: number) {
 export async function getRegistrationCodes() {
   console.log('[getRegistrationCodes] Fetching all registration codes')
   try {
-    const codes = await prisma.registrationCode.findMany({
+    const codes = await prismaClient.registrationCode.findMany({
       include: {
         rsvp: true,
       },
@@ -146,7 +147,7 @@ export async function getRegistrationCodes() {
 export async function getRegistrationCode(code: string) {
   console.log(`[getRegistrationCode] Fetching code: ${code}`)
   try {
-    const regCode = await prisma.registrationCode.findUnique({
+    const regCode = await prismaClient.registrationCode.findUnique({
       where: { code },
     })
     console.log(`[getRegistrationCode] Code found: ${!!regCode}`)
@@ -160,7 +161,7 @@ export async function getRegistrationCode(code: string) {
 export async function createRsvp(data: RsvpData) {
   console.log(`[createRsvp] Creating RSVP for code: ${data.codeId}`)
   try {
-    const rsvp = await prisma.rsvp.create({
+    const rsvp = await prismaClient.rsvp.create({
       data,
     })
     console.log(`[createRsvp] Successfully created RSVP for: ${data.name}`)
@@ -175,8 +176,8 @@ export async function getRsvpStats() {
   console.log('[getRsvpStats] Fetching RSVP statistics')
   try {
     const [totalRsvp, availableRegistrations] = await Promise.all([
-      prisma.rsvp.count(),
-      prisma.registrationCode.count({
+      prismaClient.rsvp.count(),
+      prismaClient.registrationCode.count({
         where: { used: false },
       }),
     ])
@@ -195,7 +196,7 @@ export async function getRsvpStats() {
 export async function createInvites(invites: InviteData[]) {
   console.log(`[createInvites] Creating ${invites.length} invites`)
   try {
-    const result = await prisma.invite.createMany({
+    const result = await prismaClient.invite.createMany({
       data: invites.map(invite => ({
         ...invite,
         status: 'pending',
@@ -212,7 +213,7 @@ export async function createInvites(invites: InviteData[]) {
 export async function getInviteStats() {
   console.log('[getInviteStats] Fetching invite statistics')
   try {
-    const totalInvitesSent = await prisma.invite.count({
+    const totalInvitesSent = await prismaClient.invite.count({
       where: { sent: true },
     })
 
@@ -227,7 +228,7 @@ export async function getInviteStats() {
 export async function getInvites() {
   console.log('[getInvites] Fetching all invites')
   try {
-    const invites = await prisma.invite.findMany({
+    const invites = await prismaClient.invite.findMany({
       orderBy: {
         createdAt: 'desc'
       }
@@ -242,7 +243,7 @@ export async function getInvites() {
 export async function getInviteById(id: string) {
   console.log(`[getInviteById] Fetching invite with id: ${id}`)
   try {
-    const invite = await prisma.invite.findUnique({
+    const invite = await prismaClient.invite.findUnique({
       where: { id }
     })
     return invite
@@ -255,7 +256,7 @@ export async function getInviteById(id: string) {
 export async function updateInvite(id: string, data: Partial<InviteData>) {
   console.log(`[updateInvite] Updating invite with id: ${id}`)
   try {
-    const invite = await prisma.invite.update({
+    const invite = await prismaClient.invite.update({
       where: { id },
       data
     })
@@ -270,7 +271,7 @@ export async function cancelInvite(id: string) {
   console.log(`[cancelInvite] Canceling invite with id: ${id}`)
   try {
     // Get the invite to retrieve the code
-    const invite = await prisma.invite.findUnique({
+    const invite = await prismaClient.invite.findUnique({
       where: { id }
     }) as any; // Use any type to bypass TypeScript checks for dynamic properties
 
@@ -290,7 +291,7 @@ export async function cancelInvite(id: string) {
       updateData.smsStatus = invite.smsStatus === 'failed' ? 'canceled' : invite.smsStatus;
     }
     
-    const updatedInvite = await prisma.invite.update({
+    const updatedInvite = await prismaClient.invite.update({
       where: { id },
       data: updateData
     });
@@ -311,7 +312,7 @@ export async function cancelInvite(id: string) {
 export async function markRegistrationCodeAsUsed(code: string, status: 'pending' | 'used' | 'available' = 'used') {
   console.log(`[markRegistrationCodeAsUsed] Marking registration code ${code} as ${status}`)
   try {
-    const regCode = await prisma.registrationCode.findFirst({
+    const regCode = await prismaClient.registrationCode.findFirst({
       where: { code }
     })
 
@@ -336,7 +337,7 @@ export async function markRegistrationCodeAsUsed(code: string, status: 'pending'
 
     // Only update if we have changes to make
     if (Object.keys(updateData).length > 0) {
-      const updatedCode = await prisma.registrationCode.update({
+      const updatedCode = await prismaClient.registrationCode.update({
         where: { id: regCode.id },
         data: updateData
       })
