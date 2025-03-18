@@ -205,7 +205,7 @@ END:VCALENDAR`
                   <p className="text-gray-600 text-sm leading-relaxed text-center tracking-wide">
                     You are invited to the church dedication of
                     <span className="block font-medium mt-2 mb-2">Jesse Oghenekome George</span>
-                    at RCCG Church, Champions Cathedral .
+                    at RCCG Church, Champions Cathedral.
                   </p>
                 </div>
 
