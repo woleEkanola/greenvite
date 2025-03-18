@@ -54,13 +54,27 @@ async function sendWhatsAppMessage(phone: string, name: string, code: string, me
   try {
     console.log(`Sending WhatsApp message to ${name} (${phone})`)
     
-    let formattedPhone = phone.replace(/\s+/g, '').replace(/^\+/, '');
-    if (!formattedPhone.startsWith('234')) {
+    // Format the phone number
+    let formattedPhone = phone.replace(/\s+/g, '');
+    
+    // Remove the '+' if present
+    if (formattedPhone.startsWith('+')) {
+      formattedPhone = formattedPhone.substring(1);
+    }
+    
+    // Handle Nigerian numbers: Convert 0... to 234...
+    if (formattedPhone.startsWith('0') && (formattedPhone.length === 11 || formattedPhone.length === 10)) {
+      formattedPhone = '234' + formattedPhone.substring(1);
+    } 
+    // If it doesn't have a country code (not starting with 1 or 234), assume Nigerian
+    else if (!formattedPhone.startsWith('1') && !formattedPhone.startsWith('234')) {
       formattedPhone = '234' + formattedPhone.replace(/^0+/, '');
     }
-
-    if (!formattedPhone.startsWith('234') || formattedPhone.length !== 13) {
-      console.error(`Invalid phone number format: ${phone} (formatted to ${formattedPhone}). Must be a Nigerian number starting with 234.`);
+    
+    // Check that we have a valid international format
+    const validPhoneRegex = /^(1|234)\d{10}$/;
+    if (!validPhoneRegex.test(formattedPhone)) {
+      console.error(`Invalid phone number format: ${phone} (formatted to ${formattedPhone}). Must be a US or Nigerian number.`);
       return false;
     }
     
@@ -98,6 +112,7 @@ async function sendWhatsAppMessage(phone: string, name: string, code: string, me
           mediaName: 'invitation.jpg',
         
           mediaCaption: message
+
         };
 
         const mediaResponse = await axios.post(

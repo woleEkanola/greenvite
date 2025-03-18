@@ -63,13 +63,21 @@ async function sendWhatsAppMessage(phone: string, name: string, code: string, me
   try {
     console.log(`Sending WhatsApp message to ${name} (${phone})`)
     
-    // Format the phone number if needed (remove spaces, add country code if missing)
-    let formattedPhone = phone.replace(/\s+/g, '')
+    // Format the phone number
+    let formattedPhone = phone.replace(/\s+/g, '');
     
-    // Ensure the phone number starts with 234
-    if (!formattedPhone.startsWith('234')) {
-      // Default to Nigeria country code if not specified
-      formattedPhone = '234' + formattedPhone.replace(/^0+/, '')
+    // Remove the '+' if present
+    if (formattedPhone.startsWith('+')) {
+      formattedPhone = formattedPhone.substring(1);
+    }
+    
+    // Handle Nigerian numbers: Convert 0... to 234...
+    if (formattedPhone.startsWith('0') && (formattedPhone.length === 11 || formattedPhone.length === 10)) {
+      formattedPhone = '234' + formattedPhone.substring(1);
+    } 
+    // If it doesn't have a country code (not starting with 1 or 234), assume Nigerian
+    else if (!formattedPhone.startsWith('1') && !formattedPhone.startsWith('234')) {
+      formattedPhone = '234' + formattedPhone.replace(/^0+/, '');
     }
     
     // Replace placeholders in the message
@@ -78,9 +86,10 @@ async function sendWhatsAppMessage(phone: string, name: string, code: string, me
       .replace(/{{code}}/g, code)
       .replace(/{{link}}/g, `${eventLink}#${code}`)
     
-    // Validate the phone number format for Nigerian numbers
-    if (!formattedPhone.startsWith('+234') || formattedPhone.length !== 14) {
-      console.error(`Invalid phone number format: ${phone} (formatted to ${formattedPhone}). Must be a Nigerian number in international format.`);
+    // Check that we have a valid international format
+    const validPhoneRegex = /^(1|234)\d{10}$/;
+    if (!validPhoneRegex.test(formattedPhone)) {
+      console.error(`Invalid phone number format: ${phone} (formatted to ${formattedPhone}). Must be a US or Nigerian number.`);
       return false;
     }
     
@@ -88,7 +97,7 @@ async function sendWhatsAppMessage(phone: string, name: string, code: string, me
 
     // Prepare the request payload for WhatsApp API
     const payload = {
-      chat_id: formattedPhone +'@c.us',
+      chatId: formattedPhone +'@c.us',
       message: personalizedMessage,
     };
 
@@ -99,16 +108,18 @@ async function sendWhatsAppMessage(phone: string, name: string, code: string, me
         throw new Error('WhatsApp API token is not configured');
       }
       
-      const response = await fetch(`${WAAPI_BASE_URL}/instances/${INSTANCE_ID}/client/action/send-message`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${WAAPI_TOKEN}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
+      const response = await axios.post(
+        `${WAAPI_BASE_URL}/instances/${INSTANCE_ID}/client/action/send-message`, 
+        payload, 
+        {
+          headers: {
+            'Authorization': `Bearer ${WAAPI_TOKEN}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
       
-      const data = await response.json();
+      const data = response.data;
       console.log('WhatsApp API response:', JSON.stringify(data));
 
       if (data && data.data && data.data.status === 'success') {
