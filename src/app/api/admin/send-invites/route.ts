@@ -53,14 +53,11 @@ async function sendWhatsAppMessage(phone: string, name: string, code: string, me
   try {
     console.log(`Sending WhatsApp message to ${name} (${phone})`)
     
-    // Format the phone number to always start with 234 and remove any leading +
     let formattedPhone = phone.replace(/\s+/g, '').replace(/^\+/, '');
     if (!formattedPhone.startsWith('234')) {
-      // Default to Nigeria country code if not specified
       formattedPhone = '234' + formattedPhone.replace(/^0+/, '');
     }
 
-    // Validate the phone number format
     if (!formattedPhone.startsWith('234') || formattedPhone.length !== 13) {
       console.error(`Invalid phone number format: ${phone} (formatted to ${formattedPhone}). Must be a Nigerian number starting with 234.`);
       return false;
@@ -68,13 +65,11 @@ async function sendWhatsAppMessage(phone: string, name: string, code: string, me
     
     console.log(`Sending WhatsApp message to: ${formattedPhone} (original: ${phone})`);
 
-    // Prepare the request payload for WhatsApp API
     const payload = {
        chatId: formattedPhone+'@c.us',
       message: message,
     };
 
-    // Send WhatsApp message using WhatsApp API
     try {
       if (!WAAPI_TOKEN) {
         console.error('WhatsApp API token is not configured');
@@ -82,7 +77,6 @@ async function sendWhatsAppMessage(phone: string, name: string, code: string, me
       }
       
       const response = await axios.post( `${WAAPI_BASE_URL}/instances/${INSTANCE_ID}/client/action/send-message`, payload, {
-     
         headers: {
           'Authorization': `Bearer ${WAAPI_TOKEN}`,
           'Content-Type': 'application/json'
@@ -102,13 +96,26 @@ async function sendWhatsAppMessage(phone: string, name: string, code: string, me
     } catch (error: any) {
       console.error('WhatsApp API error:', error);
       console.error('Error details:', error.response?.data || error.message);
-      // Return false instead of throwing to allow the process to continue
+      
+      if (error.response && error.response.status === 504) {
+        console.log(`WhatsApp message to ${formattedPhone} received a 504 error, treating as successful`);
+        await prisma.invite.create({
+          data: {
+            name,
+            phone,
+            type: 'whatsapp',
+            status: '504-error',
+            errorMessage: '504 Gateway Timeout',
+            code
+          }
+        });
+        return true;
+      }
       return false;
     }
   } catch (error: any) {
     console.error('WhatsApp API error:', error);
     console.error('Error message:', error.message);
-    // Return false instead of throwing to allow the process to continue
     return false;
   }
 }
@@ -128,22 +135,18 @@ async function sendEmail(email: string, name: string, code: string, subject: str
   try {
     console.log(`Sending email to ${name} (${email})`)
     
-    // Replace placeholders in the message
     const personalizedMessage = htmlMessage
       .replace(/{{name}}/g, name)
       .replace(/{{code}}/g, code)
-      .replace(/{{link}}/g, `${eventLink}#${code}`) // Update the link format
+      .replace(/{{link}}/g, `${eventLink}#${code}`) 
     
-    // Check if SMTP credentials are properly configured
     if (!process.env.SMTP_HOST || !process.env.SMTP_PORT) {
       console.error('SMTP configuration is incomplete. Missing host or port.');
       return false;
     }
     
-    // Log SMTP configuration for debugging (without password)
     console.log(`SMTP Config: Host=${process.env.SMTP_HOST}, Port=${process.env.SMTP_PORT}, User=${process.env.SMTP_USER}, Secure=${process.env.SMTP_SECURE}`)
     
-    // Create a transport with environment variables
     const transportConfig: any = {
       host: process.env.SMTP_HOST,
       port: parseInt(process.env.SMTP_PORT || '587'),
@@ -153,7 +156,6 @@ async function sendEmail(email: string, name: string, code: string, subject: str
       }
     };
     
-    // Only add auth if both username and password are provided
     if (process.env.SMTP_USER && process.env.SMTP_PASS) {
       transportConfig.auth = {
         user: process.env.SMTP_USER,
@@ -161,13 +163,11 @@ async function sendEmail(email: string, name: string, code: string, subject: str
       };
     } else {
       console.warn('SMTP credentials missing - attempting to send without authentication');
-      // For many SMTP servers, authentication is required
       console.warn('Note: Most SMTP servers require authentication. This will likely fail.');
     }
     
     const transport = nodemailer.createTransport(transportConfig);
 
-    // Try to verify SMTP connection
     try {
       await transport.verify();
       console.log('SMTP connection verified successfully');
@@ -175,16 +175,13 @@ async function sendEmail(email: string, name: string, code: string, subject: str
       console.error('SMTP connection verification failed:', verifyError);
       console.error('Error details:', verifyError.message);
       
-      // If this is an authentication error, we should abort
       if (verifyError.code === 'EAUTH') {
         console.error('SMTP authentication failed. Please check your credentials.');
         return false;
       }
-      
       console.log('Attempting to send email anyway despite connection verification failure...');
     }
 
-    // Prepare email data
     const mailOptions: any = {
       from: process.env.SMTP_FROM || (process.env.SMTP_USER ? `"Greenvites" <${process.env.SMTP_USER}>` : 'noreply@greenvites.com'),
       to: email,
@@ -192,40 +189,43 @@ async function sendEmail(email: string, name: string, code: string, subject: str
       html: personalizedMessage,
     }
 
-    // Add attachment if image buffer is provided
     if (imageBuffer) {
       mailOptions.attachments = [
         {
           filename: 'invitation.jpg',
           content: imageBuffer,
-          cid: 'invitation-image' // Content ID for referencing in HTML
+          cid: 'invitation-image'
         }
       ]
     }
 
-    // Send the email
     try {
       const info = await transport.sendMail(mailOptions)
       console.log(`Email sent successfully to ${name} (${email}): ${info.messageId}`)
       return true
     } catch (sendError: any) {
       console.error(`Failed to send email to ${name}:`, sendError)
-      console.error('Send error details:', sendError.message)
+      console.error('Send error details:', sendError.message);
       
-      if (sendError.code === 'EAUTH') {
-        console.error('SMTP authentication failed. Please check your credentials in the .env file.');
-      } else if (sendError.code === 'ESOCKET') {
-        console.error('SMTP connection error. Please check your SMTP host and port settings.');
-      } else if (sendError.code === 'ETIMEDOUT') {
-        console.error('SMTP connection timed out. Please check your SMTP host and port settings.');
+      if (sendError.response && sendError.response.status === 504) {
+        console.log(`Email to ${email} received a 504 error, treating as successful`);
+        await prisma.invite.create({
+          data: {
+            name,
+            email,
+            type: 'email',
+            status: '504-error',
+            errorMessage: '504 Gateway Timeout',
+            code
+          }
+        });
+        return true;
       }
-      
       return false
     }
   } catch (error: any) {
     console.error(`Failed to send email to ${name}:`, error)
-    console.error('Error message:', error.message)
-    // Don't throw the error, just return false to indicate failure
+    console.error('Error message:', error.message);
     return false
   }
 }
@@ -235,13 +235,11 @@ async function sendWhatsApp(phone: string, name: string, code: string, message: 
   try {
     console.log(`Sending WhatsApp message to ${name} (${phone})`)
     
-    // Replace placeholders in the message
     const personalizedMessage = message
       .replace(/{{name}}/g, name)
       .replace(/{{code}}/g, code)
       .replace(/{{link}}/g, `${eventLink}#${code}`)
     
-    // Determine which WhatsApp provider to use based on environment variable
     const whatsappProvider = process.env.WHATSAPP_PROVIDER || 'whatsapp_api';
     
     console.log(`Using WhatsApp provider: ${whatsappProvider}`);
@@ -249,12 +247,10 @@ async function sendWhatsApp(phone: string, name: string, code: string, message: 
     if (whatsappProvider === 'whatsapp_api') {
       return sendWhatsAppMessage(phone, name, code, personalizedMessage, eventLink);
     } else {
-      // Default to WhatsApp API
       return sendWhatsAppMessage(phone, name, code, personalizedMessage, eventLink);
     }
   } catch (error) {
     console.error('WhatsApp sending error:', error);
-    // Return false instead of throwing to allow the process to continue
     return false;
   }
 }
@@ -278,17 +274,14 @@ interface RegistrationCode {
 
 export async function POST(request: Request) {
   try {
-    // Check authentication
     const session = await getServerSession(authOptions)
     if (!session) {
       console.error('[POST /api/admin/send-invites] Unauthorized access attempt')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Parse the multipart form data
     const formData = await request.formData()
     
-    // Get message settings
     const emailSubject = formData.get('emailSubject') as string || 'Invitation to Jesse Oghenekome George\'s Church Dedication'
     const emailMessage = formData.get('emailMessage') as string || `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 5px;">
@@ -321,7 +314,6 @@ export async function POST(request: Request) {
     const enableWhatsApp = formData.get('enableWhatsApp') === 'true'
     const emailImageFile = formData.get('emailImage') as File | null
     
-    // Get recipients
     const recipientsJson = formData.get('recipients') as string
     if (!recipientsJson) {
       return NextResponse.json(
@@ -339,13 +331,11 @@ export async function POST(request: Request) {
       )
     }
 
-    // Process email image if provided
     let emailImageBuffer: Buffer | undefined
     if (emailImageFile) {
       const arrayBuffer = await emailImageFile.arrayBuffer()
       emailImageBuffer = Buffer.from(arrayBuffer)
     } else {
-      // Use default jessegeorge.jpg image if no custom image is provided
       try {
         const fs = require('fs');
         const path = require('path');
@@ -354,33 +344,24 @@ export async function POST(request: Request) {
         console.log('Using default image: jessegeorge.jpg');
       } catch (error) {
         console.error('Error loading default image:', error);
-        // Continue without image if there's an error
       }
     }
 
-    // Get available registration codes
-    console.log('Getting available registration codes')
     const registrationCodes = await getRegistrationCodes()
     console.log(`Found ${registrationCodes.length} registration codes`)
     
-    // Filter for available codes only
-    // Exclude codes that are used or have already been sent as invites
     let availableCodes = registrationCodes
       .filter((code: any) => {
-        // Check if the code is not used and has a status of 'available'
-        // This ensures codes with 'invite-sent' status are not reused
         return !code.used && (!code.status || code.status === 'available');
       })
       .map((code: any) => code.code)
     console.log(`Found ${availableCodes.length} available registration codes`)
     
-    // If we don't have enough codes, generate more
     if (availableCodes.length < recipients.length) {
       console.log(`Need to generate ${recipients.length - availableCodes.length} more registration codes`)
       const newCodes = await createRegistrationCodes(recipients.length - availableCodes.length)
       console.log(`Generated ${newCodes.count} new registration codes`)
       
-      // Get updated list of available codes
       const updatedRegistrationCodes = await getRegistrationCodes()
       availableCodes = updatedRegistrationCodes
         .filter((code: any) => {
@@ -397,35 +378,29 @@ export async function POST(request: Request) {
       )
     }
 
-    // Process each recipient
     const invitePromises = recipients.map(async (recipient) => {
       try {
-        // Ensure all fields are strings to avoid TypeScript errors
         const name = recipient.name || '';
         const email = recipient.email || '';
         const phone = recipient.phone || '';
         const type = recipient.type;
         
-        // Get a registration code from the available codes
         let codeValue: string;
         if (availableCodes.length > 0) {
           const regCode = availableCodes.pop();
           codeValue = regCode ? regCode : generateRandomCode();
           
-          // Mark the code as pending initially
           await markRegistrationCodeAsUsed(codeValue, 'pending');
         } else {
           codeValue = generateRandomCode();
         }
         
-        // Track channels that were successfully sent
         const successfulChannels: string[] = [];
         let emailStatus: string | null = null;
         let whatsappStatus: string | null = null;
         let whatsappProvider: string | null = null;
         let errorMessage: string | null = null;
 
-        // Send email if requested
         if ((type === 'email' || type === 'both') && email && enableEmail) {
           try {
             const emailSuccess = await sendEmail(email, name, codeValue, emailSubject, emailMessage, eventLink, emailImageBuffer);
@@ -442,7 +417,6 @@ export async function POST(request: Request) {
           }
         }
 
-        // Send WhatsApp message if requested
         if ((type === 'whatsapp' || type === 'both') && phone && enableWhatsApp) {
           try {
             const whatsappSuccess = await sendWhatsApp(phone, name, codeValue, whatsappMessage, eventLink);
@@ -460,25 +434,20 @@ export async function POST(request: Request) {
           }
         }
 
-        // If at least one channel was successful, or we want to record failures
-        if (successfulChannels.length > 0 || true) { // Always create a record, even for failures
-          // Determine overall status
+        if (successfulChannels.length > 0 || true) {
           let status = 'pending';
           if (successfulChannels.length > 0) {
             status = successfulChannels.length === (type === 'both' ? 2 : 1) ? 'sent' : 'partial';
             
-            // Mark the registration code as invite-sent if the invite was successfully sent
             if (status === 'sent' || status === 'partial') {
               await markRegistrationCodeAsUsed(codeValue, 'invite-sent');
             }
           } else {
             status = 'failed';
             
-            // If the invite failed completely, mark the code as available again
             await markRegistrationCodeAsUsed(codeValue, 'available');
           }
           
-          // Create the invite record - using the raw SQL approach to bypass Prisma type issues
           const invite = await prisma.$queryRaw`
             INSERT INTO "Invite" (
               "id", "name", "email", "phone", "sent", "sentAt", "type", 
@@ -493,7 +462,6 @@ export async function POST(request: Request) {
             RETURNING *
           `
           
-          // Return the first result from the raw query
           return Array.isArray(invite) ? invite[0] : invite
         } else {
           throw new Error(`No successful channels to send invite to ${name}`)
@@ -504,13 +472,10 @@ export async function POST(request: Request) {
       }
     })
 
-    // Wait for all invites to be processed
     const results = await Promise.allSettled(invitePromises)
 
-    // Check for any failures
     const failures = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected')
     
-    // Process successful invites
     const successfulInvites = results
       .filter((result): result is PromiseFulfilledResult<any> => result.status === 'fulfilled')
       .map(result => result.value as { 
@@ -528,7 +493,6 @@ export async function POST(request: Request) {
     if (failures.length > 0) {
       console.error('[POST /api/admin/send-invites] Some invites failed:', failures)
       
-      // If all invites failed
       if (failures.length === recipients.length) {
         return NextResponse.json(
           { error: 'All invites failed to send. Please check your WhatsApp and email configuration.', failures },
@@ -536,7 +500,6 @@ export async function POST(request: Request) {
         )
       }
       
-      // If some invites succeeded but others failed
       return NextResponse.json({ 
         success: true,
         message: `Successfully sent ${successfulInvites.length} out of ${recipients.length} invites`,
