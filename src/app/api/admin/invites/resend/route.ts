@@ -294,6 +294,41 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invite has no registration code' }, { status: 400 });
     }
 
+    // Check if the registration code is still valid for this invite
+    try {
+      const prisma = require('@/lib/prisma').prisma;
+      const registrationCode = await prisma.registrationCode.findFirst({
+        where: { 
+          code: code,
+        }
+      });
+
+      if (!registrationCode) {
+        return NextResponse.json({ error: 'Registration code not found' }, { status: 400 });
+      }
+
+      // If the code has status 'invite-sent' but is associated with a different invite,
+      // we should not reuse it
+      if (registrationCode.status === 'invite-sent') {
+        // Check if there's another invite using this code
+        const existingInvite = await prisma.invite.findFirst({
+          where: {
+            code: code,
+            id: { not: id } // Not the current invite
+          }
+        });
+
+        if (existingInvite) {
+          return NextResponse.json({ 
+            error: 'This registration code is already assigned to another invitation' 
+          }, { status: 400 });
+        }
+      }
+    } catch (error) {
+      console.error('Error checking registration code:', error);
+      // Continue with the process, as this is just an additional check
+    }
+
     // Mark the code as pending while we attempt to resend
     await markRegistrationCodeAsUsed(code, 'pending');
 

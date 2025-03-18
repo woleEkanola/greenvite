@@ -58,6 +58,14 @@ async function sendSMSAfricasTalking(phone: string, name: string, code: string, 
       .replace(/{{code}}/g, code)
       .replace(/{{link}}/g, `${eventLink}#${code}`)
     
+    // Validate the phone number format
+    if (!formattedPhone.startsWith('+234') || formattedPhone.length !== 14) {
+      console.error(`Invalid phone number format: ${phone} (formatted to ${formattedPhone}). Must be a Nigerian number in international format.`);
+      return false;
+    }
+    
+    console.log(`Sending SMS via Africa's Talking to: ${formattedPhone} (original: ${phone})`);
+
     // Initialize the SDK
     const africastalking = require('africastalking')({
       apiKey: process.env.AT_API_KEY,
@@ -67,14 +75,6 @@ async function sendSMSAfricasTalking(phone: string, name: string, code: string, 
     // Get the SMS service
     const sms = africastalking.SMS;
     
-    // Validate the phone number format
-    if (!formattedPhone.startsWith('+234') || formattedPhone.length !== 14) {
-      console.error(`Invalid phone number format: ${phone} (formatted to ${formattedPhone}). Must be a Nigerian number in international format.`);
-      return false;
-    }
-    
-    console.log(`Sending SMS via Africa's Talking to: ${formattedPhone} (original: ${phone})`);
-
     // Send SMS - using the format from the Africa's Talking example (WITH the '+' sign)
     try {
       // Send SMS
@@ -113,15 +113,20 @@ async function sendSMSTermii(phone: string, name: string, code: string, message:
   try {
     console.log(`Sending SMS via Termii to ${name} (${phone})`)
     
-    // Format the phone number if needed (remove spaces, add country code if missing)
+    // Format the phone number if needed (remove spaces, ensure it has a + prefix)
     let formattedPhone = phone.replace(/\s+/g, '')
+    
+    // Ensure the phone number starts with a + sign
     if (!formattedPhone.startsWith('+')) {
       // Default to Nigeria country code if not specified
       formattedPhone = '+234' + formattedPhone.replace(/^0+/, '')
     }
     
-    // Remove the '+' sign for Termii as they don't expect it
-    formattedPhone = formattedPhone.replace('+', '')
+    // Store the original formatted phone (with +) for our records and logs
+    const originalFormattedPhone = formattedPhone;
+    
+    // Remove the '+' sign for Termii API as they don't expect it
+    const termiiPhone = formattedPhone.replace(/^\+/, '');
     
     // Replace placeholders in the message
     const personalizedMessage = message
@@ -129,18 +134,18 @@ async function sendSMSTermii(phone: string, name: string, code: string, message:
       .replace(/{{code}}/g, code)
       .replace(/{{link}}/g, `${eventLink}#${code}`)
     
-    // Validate the phone number format
-    if (!formattedPhone.startsWith('234') || formattedPhone.length !== 13) {
-      console.error(`Invalid phone number format: ${phone} (formatted to ${formattedPhone}). Must be a Nigerian number in international format without '+'.`);
+    // Validate the phone number format for Nigerian numbers
+    if (!termiiPhone.startsWith('234') || termiiPhone.length !== 13) {
+      console.error(`Invalid phone number format: ${phone} (formatted to ${termiiPhone}). Must be a Nigerian number in international format.`);
       return false;
     }
     
-    console.log(`Sending SMS via Termii to: ${formattedPhone} (original: ${phone})`);
+    console.log(`Sending SMS via Termii to: ${termiiPhone} (original: ${originalFormattedPhone})`);
 
     // Prepare the request payload for Termii
     const payload = {
-      to: formattedPhone,
-      from: process.env.TERMII_SENDER_ID,
+      to: termiiPhone,
+      from: process.env.TERMII_SENDER_ID || 'Greenvites',
       sms: personalizedMessage,
       type: "plain",
       channel: "dnd", // Use DND channel to bypass Do Not Disturb
@@ -149,22 +154,32 @@ async function sendSMSTermii(phone: string, name: string, code: string, message:
 
     // Send SMS using Termii API
     try {
+      if (!process.env.TERMII_API_KEY) {
+        console.error('Termii API key is not configured');
+        throw new Error('Termii API key is not configured');
+      }
+      
       const response = await axios.post('https://api.ng.termii.com/api/sms/send', payload);
       
       console.log('Termii SMS API response:', JSON.stringify(response.data));
 
       if (response.data && response.data.message_id) {
+        console.log(`SMS sent successfully via Termii to ${originalFormattedPhone}`);
         return true;
       } else {
-        throw new Error(`Failed to send SMS: ${response.data?.message || 'Unknown error'}`);
+        const errorMessage = response.data?.message || 'Unknown error';
+        console.error(`Failed to send SMS via Termii: ${errorMessage}`);
+        throw new Error(`Failed to send SMS: ${errorMessage}`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Termii SMS API error:', error);
+      console.error('Error details:', error.response?.data || error.message);
       // Return false instead of throwing to allow the process to continue
       return false;
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Termii SMS API error:', error);
+    console.error('Error message:', error.message);
     // Return false instead of throwing to allow the process to continue
     return false;
   }
@@ -220,6 +235,12 @@ async function sendEmail(email: string, name: string, code: string, subject: str
       .replace(/{{code}}/g, code)
       .replace(/{{link}}/g, `${eventLink}#${code}`) // Update the link format
     
+    // Check if SMTP credentials are properly configured
+    if (!process.env.SMTP_HOST || !process.env.SMTP_PORT) {
+      console.error('SMTP configuration is incomplete. Missing host or port.');
+      return false;
+    }
+    
     // Log SMTP configuration for debugging (without password)
     console.log(`SMTP Config: Host=${process.env.SMTP_HOST}, Port=${process.env.SMTP_PORT}, User=${process.env.SMTP_USER}, Secure=${process.env.SMTP_SECURE}`)
     
@@ -241,6 +262,8 @@ async function sendEmail(email: string, name: string, code: string, subject: str
       };
     } else {
       console.warn('SMTP credentials missing - attempting to send without authentication');
+      // For many SMTP servers, authentication is required
+      console.warn('Note: Most SMTP servers require authentication. This will likely fail.');
     }
     
     const transport = nodemailer.createTransport(transportConfig);
@@ -249,9 +272,17 @@ async function sendEmail(email: string, name: string, code: string, subject: str
     try {
       await transport.verify();
       console.log('SMTP connection verified successfully');
-    } catch (verifyError) {
-      console.warn('SMTP connection verification failed:', verifyError);
-      console.log('Attempting to send email anyway...');
+    } catch (verifyError: any) {
+      console.error('SMTP connection verification failed:', verifyError);
+      console.error('Error details:', verifyError.message);
+      
+      // If this is an authentication error, we should abort
+      if (verifyError.code === 'EAUTH') {
+        console.error('SMTP authentication failed. Please check your credentials.');
+        return false;
+      }
+      
+      console.log('Attempting to send email anyway despite connection verification failure...');
     }
 
     // Prepare email data
@@ -274,15 +305,33 @@ async function sendEmail(email: string, name: string, code: string, subject: str
     }
 
     // Send the email
-    const info = await transport.sendMail(mailOptions)
-    console.log(`Email sent to ${name}: ${info.messageId}`)
-    return true
-  } catch (error) {
-    console.error(`Failed to send email to ${name}:`, error)
+    try {
+      const info = await transport.sendMail(mailOptions)
+      console.log(`Email sent successfully to ${name} (${email}): ${info.messageId}`)
+      return true
+    } catch (sendError: any) {
+      console.error(`Failed to send email to ${name} (${email}):`, sendError)
+      console.error('Send error details:', sendError.message)
+      
+      if (sendError.code === 'EAUTH') {
+        console.error('SMTP authentication failed. Please check your credentials in the .env file.');
+      } else if (sendError.code === 'ESOCKET') {
+        console.error('SMTP connection error. Please check your SMTP host and port settings.');
+      } else if (sendError.code === 'ETIMEDOUT') {
+        console.error('SMTP connection timed out. Please check your SMTP host and port settings.');
+      }
+      
+      return false
+    }
+  } catch (error: any) {
+    console.error(`Failed to send email to ${name} (${email}):`, error)
+    console.error('Error message:', error.message)
     // Don't throw the error, just return false to indicate failure
     return false
   }
 }
+
+// ... rest of the code remains the same ...
 
 interface Recipient {
   name: string
@@ -317,7 +366,7 @@ export async function POST(request: Request) {
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 5px;">
         <h2 style="color: #2c3e50; text-align: center;">You are invited to the church dedication of</h2>
         <h1 style="color: #16a085; text-align: center; margin-bottom: 30px;">Jesse Oghenekome George</h1>
-        <p style="text-align: center; font-size: 18px;">at RCCG Church, Champion Cathedral Parish.</p>
+        <p style="text-align: center; font-size: 18px;">at RCCG Church, Champions Cathedral </p>
         
         <div style="margin: 30px 0; background-color: #f9f9f9; padding: 15px; border-radius: 5px;">
           <h3 style="color: #2c3e50; text-align: center; margin-top: 0;">LOCATIONS</h3>
@@ -338,7 +387,7 @@ export async function POST(request: Request) {
         <p style="text-align: center; margin-top: 30px; color: #7f8c8d; font-size: 14px;">We look forward to celebrating this special occasion with you.</p>
       </div>
     `
-    const smsMessage = formData.get('smsMessage') as string || `You're invited to Jesse Oghenekome George's Church Dedication at RCCG Church, Champions Cathedral, #16-18 Airport Road, Effurun, Warri Delta, Nigeria. 10:00 AM, Saturday, April 13, 2025. Your code: {{code}}. RSVP: {{link}}#{{code}}`
+    const smsMessage = formData.get('smsMessage') as string || `You're invited to Jesse Oghenekome George's Church Dedication at RCCG Church, Champions Cathedral, #16-18 Airport Road, Effurun, Warri Delta, Nigeria. 10:00 AM, Saturday, April 13, 2025. Your code: {{code}}. RSVP: {{link}}`
     const eventLink = formData.get('eventLink') as string || ''
     const enableEmail = formData.get('enableEmail') === 'true'
     const enableSMS = formData.get('enableSMS') === 'true'
@@ -386,29 +435,36 @@ export async function POST(request: Request) {
     const registrationCodes = await getRegistrationCodes()
     console.log(`Found ${registrationCodes.length} registration codes`)
     
-    // Filter for unused codes
-    let unusedCodes = registrationCodes
-      .filter((code: any) => !code.used)
+    // Filter for available codes only
+    // Exclude codes that are used or have already been sent as invites
+    let availableCodes = registrationCodes
+      .filter((code: any) => {
+        // Check if the code is not used and has a status of 'available'
+        // This ensures codes with 'invite-sent' status are not reused
+        return !code.used && (!code.status || code.status === 'available');
+      })
       .map((code: any) => code.code)
-    console.log(`Found ${unusedCodes.length} unused registration codes`)
+    console.log(`Found ${availableCodes.length} available registration codes`)
     
     // If we don't have enough codes, generate more
-    if (unusedCodes.length < recipients.length) {
-      console.log(`Need to generate ${recipients.length - unusedCodes.length} more registration codes`)
-      const newCodes = await createRegistrationCodes(recipients.length - unusedCodes.length)
+    if (availableCodes.length < recipients.length) {
+      console.log(`Need to generate ${recipients.length - availableCodes.length} more registration codes`)
+      const newCodes = await createRegistrationCodes(recipients.length - availableCodes.length)
       console.log(`Generated ${newCodes.count} new registration codes`)
       
-      // Get updated list of unused codes
+      // Get updated list of available codes
       const updatedRegistrationCodes = await getRegistrationCodes()
-      unusedCodes = updatedRegistrationCodes
-        .filter((code: any) => !code.used)
+      availableCodes = updatedRegistrationCodes
+        .filter((code: any) => {
+          return !code.used && (!code.status || code.status === 'available');
+        })
         .map((code: any) => code.code)
-      console.log(`Now have ${unusedCodes.length} unused registration codes`)
+      console.log(`Now have ${availableCodes.length} available registration codes`)
     }
     
-    if (unusedCodes.length < recipients.length) {
+    if (availableCodes.length < recipients.length) {
       return NextResponse.json(
-        { error: `Not enough registration codes available. Need ${recipients.length}, but only have ${unusedCodes.length}` },
+        { error: `Not enough registration codes available. Need ${recipients.length}, but only have ${availableCodes.length}` },
         { status: 400 }
       )
     }
@@ -424,8 +480,8 @@ export async function POST(request: Request) {
         
         // Get a registration code from the available codes
         let codeValue: string;
-        if (unusedCodes.length > 0) {
-          const regCode = unusedCodes.pop();
+        if (availableCodes.length > 0) {
+          const regCode = availableCodes.pop();
           codeValue = regCode ? regCode : generateRandomCode();
           
           // Mark the code as pending initially
@@ -442,11 +498,15 @@ export async function POST(request: Request) {
         let errorMessage: string | null = null;
 
         // Send email if requested
-        if ((type === 'email' || type === 'both') && email) {
+        if ((type === 'email' || type === 'both') && email && enableEmail) {
           try {
-            await sendEmail(email, name, codeValue, emailSubject, emailMessage, eventLink, emailImageBuffer);
-            emailStatus = 'sent';
-            successfulChannels.push('email');
+            const emailSuccess = await sendEmail(email, name, codeValue, emailSubject, emailMessage, eventLink, emailImageBuffer);
+            emailStatus = emailSuccess ? 'sent' : 'failed';
+            if (emailSuccess) {
+              successfulChannels.push('email');
+            } else {
+              errorMessage = 'Email sending failed';
+            }
           } catch (error) {
             console.error(`Failed to send email to ${name}:`, error);
             emailStatus = 'failed';
@@ -455,16 +515,20 @@ export async function POST(request: Request) {
         }
 
         // Send SMS if requested
-        if ((type === 'sms' || type === 'both') && phone) {
+        if ((type === 'sms' || type === 'both') && phone && enableSMS) {
           try {
-            await sendSMS(phone, name, codeValue, smsMessage, eventLink);
-            smsStatus = 'sent';
+            const smsSuccess = await sendSMS(phone, name, codeValue, smsMessage, eventLink);
+            smsStatus = smsSuccess ? 'sent' : 'failed';
             smsProvider = process.env.SMS_PROVIDER || 'africas_talking';
-            successfulChannels.push('sms');
+            if (smsSuccess) {
+              successfulChannels.push('sms');
+            } else {
+              errorMessage = (errorMessage ? errorMessage + '; ' : '') + 'SMS sending failed';
+            }
           } catch (error) {
             console.error(`Failed to send SMS to ${name}:`, error);
             smsStatus = 'failed';
-            errorMessage = (errorMessage || '') + (error instanceof Error ? error.message : 'Unknown SMS error');
+            errorMessage = (errorMessage ? errorMessage + '; ' : '') + (error instanceof Error ? error.message : 'Unknown SMS error');
           }
         }
 

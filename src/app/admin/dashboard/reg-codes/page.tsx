@@ -118,22 +118,29 @@ export default function RegCodes() {
       accessor: (code: RegCode) => {
         let statusText = 'Available';
         let colorClass = 'bg-green-100 text-green-800';
+        let description = 'Available for RSVP or invites';
         
         if (code.status === 'used' || code.used) {
           statusText = 'Used';
           colorClass = 'bg-red-100 text-red-800';
+          description = 'Used for RSVP';
         } else if (code.status === 'invite-sent') {
           statusText = 'Invite Sent';
           colorClass = 'bg-blue-100 text-blue-800';
+          description = 'Assigned to an invitation - can be used for RSVP but not for another invite';
         } else if (code.status === 'pending') {
           statusText = 'Pending';
           colorClass = 'bg-yellow-100 text-yellow-800';
+          description = 'Invitation in progress';
         }
         
         return (
-          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${colorClass}`}>
-            {statusText}
-          </span>
+          <div className="flex flex-col">
+            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${colorClass}`}>
+              {statusText}
+            </span>
+            <span className="text-xs text-gray-500 mt-1">{description}</span>
+          </div>
         );
       },
       searchable: false
