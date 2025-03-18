@@ -1,10 +1,31 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import RsvpModal from './RsvpModal'
 import Modal from '../../components/Modal'
 import Swal from 'sweetalert2'
+
+// Add CSS keyframes for the shaking animation
+const shakeAnimation = `
+@keyframes shake {
+  0% { transform: translateX(0); }
+  10% { transform: translateX(-5px); }
+  20% { transform: translateX(5px); }
+  30% { transform: translateX(-5px); }
+  40% { transform: translateX(5px); }
+  50% { transform: translateX(-5px); }
+  60% { transform: translateX(5px); }
+  70% { transform: translateX(-5px); }
+  80% { transform: translateX(5px); }
+  90% { transform: translateX(-5px); }
+  100% { transform: translateX(0); }
+}
+
+.shake-animation {
+  animation: shake 0.8s ease-in-out;
+}
+`;
 
 interface RsvpFormData {
   name: string
@@ -19,6 +40,8 @@ export default function InteractiveEventPage() {
   const [showCodeModal, setShowCodeModal] = useState(false)
   const [rsvpCode, setRsvpCode] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isShaking, setIsShaking] = useState(false)
+  const buttonRef = useRef<HTMLButtonElement>(null)
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -120,8 +143,33 @@ END:VCALENDAR`
     }
   }
 
+  // Add useEffect for periodic shaking animation
+  useEffect(() => {
+    if (!formData.reg_code) return; // Only animate if we have a registration code
+    
+    // Function to trigger the shake animation
+    const triggerShake = () => {
+      setIsShaking(true);
+      setTimeout(() => setIsShaking(false), 800); // Animation duration is 0.8s
+    };
+    
+    // Set up interval to trigger the animation every 30 seconds
+    const interval = setInterval(triggerShake, 2500);
+    
+    // Initial shake after 5 seconds
+    const initialTimeout = setTimeout(triggerShake, 900);
+    
+    return () => {
+      clearInterval(interval);
+      clearTimeout(initialTimeout);
+    };
+  }, [formData.reg_code]);
+
   return (
     <div className="min-h-screen bg-white">
+      {/* Add the keyframes animation to the page */}
+      <style jsx global>{shakeAnimation}</style>
+      
       {/* Main Content */}
       <div className="relative min-h-screen">
         {/* Image Container - 70% on large screens, 100% on mobile */}
@@ -207,7 +255,8 @@ END:VCALENDAR`
               {formData.reg_code && (
                 <div className="fixed bottom-8 left-0 w-full flex justify-center z-30">
                   <button 
-                    className="bg-emerald-500 text-white px-6 py-3 rounded-full text-sm font-medium hover:bg-emerald-600 transition-colors shadow-lg"
+                    ref={buttonRef}
+                    className={`bg-emerald-500 text-white px-6 py-3 rounded-full text-sm font-medium hover:bg-emerald-600 transition-colors shadow-lg ${isShaking ? 'shake-animation' : ''}`}
                     onClick={handleRsvp}
                   >
                     Confirm Your Attendance
