@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import nodemailer from 'nodemailer';
 import { v4 as uuidv4 } from 'uuid';
 import axios from 'axios';
+import sharp from 'sharp';
 
 // Update the Invite interface to include WhatsApp fields
 interface Invite {
@@ -59,7 +60,14 @@ emailTransporter.verify(function(error, success) {
 });
 
 // Function to send WhatsApp message using WhatsApp API
-async function sendWhatsAppMessage(phone: string, name: string, code: string, message: string, eventLink: string): Promise<boolean> {
+async function sendWhatsAppMessage(
+  phone: string, 
+  name: string, 
+  code: string, 
+  message: string, 
+  eventLink: string,
+  imageBuffer?: number[] | null
+): Promise<boolean> {
   try {
     console.log(`Sending WhatsApp message to ${name} (${phone})`)
     
@@ -95,51 +103,148 @@ async function sendWhatsAppMessage(phone: string, name: string, code: string, me
     
     console.log(`Sending WhatsApp message to: ${formattedPhone} (original: ${phone})`);
 
-    // Prepare the request payload for WhatsApp API
-    const payload = {
-      chatId: formattedPhone +'@c.us',
-      message: personalizedMessage,
-    };
-
-    // Send WhatsApp message using WhatsApp API
-    try {
-      if (!WAAPI_TOKEN) {
-        console.error('WhatsApp API token is not configured');
-        throw new Error('WhatsApp API token is not configured');
-      }
-      
-      const response = await axios.post(
-        `${WAAPI_BASE_URL}/instances/${INSTANCE_ID}/client/action/send-message`, 
-        payload, 
-        {
-          headers: {
-            'Authorization': `Bearer ${WAAPI_TOKEN}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-      
-      const data = response.data;
-      console.log('WhatsApp API response:', JSON.stringify(data));
-
-      if (data && data.data && data.data.status === 'success') {
-        console.log(`WhatsApp message sent successfully to ${formattedPhone}`);
-        return true;
-      } else {
-        const errorMessage = data?.data?.message || 'Unknown error';
-        console.error(`Failed to send WhatsApp message: ${errorMessage}`);
-        throw new Error(`Failed to send WhatsApp message: ${errorMessage}`);
-      }
-    } catch (error: any) {
-      console.error('WhatsApp API error:', error);
-      console.error('Error details:', error.response?.data || error.message);
-      // Return false instead of throwing to allow the process to continue
-      return false;
+    if (!WAAPI_TOKEN) {
+      console.error('WhatsApp API token is not configured');
+      throw new Error('WhatsApp API token is not configured');
     }
+
+    // Track if message was sent successfully
+    let messageSent = false;
+    
+    // If we have an image buffer, send a media message with caption
+    if (imageBuffer && imageBuffer.length > 0) {
+      try {
+        console.log('Sending WhatsApp media message...');
+        
+        // Convert the number array to a Buffer
+        const buffer = Buffer.from(imageBuffer);
+        
+        // Resize the image to reduce payload size
+        const resizedBuffer = await sharp(buffer)
+          .resize({ width: 800 }) // Resize to width of 800px, maintaining aspect ratio
+          .jpeg({ quality: 80 }) // Compress as JPEG with 80% quality
+          .toBuffer();
+        
+        console.log(`Original image size: ${buffer.length} bytes, Resized image size: ${resizedBuffer.length} bytes`);
+        
+        // According to https://waapi.readme.io/reference/post_instances-id-client-action-send-media
+        const mediaPayload = {
+          chatId: formattedPhone+'@c.us',
+          mediaBase64: resizedBuffer.toString('base64'),
+          mediaName: 'invitation.jpg',
+          mediaCaption: personalizedMessage
+        };
+
+        const mediaResponse = await axios.post(
+          `${WAAPI_BASE_URL}/instances/${INSTANCE_ID}/client/action/send-media`, 
+          mediaPayload, 
+          {
+            headers: {
+              'Authorization': `Bearer ${WAAPI_TOKEN}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+        
+        console.log('WhatsApp Media API response:', JSON.stringify(mediaResponse.data));
+
+        if (mediaResponse.data && mediaResponse.data.data && mediaResponse.data.data.status === 'success') {
+          console.log(`WhatsApp media message sent successfully to ${formattedPhone}`);
+          messageSent = true;
+        } else {
+          const errorMessage = mediaResponse.data?.data?.message || 'Unknown error';
+          console.error(`Failed to send WhatsApp media: ${errorMessage}`);
+        }
+      } catch (mediaError: any) {
+        console.error('WhatsApp Media API error:', mediaError);
+        console.error('Error details:', mediaError.response?.data || mediaError.message);
+        
+        if (mediaError.response && mediaError.response.status === 504) {
+          console.log(`WhatsApp media message to ${formattedPhone} received a 504 error, treating as successful`);
+          await prisma.invite.create({
+            data: {
+              name,
+              phone,
+              type: 'whatsapp-media',
+              status: '504-error',
+              errorMessage: '504 Gateway Timeout',
+              code
+            }
+          });
+          messageSent = true;
+        }
+      }
+    } else {
+      // If no image is provided, send a text-only message
+      try {
+        // Prepare the request payload for WhatsApp API
+        const payload = {
+          chatId: formattedPhone +'@c.us',
+          message: personalizedMessage,
+        };
+
+        // Send WhatsApp message using WhatsApp API
+        const response = await axios.post(
+          `${WAAPI_BASE_URL}/instances/${INSTANCE_ID}/client/action/send-message`, 
+          payload, 
+          {
+            headers: {
+              'Authorization': `Bearer ${WAAPI_TOKEN}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+        
+        const data = response.data;
+        console.log('WhatsApp API response:', JSON.stringify(data));
+
+        if (data && data.data && data.data.status === 'success') {
+          console.log(`WhatsApp message sent successfully to ${formattedPhone}`);
+          messageSent = true;
+        } else {
+          const errorMessage = data?.data?.message || 'Unknown error';
+          console.error(`Failed to send WhatsApp message: ${errorMessage}`);
+        }
+      } catch (error: any) {
+        console.error('WhatsApp Text API error:', error);
+        console.error('Error details:', error.response?.data || error.message);
+        
+        if (error.response && error.response.status === 504) {
+          console.log(`WhatsApp text message to ${formattedPhone} received a 504 error, treating as successful`);
+          await prisma.invite.create({
+            data: {
+              name,
+              phone,
+              type: 'whatsapp-text',
+              status: '504-error',
+              errorMessage: '504 Gateway Timeout',
+              code
+            }
+          });
+          messageSent = true;
+        }
+      }
+    }
+
+    return messageSent;
   } catch (error: any) {
-    console.error('WhatsApp API error:', error);
+    console.error('WhatsApp API general error:', error);
     console.error('Error message:', error.message);
-    // Return false instead of throwing to allow the process to continue
+    
+    if (error.response && error.response.status === 504) {
+      console.log(`WhatsApp message to ${phone} received a 504 error, treating as successful`);
+      await prisma.invite.create({
+        data: {
+          name,
+          phone,
+          type: 'whatsapp',
+          status: '504-error',
+          errorMessage: '504 Gateway Timeout',
+          code
+        }
+      });
+      return true;
+    }
     return false;
   }
 }
@@ -334,7 +439,8 @@ export async function POST(request: NextRequest) {
           invite.name || '',
           code,
           whatsappMessage || '',
-          eventLink || ''
+          eventLink || '',
+          emailImageBuffer  // Use the same image buffer for WhatsApp
         );
         whatsappStatus = whatsappSuccess ? 'sent' : 'failed';
         whatsappProvider = process.env.WHATSAPP_PROVIDER || 'whatsapp_api';

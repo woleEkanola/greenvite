@@ -85,8 +85,8 @@ async function sendWhatsAppMessage(phone: string, name: string, code: string, me
       throw new Error('WhatsApp API token is not configured');
     }
 
-    // Track if any message was sent successfully
-    let anyMessageSent = false;
+    // Track if message was sent successfully
+    let messageSent = false;
     
     // Resize the image to reduce payload size
     let resizedImageBuffer;
@@ -99,7 +99,7 @@ async function sendWhatsAppMessage(phone: string, name: string, code: string, me
       console.log(`Original image size: ${imageBuffer.length} bytes, Resized image size: ${resizedImageBuffer.length} bytes`);
     }
 
-    // Step 1: Send the media message if an image is available
+    // Send the media message with caption
     if (resizedImageBuffer) {
       try {
         console.log('Sending WhatsApp media message...');
@@ -107,12 +107,9 @@ async function sendWhatsAppMessage(phone: string, name: string, code: string, me
         // According to https://waapi.readme.io/reference/post_instances-id-client-action-send-media
         const mediaPayload = {
           chatId: formattedPhone+'@c.us',
-
           mediaBase64: resizedImageBuffer.toString('base64'),
           mediaName: 'invitation.jpg',
-        
           mediaCaption: message
-
         };
 
         const mediaResponse = await axios.post(
@@ -130,7 +127,7 @@ async function sendWhatsAppMessage(phone: string, name: string, code: string, me
 
         if (mediaResponse.data && mediaResponse.data.data && mediaResponse.data.data.status === 'success') {
           console.log(`WhatsApp media message sent successfully to ${formattedPhone}`);
-          anyMessageSent = true;
+          messageSent = true;
         } else {
           const errorMessage = mediaResponse.data?.data?.message || 'Unknown error';
           console.error(`Failed to send WhatsApp media: ${errorMessage}`);
@@ -151,62 +148,62 @@ async function sendWhatsAppMessage(phone: string, name: string, code: string, me
               code
             }
           });
-          anyMessageSent = true;
+          messageSent = true;
+        }
+      }
+    } else {
+      // If no image is provided, send a text-only message
+      try {
+        console.log('No image provided. Sending WhatsApp text message...');
+        
+        const textPayload = {
+          chatId: formattedPhone+'@c.us',
+          message: message
+        };
+
+        const textResponse = await axios.post(
+          `${WAAPI_BASE_URL}/instances/${INSTANCE_ID}/client/action/send-message`, 
+          textPayload, 
+          {
+            headers: {
+              'Authorization': `Bearer ${WAAPI_TOKEN}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+        
+        console.log('WhatsApp Text API response:', JSON.stringify(textResponse.data));
+
+        if (textResponse.data && textResponse.data.data && textResponse.data.data.status === 'success') {
+          console.log(`WhatsApp text message sent successfully to ${formattedPhone}`);
+          messageSent = true;
+        } else {
+          const errorMessage = textResponse.data?.data?.message || 'Unknown error';
+          console.error(`Failed to send WhatsApp text message: ${errorMessage}`);
+        }
+      } catch (textError: any) {
+        console.error('WhatsApp Text API error:', textError);
+        console.error('Error details:', textError.response?.data || textError.message);
+        
+        if (textError.response && textError.response.status === 504) {
+          console.log(`WhatsApp text message to ${formattedPhone} received a 504 error, treating as successful`);
+          await prisma.invite.create({
+            data: {
+              name,
+              phone,
+              type: 'whatsapp-text',
+              status: '504-error',
+              errorMessage: '504 Gateway Timeout',
+              code
+            }
+          });
+          messageSent = true;
         }
       }
     }
 
-    // Step 2: Always send the text message as well (regardless of media message success)
-    try {
-      console.log('Sending WhatsApp text message...');
-      
-      const textPayload = {
-        chatId: formattedPhone+'@c.us',
-        message: message
-      };
-
-      const textResponse = await axios.post(
-        `${WAAPI_BASE_URL}/instances/${INSTANCE_ID}/client/action/send-message`, 
-        textPayload, 
-        {
-          headers: {
-            'Authorization': `Bearer ${WAAPI_TOKEN}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-      
-      console.log('WhatsApp Text API response:', JSON.stringify(textResponse.data));
-
-      if (textResponse.data && textResponse.data.data && textResponse.data.data.status === 'success') {
-        console.log(`WhatsApp text message sent successfully to ${formattedPhone}`);
-        anyMessageSent = true;
-      } else {
-        const errorMessage = textResponse.data?.data?.message || 'Unknown error';
-        console.error(`Failed to send WhatsApp text message: ${errorMessage}`);
-      }
-    } catch (textError: any) {
-      console.error('WhatsApp Text API error:', textError);
-      console.error('Error details:', textError.response?.data || textError.message);
-      
-      if (textError.response && textError.response.status === 504) {
-        console.log(`WhatsApp text message to ${formattedPhone} received a 504 error, treating as successful`);
-        await prisma.invite.create({
-          data: {
-            name,
-            phone,
-            type: 'whatsapp-text',
-            status: '504-error',
-            errorMessage: '504 Gateway Timeout',
-            code
-          }
-        });
-        anyMessageSent = true;
-      }
-    }
-
-    // Return true if either message type was sent successfully
-    return anyMessageSent;
+    // Return true if message was sent successfully
+    return messageSent;
   } catch (error: any) {
     console.error('WhatsApp API general error:', error);
     console.error('Error message:', error.message);
