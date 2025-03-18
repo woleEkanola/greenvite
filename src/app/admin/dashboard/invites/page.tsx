@@ -15,17 +15,17 @@ interface Recipient {
   name: string
   email?: string
   phone?: string
-  type: 'email' | 'sms' | 'both'
+  type: 'email' | 'whatsapp' | 'both'
   code?: string
 }
 
 export default function SendInvites() {
-  const [recipients, setRecipients] = useState<Recipient[]>([{ name: '', email: '', phone: '', type: 'sms' }])
+  const [recipients, setRecipients] = useState<Recipient[]>([{ name: '', email: '', phone: '', type: 'whatsapp' }])
   const [isSending, setIsSending] = useState(false)
   const [previewData, setPreviewData] = useState<Recipient[]>([])
   const [showPreview, setShowPreview] = useState(false)
   const [enableEmail, setEnableEmail] = useState(true)
-  const [enableSMS, setEnableSMS] = useState(true)
+  const [enableWhatsApp, setEnableWhatsApp] = useState(true)
   const [emailMessage, setEmailMessage] = useState(`
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 5px;">
   <h2 style="color: #2c3e50; text-align: center;">You are invited to the church dedication of</h2>
@@ -51,7 +51,7 @@ export default function SendInvites() {
   <p style="text-align: center; margin-top: 30px; color: #7f8c8d; font-size: 14px;">We look forward to celebrating this special occasion with you.</p>
 </div>
   `)
-  const [smsMessage, setSMSMessage] = useState(`You're invited to Jesse Oghenekome George's Church Dedication at RCCG Church, Champions Cathedral, #16-18 Airport Road, Effurun, Warri Delta, Nigeria. 10:00 AM, Saturday, April 13, 2025. Your code: {{code}}. RSVP: {{link}}`)
+  const [whatsappMessage, setWhatsappMessage] = useState(`You're invited to Jesse Oghenekome George's Church Dedication at RCCG Church, Champions Cathedral, #16-18 Airport Road, Effurun, Warri Delta, Nigeria. 10:00 AM, Saturday, April 13, 2025. Your code: {{code}}. RSVP: {{link}}`)
   const [eventLink, setEventLink] = useState('https://greenvites.online/jessegeorge')
   const [emailSubject, setEmailSubject] = useState('Invitation to Jesse Oghenekome George\'s Church Dedication')
   const [emailImage, setEmailImage] = useState<File | null>(null)
@@ -61,12 +61,12 @@ export default function SendInvites() {
   const [editingInvite, setEditingInvite] = useState<any>(null)
   const [editedPhone, setEditedPhone] = useState('')
   const [editedEmail, setEditedEmail] = useState('')
-  const [resendChannel, setResendChannel] = useState<'sms' | 'email' | 'both'>('both')
+  const [resendChannel, setResendChannel] = useState<'whatsapp' | 'email' | 'both'>('both')
   const [isLoading, setIsLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleAddRecipient = () => {
-    setRecipients([...recipients, { name: '', email: '', phone: '', type: 'sms' }])
+    setRecipients([...recipients, { name: '', email: '', phone: '', type: 'whatsapp' }])
   }
 
   const handleRemoveRecipient = (index: number) => {
@@ -133,7 +133,7 @@ export default function SendInvites() {
           name: row.name || '',
           email: row.email || '',
           phone: row.phone || '',
-          type: row.type || 'sms'
+          type: row.type || 'whatsapp'
         }))
 
         setPreviewData(formattedData)
@@ -156,7 +156,7 @@ export default function SendInvites() {
     const template = [
       { name: 'John Doe', email: 'john@example.com', phone: '+2348012345678', type: 'both' },
       { name: 'Jane Smith', email: 'jane@example.com', phone: '', type: 'email' },
-      { name: 'Bob Johnson', email: '', phone: '+2348012345679', type: 'sms' }
+      { name: 'Bob Johnson', email: '', phone: '+2348012345679', type: 'whatsapp' }
     ]
     const ws = XLSX.utils.json_to_sheet(template)
     const wb = XLSX.utils.book_new()
@@ -189,14 +189,14 @@ export default function SendInvites() {
   const prepareRecipientData = () => {
     return recipients.map(recipient => {
       // Determine the type based on available contact info and user preference
-      let type: 'email' | 'sms' | 'both' = 'email' // Default to email
+      let type: 'email' | 'whatsapp' | 'both' = 'email' // Default to email
       
       if (recipient.email && recipient.phone) {
         type = 'both'
       } else if (recipient.email) {
         type = 'email'
       } else if (recipient.phone) {
-        type = 'sms'
+        type = 'whatsapp'
       }
       
       return {
@@ -214,8 +214,8 @@ export default function SendInvites() {
       // Filter recipients based on global toggles
       let validRecipients = prepareRecipientData()
       
-      if (!enableEmail && !enableSMS) {
-        throw new Error('Both email and SMS are disabled. Please enable at least one channel.')
+      if (!enableEmail && !enableWhatsApp) {
+        throw new Error('Both email and WhatsApp are disabled. Please enable at least one channel.')
       }
       
       // Apply global toggles to recipient types
@@ -224,14 +224,14 @@ export default function SendInvites() {
         
         // If recipient is set to 'both', but one channel is disabled globally
         if (type === 'both') {
-          if (!enableEmail) type = 'sms'
-          else if (!enableSMS) type = 'email'
+          if (!enableEmail) type = 'whatsapp'
+          else if (!enableWhatsApp) type = 'email'
         }
         // If recipient's channel is disabled globally
-        else if ((type === 'email' && !enableEmail) || (type === 'sms' && !enableSMS)) {
+        else if ((type === 'email' && !enableEmail) || (type === 'whatsapp' && !enableWhatsApp)) {
           // Try to use the other channel if available
-          if (type === 'email' && enableSMS && r.phone) type = 'sms'
-          else if (type === 'sms' && enableEmail && r.email) type = 'email'
+          if (type === 'email' && enableWhatsApp && r.phone) type = 'whatsapp'
+          else if (type === 'whatsapp' && enableEmail && r.email) type = 'email'
           // If no alternative channel is available, keep the original type
           // The recipient will be filtered out in the next step
         }
@@ -242,8 +242,8 @@ export default function SendInvites() {
       // Further filter recipients based on contact info
       validRecipients = validRecipients.filter(r => 
         (r.type === 'email' && r.email) || 
-        (r.type === 'sms' && r.phone) ||
-        (r.type === 'both' && ((enableEmail && r.email) || (enableSMS && r.phone)))
+        (r.type === 'whatsapp' && r.phone) ||
+        (r.type === 'both' && ((enableEmail && r.email) || (enableWhatsApp && r.phone)))
       )
 
       if (validRecipients.length === 0) {
@@ -254,10 +254,10 @@ export default function SendInvites() {
       const formData = new FormData()
       formData.append('emailSubject', emailSubject)
       formData.append('emailMessage', emailMessage)
-      formData.append('smsMessage', smsMessage)
+      formData.append('whatsappMessage', whatsappMessage)
       formData.append('eventLink', eventLink)
       formData.append('enableEmail', String(enableEmail))
-      formData.append('enableSMS', String(enableSMS))
+      formData.append('enableWhatsApp', String(enableWhatsApp))
       
       if (emailImage) {
         formData.append('emailImage', emailImage)
@@ -275,7 +275,7 @@ export default function SendInvites() {
         setSentInvites(data.sentInvites)
         setShowSentInvites(true)
         Swal.fire('Success', 'Invites sent successfully!', 'success')
-        setRecipients([{ name: '', email: '', phone: '', type: 'sms' }])
+        setRecipients([{ name: '', email: '', phone: '', type: 'whatsapp' }])
       } else {
         const error = await response.json()
         throw new Error(error.message || 'Failed to send invites')
@@ -293,7 +293,7 @@ export default function SendInvites() {
     setEditingInvite(invite)
     setEditedPhone(invite.phone || '')
     setEditedEmail(invite.email || '')
-    setResendChannel(invite.type === 'both' ? 'both' : (invite.type as 'sms' | 'email'))
+    setResendChannel(invite.type === 'both' ? 'both' : (invite.type as 'whatsapp' | 'email'))
     
     // Show the edit dialog
     Swal.fire({
@@ -318,8 +318,8 @@ export default function SendInvites() {
         <div class="mb-4">
           <label class="block text-sm font-medium text-gray-700 mb-1">Resend Via</label>
           <select id="channel" class="w-full p-2 border rounded">
-            ${invite.type === 'both' ? '<option value="both">Both SMS & Email</option>' : ''}
-            ${invite.phone ? '<option value="sms">SMS Only</option>' : ''}
+            ${invite.type === 'both' ? '<option value="both">Both WhatsApp & Email</option>' : ''}
+            ${invite.phone ? '<option value="whatsapp">WhatsApp Only</option>' : ''}
             ${invite.email ? '<option value="email">Email Only</option>' : ''}
           </select>
         </div>
@@ -329,13 +329,13 @@ export default function SendInvites() {
       preConfirm: () => {
         const phone = (document.getElementById('phone') as HTMLInputElement)?.value
         const email = (document.getElementById('email') as HTMLInputElement)?.value
-        const channel = (document.getElementById('channel') as HTMLSelectElement)?.value as 'sms' | 'email' | 'both'
+        const channel = (document.getElementById('channel') as HTMLSelectElement)?.value as 'whatsapp' | 'email' | 'both'
         
         return { phone, email, channel }
       }
     }).then(async (result) => {
       if (result.isConfirmed) {
-        const { phone, email, channel } = result.value as { phone: string, email: string, channel: 'sms' | 'email' | 'both' }
+        const { phone, email, channel } = result.value as { phone: string, email: string, channel: 'whatsapp' | 'email' | 'both' }
         
         setIsLoading(true)
         try {
@@ -356,7 +356,7 @@ export default function SendInvites() {
               phone,
               email,
               channel,
-              smsMessage,
+              whatsappMessage,
               emailSubject,
               emailMessage,
               eventLink,
@@ -600,32 +600,32 @@ export default function SendInvites() {
               
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-md font-medium">SMS Settings</h3>
+                  <h3 className="text-md font-medium">WhatsApp Settings</h3>
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input 
                       type="checkbox" 
                       className="sr-only peer"
-                      checked={enableSMS}
-                      onChange={() => setEnableSMS(!enableSMS)}
+                      checked={enableWhatsApp}
+                      onChange={() => setEnableWhatsApp(!enableWhatsApp)}
                     />
                     <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
-                    <span className="ml-3 text-sm font-medium text-gray-900">{enableSMS ? 'Enabled' : 'Disabled'}</span>
+                    <span className="ml-3 text-sm font-medium text-gray-900">{enableWhatsApp ? 'Enabled' : 'Disabled'}</span>
                   </label>
                 </div>
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    SMS Message
+                    WhatsApp Message
                   </label>
                   <div className="text-xs text-gray-500 mb-2">
                     Use {"{{name}}"}, {"{{code}}"}, and {"{{link}}"} as placeholders
                   </div>
                   <textarea
-                    value={smsMessage}
-                    onChange={(e) => setSMSMessage(e.target.value)}
+                    value={whatsappMessage}
+                    onChange={(e) => setWhatsappMessage(e.target.value)}
                     rows={8}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono text-sm"
-                    disabled={!enableSMS}
+                    disabled={!enableWhatsApp}
                   />
                 </div>
                 
@@ -698,9 +698,9 @@ export default function SendInvites() {
                       type="tel"
                       value={recipient.phone}
                       onChange={(e) => handleRecipientChange(index, 'phone', e.target.value)}
-                      className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 ${!enableSMS && 'opacity-50'}`}
-                      required={recipient.type === 'sms' || (recipient.type === 'both' && enableSMS)}
-                      disabled={!enableSMS}
+                      className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 ${!enableWhatsApp && 'opacity-50'}`}
+                      required={recipient.type === 'whatsapp' || (recipient.type === 'both' && enableWhatsApp)}
+                      disabled={!enableWhatsApp}
                       placeholder="+234XXXXXXXXXX"
                     />
                   </div>
@@ -711,12 +711,12 @@ export default function SendInvites() {
                     </label>
                     <select
                       value={recipient.type}
-                      onChange={(e) => handleRecipientChange(index, 'type', e.target.value as 'email' | 'sms' | 'both')}
+                      onChange={(e) => handleRecipientChange(index, 'type', e.target.value as 'email' | 'whatsapp' | 'both')}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     >
-                      {enableSMS && <option value="sms">SMS</option>}
+                      {enableWhatsApp && <option value="whatsapp">WhatsApp</option>}
                       {enableEmail && <option value="email">Email</option>}
-                      {enableEmail && enableSMS && <option value="both">Both</option>}
+                      {enableEmail && enableWhatsApp && <option value="both">Both</option>}
                     </select>
                   </div>
                 </div>
@@ -790,19 +790,19 @@ export default function SendInvites() {
                 searchable: false
               },
               {
-                header: 'SMS Status',
+                header: 'WhatsApp Status',
                 accessor: (invite: any) => (
                   <div>
-                    {invite.smsStatus ? (
-                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadgeColor(invite.smsStatus)}`}>
-                        {getStatusIcon(invite.smsStatus)} {invite.smsStatus}
+                    {invite.whatsappStatus ? (
+                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadgeColor(invite.whatsappStatus)}`}>
+                        {getStatusIcon(invite.whatsappStatus)} {invite.whatsappStatus}
                       </span>
                     ) : (
                       <span className="text-gray-400">N/A</span>
                     )}
-                    {invite.smsProvider && (
+                    {invite.whatsappProvider && (
                       <div className="text-xs text-gray-500 mt-1">
-                        via {invite.smsProvider === 'africas_talking' ? 'Africa\'s Talking' : 'Termii'}
+                        via {invite.whatsappProvider === 'twilio' ? 'Twilio' : 'Nexmo'}
                       </div>
                     )}
                   </div>
@@ -828,7 +828,7 @@ export default function SendInvites() {
                 header: 'Actions',
                 accessor: (invite: any) => (
                   <div className="text-right">
-                    {(invite.smsStatus === 'failed' || invite.emailStatus === 'failed') && (
+                    {(invite.whatsappStatus === 'failed' || invite.emailStatus === 'failed') && (
                       <button
                         onClick={() => handleResendInvite(invite)}
                         className="text-indigo-600 hover:text-indigo-900 mr-4"

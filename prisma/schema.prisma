@@ -62,6 +62,8 @@ model Invite {
   sentAt            DateTime @default(now())
   type              String   // "email", "sms", or "both"
   status            String   // "sent", "delivered", "failed", "pending", "canceled"
+  whatsappStatus    String? // "sent", "delivered", "failed", "pending"
+  whatsappProvider   String? // "whatsapp_api", "another_provider"
   emailStatus       String? // "sent", "delivered", "failed", "pending"
   smsStatus         String? // "sent", "delivered", "failed", "pending"
   smsProvider       String? // "africas_talking", "termii"
