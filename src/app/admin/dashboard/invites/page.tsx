@@ -39,7 +39,7 @@ export default function SendInvites() {
     <p style="text-align: center;">#16-18 Airport Road, Effurun, Warri Delta</p>
     <p style="text-align: center;">Nigeria</p>
     <p style="text-align: center; font-size: 20px; margin: 20px 0;">10:00 AM</p>
-    <p style="text-align: center; font-size: 18px;">Saturday, April 13, 2025</p>
+    <p style="text-align: center; font-size: 18px;">Sunday, April 13, 2025</p>
   </div>
   
   <div style="margin: 30px 0; text-align: center;">
@@ -51,7 +51,7 @@ export default function SendInvites() {
   <p style="text-align: center; margin-top: 30px; color: #7f8c8d; font-size: 14px;">We look forward to celebrating this special occasion with you.</p>
 </div>
   `)
-  const [whatsappMessage, setWhatsappMessage] = useState(`You're invited to Jesse Oghenekome George's Church Dedication at RCCG Church, Champions Cathedral, #16-18 Airport Road, Effurun, Warri Delta, Nigeria. 10:00 AM, Saturday, April 13, 2025. Your code: {{code}}. RSVP: {{link}}`)
+  const [whatsappMessage, setWhatsappMessage] = useState(`You're invited to Jesse Oghenekome George's Church Dedication at RCCG Church, Champions Cathedral, #16-18 Airport Road, Effurun, Warri Delta, Nigeria. 10:00 AM, Sunday, April 13, 2025. Your code: {{code}}. RSVP: {{link}}`)
   const [eventLink, setEventLink] = useState('https://greenvites.online/jessegeorge')
   const [emailSubject, setEmailSubject] = useState('Invitation to Jesse Oghenekome George\'s Church Dedication')
   const [emailImage, setEmailImage] = useState<File | null>(null)

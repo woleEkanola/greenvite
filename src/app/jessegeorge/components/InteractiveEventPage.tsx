@@ -169,7 +169,7 @@ END:VCALENDAR`
                     <p className="text-gray-700 tracking-wide">#16-18 Airport Road, Effurun, Warri Delta</p>
                     <p className="text-gray-700 tracking-wide mb-4">Nigeria</p>
                     <p className="text-gray-600 text-sm tracking-wider">10:00 AM</p>
-                    <p className="text-gray-600 text-sm tracking-wider mb-8">Saturday, April 13, 2025</p>
+                    <p className="text-gray-600 text-sm tracking-wider mb-8">Sunday, April 13, 2025</p>
 
                     <h4 className="text-gray-700 font-light tracking-wider uppercase mt-8 mb-4">Reception</h4>
                     <p className="text-gray-700 tracking-wide mb-8">KFT Event Hall</p>

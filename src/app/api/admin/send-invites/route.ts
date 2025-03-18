@@ -303,7 +303,7 @@ export async function POST(request: Request) {
           <p style="text-align: center;">#16-18 Airport Road, Effurun, Warri Delta</p>
           <p style="text-align: center;">Nigeria</p>
           <p style="text-align: center; font-size: 20px; margin: 20px 0;">10:00 AM</p>
-          <p style="text-align: center; font-size: 18px;">Saturday, April 13, 2025</p>
+          <p style="text-align: center; font-size: 18px;">Sunday, April 13, 2025</p>
         </div>
         
         <div style="margin: 30px 0; text-align: center;">
@@ -315,7 +315,7 @@ export async function POST(request: Request) {
         <p style="text-align: center; margin-top: 30px; color: #7f8c8d; font-size: 14px;">We look forward to celebrating this special occasion with you.</p>
       </div>
     `
-    const whatsappMessage = formData.get('whatsappMessage') as string || `You're invited to Jesse Oghenekome George's Church Dedication at RCCG Church, Champions Cathedral, #16-18 Airport Road, Effurun, Warri Delta, Nigeria. 10:00 AM, Saturday, April 13, 2025. Your code: {{code}}. RSVP: {{link}}`
+    const whatsappMessage = formData.get('whatsappMessage') as string || `You're invited to Jesse Oghenekome George's Church Dedication at RCCG Church, Champions Cathedral, #16-18 Airport Road, Effurun, Warri Delta, Nigeria. 10:00 AM, Sunday, April 13, 2025. Your code: {{code}}. RSVP: {{link}}`
     const eventLink = formData.get('eventLink') as string || ''
     const enableEmail = formData.get('enableEmail') === 'true'
     const enableWhatsApp = formData.get('enableWhatsApp') === 'true'
