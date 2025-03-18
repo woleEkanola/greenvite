@@ -144,52 +144,50 @@ async function sendEmail(
   emailImageBuffer: number[] | null
 ): Promise<boolean> {
   try {
-    // Prepare the email content with the registration code
-    const personalizedMessage = message
-      .replace(/\{\{name\}\}/g, name)
-      .replace(/\{\{code\}\}/g, code)
-      .replace(/\{link\}/g, eventLink);
+    console.log(`Resending email to ${name} (${email})`)
+    
+    // Add the image placeholder if not already present in the message
+    let personalizedMessage = message;
+    if (emailImageBuffer && !message.includes('{{image}}')) {
+      personalizedMessage = `<div><img src="cid:invitation-image" alt="Invitation Image" style="max-width: 100%; height: auto; margin-bottom: 20px;"/></div>${personalizedMessage}`;
+    }
+    
+    // Now replace template variables
+    personalizedMessage = personalizedMessage
+      .replace(/{{name}}/g, name)
+      .replace(/{{code}}/g, code)
+      .replace(/{{link}}/g, `${eventLink}#${code}`)
+      .replace(/{{image}}/g, '<img src="cid:invitation-image" alt="Invitation Image" style="max-width: 100%; height: auto; margin-bottom: 20px;"/>');
 
-    // Prepare email attachments if image is provided
-    const attachments = emailImageBuffer
-      ? [
-          {
-            filename: 'invitation.jpg',
-            content: Buffer.from(emailImageBuffer),
-            cid: 'invitation-image',
-          },
-        ]
-      : [];
-
-    // Prepare HTML content
-    const htmlContent = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #4a5568;">Hello ${name},</h2>
-        ${
-          emailImageBuffer
-            ? `<div style="text-align: center; margin: 20px 0;">
-                <img src="cid:invitation-image" alt="Event Invitation" style="max-width: 100%; border-radius: 8px;" />
-              </div>`
-            : ''
-        }
-        ${personalizedMessage}
-      </div>
-    `;
-
-    // Send the email
-    const info = await emailTransporter.sendMail({
+    // Prepare email options
+    const mailOptions: any = {
       from: `"Greenvites" <${process.env.SMTP_USER}>`,
       to: email,
       subject: subject,
-      html: htmlContent,
-      attachments: attachments,
-    });
+      html: personalizedMessage
+    };
 
-    console.log(`Email sent to ${email}: ${info.messageId}`);
+    // Add attachment if image buffer is provided - use original size without resizing
+    if (emailImageBuffer) {
+      const imageBufferSize = Buffer.from(emailImageBuffer).length;
+      console.log(`Using original image for email resend with size: ${imageBufferSize} bytes`);
+      console.log('Adding image attachment with CID: invitation-image');
+      mailOptions.attachments = [
+        {
+          filename: 'invitation.jpg',
+          content: Buffer.from(emailImageBuffer),
+          cid: 'invitation-image' // Same CID value as in the <img> tag
+        }
+      ];
+    }
+
+    // Send the email
+    const info = await emailTransporter.sendMail(mailOptions);
+    console.log(`Email resent successfully to ${name} (${email}): ${info.messageId}`);
     return true;
   } catch (error) {
-    console.error(`Error sending email to ${email}:`, error);
-    throw error;
+    console.error(`Error resending email to ${email}:`, error);
+    return false;
   }
 }
 

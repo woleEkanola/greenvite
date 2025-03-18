@@ -13,9 +13,17 @@ interface RichTextEditorProps {
   placeholder?: string
   height?: number
   disabled?: boolean
+  showImageVariable?: boolean
 }
 
-const RichTextEditor = ({ value, onChange, placeholder = 'Enter your content here...', height = 200, disabled = false }: RichTextEditorProps) => {
+const RichTextEditor = ({ 
+  value, 
+  onChange, 
+  placeholder = 'Enter your content here...', 
+  height = 200, 
+  disabled = false,
+  showImageVariable = true
+}: RichTextEditorProps) => {
   // State to track if the component is mounted (for SSR)
   const [mounted, setMounted] = useState(false)
 
@@ -53,7 +61,7 @@ const RichTextEditor = ({ value, onChange, placeholder = 'Enter your content her
     let processedContent = content
     
     // Check for and preserve template variables like {{name}}, {{code}}, {{link}}
-    const templateVars = ['{{name}}', '{{code}}', '{{link}}']
+    const templateVars = ['{{name}}', '{{code}}', '{{link}}', '{{image}}']
     templateVars.forEach(variable => {
       // Create a regex that matches the variable even if it's wrapped in HTML tags
       const regex = new RegExp(`(<[^>]*>)?${variable.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(<[^>]*>)?`, 'g')
@@ -82,6 +90,12 @@ const RichTextEditor = ({ value, onChange, placeholder = 'Enter your content her
         <br />
         {/* Only show code and link variables if they're likely to be used */}
         If registration code is enabled: <code>{'{{code}}'}</code> - Registration code, <code>{'{{link}}'}</code> - Event link with code
+        {showImageVariable && (
+          <>
+            <br />
+            <code>{'{{image}}'}</code> - Insert the uploaded invitation image (will appear as an embedded image in email)
+          </>
+        )}
       </div>
       <style jsx>{`
         .rich-text-editor :global(.ql-editor) {

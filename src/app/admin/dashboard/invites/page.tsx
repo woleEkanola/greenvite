@@ -28,6 +28,7 @@ export default function SendInvites() {
   const [enableWhatsApp, setEnableWhatsApp] = useState(true)
   const [emailMessage, setEmailMessage] = useState(`
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 5px;">
+  {{image}}
   <h2 style="color: #2c3e50; text-align: center;">You are invited to the church dedication of</h2>
   <h1 style="color: #16a085; text-align: center; margin-bottom: 30px;">Jesse Oghenekome George</h1>
   <p style="text-align: center; font-size: 18px;">at RCCG Church, Champions Cathedral.</p>
@@ -45,10 +46,8 @@ export default function SendInvites() {
   <div style="margin: 30px 0; text-align: center;">
     <p>Your personal registration code is: <strong>{{code}}</strong></p>
     <a href="{{link}}" style="display: inline-block; background-color: #16a085; color: white; padding: 12px 25px; text-decoration: none; border-radius: 4px; font-weight: bold;">Confirm Your Attendance</a>
-    <p style="margin-top: 15px; font-size: 14px; color: #7f8c8d;">Please click the button above to confirm your attendance or visit <a href="{{link}}" style="color: #16a085;">{{link}}</a></p>
+    <p style="text-align: center; margin-top: 30px; color: #7f8c8d; font-size: 14px;">We look forward to celebrating this special occasion with you.</p>
   </div>
-  
-  <p style="text-align: center; margin-top: 30px; color: #7f8c8d; font-size: 14px;">We look forward to celebrating this special occasion with you.</p>
 </div>
   `)
   const [whatsappMessage, setWhatsappMessage] = useState(`You're invited to Jesse Oghenekome George's Church Dedication at RCCG Church, Champions Cathedral, #16-18 Airport Road, Effurun, Warri Delta, Nigeria. 10:00 AM, Sunday, April 13, 2025. Your code: {{code}}. RSVP: {{link}}`)

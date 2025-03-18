@@ -36,6 +36,7 @@
     "react-dom": "^18.2.0",
     "react-quill": "^2.0.0",
     "recharts": "^2.15.1",
+    "sharp": "^0.33.5",
     "sonner": "^2.0.1",
     "sweetalert2": "^11.17.2",
     "uuid": "^11.1.0",
