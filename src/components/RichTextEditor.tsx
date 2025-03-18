@@ -77,7 +77,7 @@ const RichTextEditor = ({ value, onChange, placeholder = 'Enter your content her
           readOnly={disabled}
         />
       )}
-      <div className="text-xs text-gray-500 mt-12">
+      <div className="text-xs text-gray-500 pt-[50px]">
         <strong>Available template variables:</strong> <code>{'{{name}}'}</code> - Recipient&apos;s name
         <br />
         {/* Only show code and link variables if they're likely to be used */}

@@ -36,6 +36,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check if code is available - both 'available' and 'invite-sent' status should be valid for RSVP
+    // Cast to any to access the status field which might not be in the TypeScript type yet
+    const regCodeWithStatus = registrationCode as any;
+    if (regCodeWithStatus.status && 
+        regCodeWithStatus.status !== 'available' && 
+        regCodeWithStatus.status !== 'invite-sent') {
+      return NextResponse.json(
+        { error: 'This registration code is not available for use' },
+        { status: 400 }
+      );
+    }
+
     // Create RSVP entry and update registration code status
     const rsvp = await prisma.$transaction(async (tx) => {
       // Create the RSVP

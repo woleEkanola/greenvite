@@ -58,7 +58,7 @@ export default function InteractiveEventPage() {
     const event = {
       title: 'Church Dedication - Jesse Oghenekome George',
       description: 'Church dedication service followed by reception at KFT Event Hall.',
-      location: 'RCCG Church, Champion Cathedral Parish, #80 airport road Warri, Delta State, Nigeria',
+      location: 'RCCG Church, Champions Cathedral , #16-18 Airport Road, Effurun, Warri Delta, Nigeria',
       startTime: '2025-04-13T09:00:00',
       endTime: '2025-04-13T12:00:00',
     }
@@ -157,7 +157,7 @@ END:VCALENDAR`
                   <p className="text-gray-600 text-sm leading-relaxed text-center tracking-wide">
                     You are invited to the church dedication of
                     <span className="block font-medium mt-2 mb-2">Jesse Oghenekome George</span>
-                    at RCCG Church, Champion Cathedral Parish.
+                    at RCCG Church, Champions Cathedral .
                   </p>
                 </div>
 

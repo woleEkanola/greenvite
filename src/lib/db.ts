@@ -175,17 +175,30 @@ export async function createRsvp(data: RsvpData) {
 export async function getRsvpStats() {
   console.log('[getRsvpStats] Fetching RSVP statistics')
   try {
-    const [totalRsvp, availableRegistrations] = await Promise.all([
+    const [totalRsvp, availableRegistrations, pendingRegistrations, usedRegistrations, inviteSentRegistrations] = await Promise.all([
       prismaClient.rsvp.count(),
       prismaClient.registrationCode.count({
-        where: { used: false },
+        where: { status: 'available' },
+      }),
+      prismaClient.registrationCode.count({
+        where: { status: 'pending' },
+      }),
+      prismaClient.registrationCode.count({
+        where: { status: 'used' },
+      }),
+      prismaClient.registrationCode.count({
+        where: { status: 'invite-sent' },
       }),
     ])
 
-    console.log(`[getRsvpStats] Stats - Total RSVPs: ${totalRsvp}, Available Codes: ${availableRegistrations}`)
+    console.log(`[getRsvpStats] Stats - Total RSVPs: ${totalRsvp}, Available Codes: ${availableRegistrations}, Pending: ${pendingRegistrations}, Used: ${usedRegistrations}, Invite Sent: ${inviteSentRegistrations}`)
     return {
       totalRsvp,
       availableRegistrations,
+      pendingRegistrations,
+      usedRegistrations,
+      inviteSentRegistrations,
+      totalRegistrationCodes: availableRegistrations + pendingRegistrations + usedRegistrations + inviteSentRegistrations
     }
   } catch (error) {
     console.error('[getRsvpStats] Error fetching RSVP stats:', error)
@@ -213,12 +226,36 @@ export async function createInvites(invites: InviteData[]) {
 export async function getInviteStats() {
   console.log('[getInviteStats] Fetching invite statistics')
   try {
-    const totalInvitesSent = await prismaClient.invite.count({
-      where: { sent: true },
-    })
+    const [totalInvitesSent, emailInvites, smsInvites, bothInvites, successfulInvites, failedInvites] = await Promise.all([
+      prismaClient.invite.count({
+        where: { sent: true },
+      }),
+      prismaClient.invite.count({
+        where: { type: 'email' },
+      }),
+      prismaClient.invite.count({
+        where: { type: 'sms' },
+      }),
+      prismaClient.invite.count({
+        where: { type: 'both' },
+      }),
+      prismaClient.invite.count({
+        where: { status: 'sent' },
+      }),
+      prismaClient.invite.count({
+        where: { status: 'failed' },
+      }),
+    ])
 
-    console.log(`[getInviteStats] Total invites sent: ${totalInvitesSent}`)
-    return { totalInvitesSent }
+    console.log(`[getInviteStats] Total invites sent: ${totalInvitesSent}, Email: ${emailInvites}, SMS: ${smsInvites}, Both: ${bothInvites}, Success: ${successfulInvites}, Failed: ${failedInvites}`)
+    return { 
+      totalInvitesSent,
+      emailInvites,
+      smsInvites,
+      bothInvites,
+      successfulInvites,
+      failedInvites
+    }
   } catch (error) {
     console.error('[getInviteStats] Error fetching invite stats:', error)
     throw error
@@ -310,49 +347,31 @@ export async function cancelInvite(id: string) {
 }
 
 export async function markRegistrationCodeAsUsed(code: string, status: 'pending' | 'used' | 'available' | 'invite-sent' = 'used') {
-  console.log(`[markRegistrationCodeAsUsed] Marking registration code ${code} as ${status}`)
+  console.log(`[markRegistrationCodeAsUsed] Marking code ${code} as ${status}`)
   try {
-    const regCode = await prismaClient.registrationCode.findFirst({
-      where: { code }
+    const registrationCode = await prismaClient.registrationCode.findUnique({
+      where: { code },
     })
 
-    if (!regCode) {
-      console.warn(`[markRegistrationCodeAsUsed] Registration code ${code} not found`)
-      return null
+    if (!registrationCode) {
+      console.error(`[markRegistrationCodeAsUsed] Registration code ${code} not found`)
+      throw new Error('Registration code not found')
     }
 
-    // For 'used' status, mark as used with timestamp
-    // For 'available' status, mark as not used with null timestamp
-    // For 'pending' status, we don't change anything (code is reserved but not marked as used yet)
-    // For 'invite-sent' status, mark the status as invite-sent but not used yet
-    const updateData: any = {
-      status: status // Always update the status field
-    }
-    
-    if (status === 'used') {
-      updateData.used = true
-      updateData.usedAt = new Date()
-    } else if (status === 'available') {
-      updateData.used = false
-      updateData.usedAt = null
-    } else if (status === 'invite-sent') {
-      updateData.used = false
-      updateData.usedAt = null
-    }
-    // For 'pending', we only update the status field
+    // Update the registration code status
+    const updatedCode = await prismaClient.registrationCode.update({
+      where: { id: registrationCode.id },
+      data: {
+        used: status === 'used',
+        usedAt: status === 'used' ? new Date() : null,
+        status,
+      },
+    })
 
-    // Only update if we have changes to make
-    if (Object.keys(updateData).length > 0) {
-      const updatedCode = await prismaClient.registrationCode.update({
-        where: { id: regCode.id },
-        data: updateData
-      })
-      return updatedCode
-    }
-    
-    return regCode
+    console.log(`[markRegistrationCodeAsUsed] Successfully updated code ${code} to ${status}`)
+    return updatedCode
   } catch (error) {
-    console.error(`[markRegistrationCodeAsUsed] Error updating registration code ${code}:`, error)
+    console.error(`[markRegistrationCodeAsUsed] Error updating code ${code}:`, error)
     throw error
   }
 }

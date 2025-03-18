@@ -40,7 +40,8 @@ export async function POST(request: NextRequest) {
     // but it exists in the database schema
     const regCodeWithStatus = registrationCode as any;
     
-    // Check if code is available or has been sent as an invite
+    // Check if code is available - both 'available' and 'invite-sent' status should be valid for RSVP
+    // Only other statuses like 'used' or 'pending' should be rejected
     if (regCodeWithStatus.status && 
         regCodeWithStatus.status !== 'available' && 
         regCodeWithStatus.status !== 'invite-sent') {

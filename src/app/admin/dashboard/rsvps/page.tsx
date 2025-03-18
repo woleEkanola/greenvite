@@ -57,7 +57,7 @@ export default function RsvpsPage() {
     <p style="text-align: center;">Thank you for confirming your attendance to our church dedication.</p>
     <p style="text-align: center;">We look forward to seeing you!</p>
     ${includeRegistrationCode ? '<p style="text-align: center;">Your registration code is: <strong>{{code}}</strong></p>' : ''}
-    ${includeRegistrationCode ? '<p style="text-align: center;">Please use this link to access the event details: <a href="{{link}}#{{code}}">{{link}}#{{code}}</a></p>' : ''}
+    ${includeRegistrationCode ? '<p style="text-align: center;">Please use this link to access the event details: <a href="{{link}}">{{link}}</a></p>' : ''}
   </div>
   
   <p style="text-align: center; margin-top: 30px; color: #7f8c8d; font-size: 14px;">Best regards,<br>Jesse Oghenekome George</p>
