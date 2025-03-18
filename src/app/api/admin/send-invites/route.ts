@@ -4,9 +4,22 @@ import { authOptions } from '@/lib/auth'
 import { createRegistrationCodes, getRegistrationCodes, markRegistrationCodeAsUsed } from '@/lib/db'
 import nodemailer from 'nodemailer'
 import { v4 as uuidv4 } from 'uuid'
-import AfricasTalking from 'africastalking'
 import axios from 'axios'; // Import axios for Termii API
 import { prisma } from '@/lib/prisma'; // Import prisma
+
+// WhatsApp API configuration
+const WAAPI_BASE_URL = process.env.WAAPI_BASE_URL || 'https://waapi.app/api/v1';
+const WAAPI_TOKEN = process.env.WAAPI_TOKEN;
+const INSTANCE_ID = process.env.WAAPI_INSTANCE_ID;
+
+// WhatsApp API response interface
+interface WhatsAppResponse {
+  data: {
+    status: string;
+    message?: string;
+    response?: any;
+  }
+}
 
 // Configure email transporter
 const emailTransporter = nodemailer.createTransport({
@@ -35,180 +48,66 @@ emailTransporter.verify(function(error, success) {
   }
 });
 
-// Function to send SMS using Africa's Talking
-async function sendSMSAfricasTalking(phone: string, name: string, code: string, message: string, eventLink: string): Promise<boolean> {
+// Function to send WhatsApp message using WhatsApp API
+async function sendWhatsAppMessage(phone: string, name: string, code: string, message: string, eventLink: string): Promise<boolean> {
   try {
-    console.log(`Sending SMS via Africa's Talking to ${name} (${phone})`)
+    console.log(`Sending WhatsApp message to ${name} (${phone})`)
     
-    if (!process.env.AT_API_KEY || !process.env.AT_USERNAME) {
-      console.error('Africa\'s Talking credentials not found');
-      return false;
-    }
-    
-    // Format the phone number if needed (remove spaces, add country code if missing)
-    let formattedPhone = phone.replace(/\s+/g, '')
-    if (!formattedPhone.startsWith('+')) {
+    // Format the phone number to always start with 234 and remove any leading +
+    let formattedPhone = phone.replace(/\s+/g, '').replace(/^\+/, '');
+    if (!formattedPhone.startsWith('234')) {
       // Default to Nigeria country code if not specified
-      formattedPhone = '+234' + formattedPhone.replace(/^0+/, '')
+      formattedPhone = '234' + formattedPhone.replace(/^0+/, '');
     }
-    
-    // Replace placeholders in the message
-    const personalizedMessage = message
-      .replace(/{{name}}/g, name)
-      .replace(/{{code}}/g, code)
-      .replace(/{{link}}/g, `${eventLink}#${code}`)
-    
+
     // Validate the phone number format
-    if (!formattedPhone.startsWith('+234') || formattedPhone.length !== 14) {
-      console.error(`Invalid phone number format: ${phone} (formatted to ${formattedPhone}). Must be a Nigerian number in international format.`);
+    if (!formattedPhone.startsWith('234') || formattedPhone.length !== 13) {
+      console.error(`Invalid phone number format: ${phone} (formatted to ${formattedPhone}). Must be a Nigerian number starting with 234.`);
       return false;
     }
     
-    console.log(`Sending SMS via Africa's Talking to: ${formattedPhone} (original: ${phone})`);
+    console.log(`Sending WhatsApp message to: ${formattedPhone} (original: ${phone})`);
 
-    // Initialize the SDK
-    const africastalking = require('africastalking')({
-      apiKey: process.env.AT_API_KEY,
-      username: process.env.AT_USERNAME,
-    });
-
-    // Get the SMS service
-    const sms = africastalking.SMS;
-    
-    // Send SMS - using the format from the Africa's Talking example (WITH the '+' sign)
-    try {
-      // Send SMS
-      const response = await sms.send({
-        to: [formattedPhone], // Send as an array with a single recipient WITH the '+' sign
-        message: personalizedMessage,
-        // from: process.env.AT_SENDER_ID, // Optional sender ID
-      });
-
-      console.log('Africa\'s Talking SMS API response:', JSON.stringify(response));
-
-      if (!response.SMSMessageData.Recipients || 
-          response.SMSMessageData.Recipients.length === 0 || 
-          response.SMSMessageData.Recipients[0].status !== 'Success') {
-        const errorMessage = response.SMSMessageData.Recipients && response.SMSMessageData.Recipients.length > 0 
-          ? `${response.SMSMessageData.Recipients[0].statusCode}: ${response.SMSMessageData.Recipients[0].status}`
-          : 'Unknown error';
-        throw new Error(`Failed to send SMS: ${errorMessage}`);
-      }
-
-      return true;
-    } catch (error) {
-      console.error('Africa\'s Talking SMS API error:', error);
-      // Return false instead of throwing to allow the process to continue
-      return false;
-    }
-  } catch (error) {
-    console.error('Africa\'s Talking SMS API error:', error);
-    // Return false instead of throwing to allow the process to continue
-    return false;
-  }
-}
-
-// Function to send SMS using Termii
-async function sendSMSTermii(phone: string, name: string, code: string, message: string, eventLink: string): Promise<boolean> {
-  try {
-    console.log(`Sending SMS via Termii to ${name} (${phone})`)
-    
-    // Format the phone number if needed (remove spaces, ensure it has a + prefix)
-    let formattedPhone = phone.replace(/\s+/g, '')
-    
-    // Ensure the phone number starts with a + sign
-    if (!formattedPhone.startsWith('+')) {
-      // Default to Nigeria country code if not specified
-      formattedPhone = '+234' + formattedPhone.replace(/^0+/, '')
-    }
-    
-    // Store the original formatted phone (with +) for our records and logs
-    const originalFormattedPhone = formattedPhone;
-    
-    // Remove the '+' sign for Termii API as they don't expect it
-    const termiiPhone = formattedPhone.replace(/^\+/, '');
-    
-    // Replace placeholders in the message
-    const personalizedMessage = message
-      .replace(/{{name}}/g, name)
-      .replace(/{{code}}/g, code)
-      .replace(/{{link}}/g, `${eventLink}#${code}`)
-    
-    // Validate the phone number format for Nigerian numbers
-    if (!termiiPhone.startsWith('234') || termiiPhone.length !== 13) {
-      console.error(`Invalid phone number format: ${phone} (formatted to ${termiiPhone}). Must be a Nigerian number in international format.`);
-      return false;
-    }
-    
-    console.log(`Sending SMS via Termii to: ${termiiPhone} (original: ${originalFormattedPhone})`);
-
-    // Prepare the request payload for Termii
+    // Prepare the request payload for WhatsApp API
     const payload = {
-      to: termiiPhone,
-      from: process.env.TERMII_SENDER_ID || 'Greenvites',
-      sms: personalizedMessage,
-      type: "plain",
-      channel: "dnd", // Use DND channel to bypass Do Not Disturb
-      api_key: process.env.TERMII_API_KEY,
+       chatId: formattedPhone+'@c.us',
+      message: message,
     };
 
-    // Send SMS using Termii API
+    // Send WhatsApp message using WhatsApp API
     try {
-      if (!process.env.TERMII_API_KEY) {
-        console.error('Termii API key is not configured');
-        throw new Error('Termii API key is not configured');
+      if (!WAAPI_TOKEN) {
+        console.error('WhatsApp API token is not configured');
+        throw new Error('WhatsApp API token is not configured');
       }
       
-      const response = await axios.post('https://api.ng.termii.com/api/sms/send', payload);
+      const response = await axios.post( `${WAAPI_BASE_URL}/instances/${INSTANCE_ID}/client/action/send-message`, payload, {
+     
+        headers: {
+          'Authorization': `Bearer ${WAAPI_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      });
       
-      console.log('Termii SMS API response:', JSON.stringify(response.data));
+      console.log('WhatsApp API response:', JSON.stringify(response.data));
 
-      if (response.data && response.data.message_id) {
-        console.log(`SMS sent successfully via Termii to ${originalFormattedPhone}`);
+      if (response.data && response.data.data && response.data.data.status === 'success') {
+        console.log(`WhatsApp message sent successfully to ${formattedPhone}`);
         return true;
       } else {
-        const errorMessage = response.data?.message || 'Unknown error';
-        console.error(`Failed to send SMS via Termii: ${errorMessage}`);
-        throw new Error(`Failed to send SMS: ${errorMessage}`);
+        const errorMessage = response.data?.data?.message || 'Unknown error';
+        console.error(`Failed to send WhatsApp message: ${errorMessage}`);
+        throw new Error(`Failed to send WhatsApp message: ${errorMessage}`);
       }
     } catch (error: any) {
-      console.error('Termii SMS API error:', error);
+      console.error('WhatsApp API error:', error);
       console.error('Error details:', error.response?.data || error.message);
       // Return false instead of throwing to allow the process to continue
       return false;
     }
   } catch (error: any) {
-    console.error('Termii SMS API error:', error);
+    console.error('WhatsApp API error:', error);
     console.error('Error message:', error.message);
-    // Return false instead of throwing to allow the process to continue
-    return false;
-  }
-}
-
-// Main SMS sending function that selects the provider based on environment variable
-async function sendSMS(phone: string, name: string, code: string, message: string, eventLink: string): Promise<boolean> {
-  try {
-    console.log(`Sending SMS to ${name} (${phone})`)
-    
-    // Replace placeholders in the message
-    const personalizedMessage = message
-      .replace(/{{name}}/g, name)
-      .replace(/{{code}}/g, code)
-      .replace(/{{link}}/g, `${eventLink}#${code}`)
-    
-    // Determine which SMS provider to use based on environment variable
-    const smsProvider = process.env.SMS_PROVIDER || 'africas_talking';
-    
-    console.log(`Using SMS provider: ${smsProvider}`);
-    
-    if (smsProvider === 'termii') {
-      return sendSMSTermii(phone, name, code, personalizedMessage, eventLink);
-    } else {
-      // Default to Africa's Talking
-      return sendSMSAfricasTalking(phone, name, code, personalizedMessage, eventLink);
-    }
-  } catch (error) {
-    console.error('SMS sending error:', error);
     // Return false instead of throwing to allow the process to continue
     return false;
   }
@@ -310,7 +209,7 @@ async function sendEmail(email: string, name: string, code: string, subject: str
       console.log(`Email sent successfully to ${name} (${email}): ${info.messageId}`)
       return true
     } catch (sendError: any) {
-      console.error(`Failed to send email to ${name} (${email}):`, sendError)
+      console.error(`Failed to send email to ${name}:`, sendError)
       console.error('Send error details:', sendError.message)
       
       if (sendError.code === 'EAUTH') {
@@ -324,10 +223,39 @@ async function sendEmail(email: string, name: string, code: string, subject: str
       return false
     }
   } catch (error: any) {
-    console.error(`Failed to send email to ${name} (${email}):`, error)
+    console.error(`Failed to send email to ${name}:`, error)
     console.error('Error message:', error.message)
     // Don't throw the error, just return false to indicate failure
     return false
+  }
+}
+
+// Main WhatsApp sending function
+async function sendWhatsApp(phone: string, name: string, code: string, message: string, eventLink: string): Promise<boolean> {
+  try {
+    console.log(`Sending WhatsApp message to ${name} (${phone})`)
+    
+    // Replace placeholders in the message
+    const personalizedMessage = message
+      .replace(/{{name}}/g, name)
+      .replace(/{{code}}/g, code)
+      .replace(/{{link}}/g, `${eventLink}#${code}`)
+    
+    // Determine which WhatsApp provider to use based on environment variable
+    const whatsappProvider = process.env.WHATSAPP_PROVIDER || 'whatsapp_api';
+    
+    console.log(`Using WhatsApp provider: ${whatsappProvider}`);
+    
+    if (whatsappProvider === 'whatsapp_api') {
+      return sendWhatsAppMessage(phone, name, code, personalizedMessage, eventLink);
+    } else {
+      // Default to WhatsApp API
+      return sendWhatsAppMessage(phone, name, code, personalizedMessage, eventLink);
+    }
+  } catch (error) {
+    console.error('WhatsApp sending error:', error);
+    // Return false instead of throwing to allow the process to continue
+    return false;
   }
 }
 
@@ -337,7 +265,7 @@ interface Recipient {
   name: string
   email?: string
   phone?: string
-  type: 'email' | 'sms' | 'both'
+  type: 'email' | 'whatsapp' | 'both'
 }
 
 interface RegistrationCode {
@@ -387,10 +315,10 @@ export async function POST(request: Request) {
         <p style="text-align: center; margin-top: 30px; color: #7f8c8d; font-size: 14px;">We look forward to celebrating this special occasion with you.</p>
       </div>
     `
-    const smsMessage = formData.get('smsMessage') as string || `You're invited to Jesse Oghenekome George's Church Dedication at RCCG Church, Champions Cathedral, #16-18 Airport Road, Effurun, Warri Delta, Nigeria. 10:00 AM, Saturday, April 13, 2025. Your code: {{code}}. RSVP: {{link}}`
+    const whatsappMessage = formData.get('whatsappMessage') as string || `You're invited to Jesse Oghenekome George's Church Dedication at RCCG Church, Champions Cathedral, #16-18 Airport Road, Effurun, Warri Delta, Nigeria. 10:00 AM, Saturday, April 13, 2025. Your code: {{code}}. RSVP: {{link}}`
     const eventLink = formData.get('eventLink') as string || ''
     const enableEmail = formData.get('enableEmail') === 'true'
-    const enableSMS = formData.get('enableSMS') === 'true'
+    const enableWhatsApp = formData.get('enableWhatsApp') === 'true'
     const emailImageFile = formData.get('emailImage') as File | null
     
     // Get recipients
@@ -493,8 +421,8 @@ export async function POST(request: Request) {
         // Track channels that were successfully sent
         const successfulChannels: string[] = [];
         let emailStatus: string | null = null;
-        let smsStatus: string | null = null;
-        let smsProvider: string | null = null;
+        let whatsappStatus: string | null = null;
+        let whatsappProvider: string | null = null;
         let errorMessage: string | null = null;
 
         // Send email if requested
@@ -514,21 +442,21 @@ export async function POST(request: Request) {
           }
         }
 
-        // Send SMS if requested
-        if ((type === 'sms' || type === 'both') && phone && enableSMS) {
+        // Send WhatsApp message if requested
+        if ((type === 'whatsapp' || type === 'both') && phone && enableWhatsApp) {
           try {
-            const smsSuccess = await sendSMS(phone, name, codeValue, smsMessage, eventLink);
-            smsStatus = smsSuccess ? 'sent' : 'failed';
-            smsProvider = process.env.SMS_PROVIDER || 'africas_talking';
-            if (smsSuccess) {
-              successfulChannels.push('sms');
+            const whatsappSuccess = await sendWhatsApp(phone, name, codeValue, whatsappMessage, eventLink);
+            whatsappStatus = whatsappSuccess ? 'sent' : 'failed';
+            whatsappProvider = process.env.WHATSAPP_PROVIDER || 'whatsapp_api';
+            if (whatsappSuccess) {
+              successfulChannels.push('whatsapp');
             } else {
-              errorMessage = (errorMessage ? errorMessage + '; ' : '') + 'SMS sending failed';
+              errorMessage = (errorMessage ? errorMessage + '; ' : '') + 'WhatsApp sending failed';
             }
           } catch (error) {
-            console.error(`Failed to send SMS to ${name}:`, error);
-            smsStatus = 'failed';
-            errorMessage = (errorMessage ? errorMessage + '; ' : '') + (error instanceof Error ? error.message : 'Unknown SMS error');
+            console.error(`Failed to send WhatsApp message to ${name}:`, error);
+            whatsappStatus = 'failed';
+            errorMessage = (errorMessage ? errorMessage + '; ' : '') + (error instanceof Error ? error.message : 'Unknown WhatsApp error');
           }
         }
 
@@ -554,13 +482,13 @@ export async function POST(request: Request) {
           const invite = await prisma.$queryRaw`
             INSERT INTO "Invite" (
               "id", "name", "email", "phone", "sent", "sentAt", "type", 
-              "status", "emailStatus", "smsStatus", "smsProvider", "errorMessage", "code",
+              "status", "emailStatus", "whatsappStatus", "whatsappProvider", "errorMessage", "code",
               "createdAt", "updatedAt"
             ) 
             VALUES (
               ${uuidv4()}, ${name}, ${email}, ${phone}, ${successfulChannels.length > 0}, 
-              ${new Date()}, ${type}, ${status}, ${emailStatus}, ${smsStatus}, 
-              ${smsProvider}, ${errorMessage}, ${codeValue}, ${new Date()}, ${new Date()}
+              ${new Date()}, ${type}, ${status}, ${emailStatus}, ${whatsappStatus}, 
+              ${whatsappProvider}, ${errorMessage}, ${codeValue}, ${new Date()}, ${new Date()}
             )
             RETURNING *
           `
@@ -591,9 +519,9 @@ export async function POST(request: Request) {
         phone?: string | undefined, 
         code: string, 
         channels: string,
-        smsStatus: string | null,
+        whatsappStatus: string | null,
         emailStatus: string | null,
-        smsProvider: string | null,
+        whatsappProvider: string | null,
         errorMessage: string | null
       });
     
@@ -603,7 +531,7 @@ export async function POST(request: Request) {
       // If all invites failed
       if (failures.length === recipients.length) {
         return NextResponse.json(
-          { error: 'All invites failed to send. Please check your SMS and email configuration.', failures },
+          { error: 'All invites failed to send. Please check your WhatsApp and email configuration.', failures },
           { status: 500 }
         )
       }
@@ -618,9 +546,9 @@ export async function POST(request: Request) {
           phone: invite.phone,
           code: invite.code,
           channels: invite.channels,
-          smsStatus: invite.smsStatus,
+          whatsappStatus: invite.whatsappStatus,
           emailStatus: invite.emailStatus,
-          smsProvider: invite.smsProvider,
+          whatsappProvider: invite.whatsappProvider,
           errorMessage: invite.errorMessage
         })),
         failedCount: failures.length,
@@ -637,9 +565,9 @@ export async function POST(request: Request) {
         phone: invite.phone,
         code: invite.code,
         channels: invite.channels,
-        smsStatus: invite.smsStatus,
+        whatsappStatus: invite.whatsappStatus,
         emailStatus: invite.emailStatus,
-        smsProvider: invite.smsProvider,
+        whatsappProvider: invite.whatsappProvider,
         errorMessage: invite.errorMessage
       })),
       failedCount: failures.length,

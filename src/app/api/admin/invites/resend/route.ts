@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { getInviteById, updateInvite, markRegistrationCodeAsUsed } from '@/lib/db';
+import { prisma } from '@/lib/prisma';
 import nodemailer from 'nodemailer';
 import { v4 as uuidv4 } from 'uuid';
 import axios from 'axios';
 
-// Define the Invite type to match the Prisma schema
+// Update the Invite interface to include WhatsApp fields
 interface Invite {
   id: string;
   name: string;
@@ -17,13 +17,19 @@ interface Invite {
   type: string;
   status: string;
   emailStatus: string | null;
-  smsStatus: string | null;
-  smsProvider: string | null;
+  whatsappStatus: string | null;
+  whatsappProvider: string | null;
   errorMessage: string | null;
   code: string | null;
   createdAt: Date;
   updatedAt: Date;
+  registrationCodeId?: string | null;
 }
+
+// WhatsApp API configuration
+const WAAPI_BASE_URL = process.env.WAAPI_BASE_URL || 'https://waapi.app/api/v1';
+const WAAPI_TOKEN = process.env.WAAPI_TOKEN;
+const INSTANCE_ID = process.env.WAAPI_INSTANCE_ID;
 
 // Configure email transporter
 const emailTransporter = nodemailer.createTransport({
@@ -52,130 +58,82 @@ emailTransporter.verify(function(error, success) {
   }
 });
 
-// Helper function to send SMS via Africa's Talking
-async function sendSMSAfricasTalking(phone: string, name: string, code: string, message: string, eventLink: string) {
+// Function to send WhatsApp message using WhatsApp API
+async function sendWhatsAppMessage(phone: string, name: string, code: string, message: string, eventLink: string): Promise<boolean> {
   try {
-    // Format the phone number to ensure it has the country code
-    let formattedPhone = phone;
+    console.log(`Sending WhatsApp message to ${name} (${phone})`)
     
-    // If the phone number starts with '0', replace it with '+234' (Nigeria)
-    if (phone.startsWith('0')) {
-      formattedPhone = '+234' + phone.substring(1);
-    } 
-    // If the phone number starts with '+234', add a '+' prefix
-    else if (phone.startsWith('234')) {
-      formattedPhone = '+' + phone;
+    // Format the phone number if needed (remove spaces, add country code if missing)
+    let formattedPhone = phone.replace(/\s+/g, '')
+    
+    // Ensure the phone number starts with 234
+    if (!formattedPhone.startsWith('234')) {
+      // Default to Nigeria country code if not specified
+      formattedPhone = '234' + formattedPhone.replace(/^0+/, '')
     }
     
     // Replace placeholders in the message
-    const customMessage = message
+    const personalizedMessage = message
       .replace(/{{name}}/g, name)
       .replace(/{{code}}/g, code)
-      .replace(/{{link}}/g, `${eventLink}?code=${code}`)
+      .replace(/{{link}}/g, `${eventLink}#${code}`)
     
-    // Initialize the SDK
-    const credentials = {
-      apiKey: process.env.AT_API_KEY || '',
-      username: process.env.AT_USERNAME || '',
-    }
-    
-    // Send the message
-    const options = {
-      to: [formattedPhone],
-      message: customMessage,
-      from: 'Greenvites',
-    }
-    
-    const response = await axios.post(
-      'https://api.africastalking.com/version1/messaging',
-      new URLSearchParams({
-        username: credentials.username,
-        to: formattedPhone,
-        message: customMessage,
-        from: 'Greenvites',
-      }),
-      {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Accept': 'application/json',
-          'apiKey': credentials.apiKey,
-        },
-      }
-    );
-    
-    if (response.status === 201 || response.status === 200) {
-      console.log(`SMS sent to ${formattedPhone} via Africa's Talking`);
-      return true;
-    } else {
-      console.error(`Failed to send SMS to ${formattedPhone} via Africa's Talking:`, response.data);
+    // Validate the phone number format for Nigerian numbers
+    if (!formattedPhone.startsWith('+234') || formattedPhone.length !== 14) {
+      console.error(`Invalid phone number format: ${phone} (formatted to ${formattedPhone}). Must be a Nigerian number in international format.`);
       return false;
     }
-  } catch (error) {
-    console.error(`Error sending SMS via Africa's Talking:`, error);
-    throw error;
-  }
-}
+    
+    console.log(`Sending WhatsApp message to: ${formattedPhone} (original: ${phone})`);
 
-// Helper function to send SMS via Termii
-async function sendSMSTermii(phone: string, name: string, code: string, message: string, eventLink: string) {
-  try {
-    // Format the phone number to ensure it has the country code
-    let formattedPhone = phone;
-    
-    // If the phone number starts with '0', replace it with '234' (Nigeria)
-    if (phone.startsWith('0')) {
-      formattedPhone = '234' + phone.substring(1);
-    } 
-    // If the phone number starts with '+', remove it
-    else if (phone.startsWith('+')) {
-      formattedPhone = phone.substring(1);
-    }
-    
-    // Replace placeholders in the message
-    const customMessage = message
-      .replace(/{{name}}/g, name)
-      .replace(/{{code}}/g, code)
-      .replace(/{{link}}/g, `${eventLink}?code=${code}`)
-    
-    const apiKey = process.env.TERMII_API_KEY || '';
-    const senderId = process.env.TERMII_SENDER_ID || 'Greenvites';
-    
-    const data = {
-      to: formattedPhone,
-      from: senderId,
-      sms: customMessage,
-      type: "plain",
-      api_key: apiKey,
-      channel: "dnd", // Use DND channel to bypass DND restrictions
+    // Prepare the request payload for WhatsApp API
+    const payload = {
+      chat_id: formattedPhone +'@c.us',
+      message: personalizedMessage,
     };
-    
-    const response = await axios.post('https://api.ng.termii.com/api/sms/send', data);
-    
-    if (response.status === 200 || response.status === 201) {
-      console.log(`SMS sent to ${formattedPhone} via Termii`);
-      return true;
-    } else {
-      console.error(`Failed to send SMS to ${formattedPhone} via Termii:`, response.data);
+
+    // Send WhatsApp message using WhatsApp API
+    try {
+      if (!WAAPI_TOKEN) {
+        console.error('WhatsApp API token is not configured');
+        throw new Error('WhatsApp API token is not configured');
+      }
+      
+      const response = await fetch(`${WAAPI_BASE_URL}/instances/${INSTANCE_ID}/client/action/send-message`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${WAAPI_TOKEN}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+      
+      const data = await response.json();
+      console.log('WhatsApp API response:', JSON.stringify(data));
+
+      if (data && data.data && data.data.status === 'success') {
+        console.log(`WhatsApp message sent successfully to ${formattedPhone}`);
+        return true;
+      } else {
+        const errorMessage = data?.data?.message || 'Unknown error';
+        console.error(`Failed to send WhatsApp message: ${errorMessage}`);
+        throw new Error(`Failed to send WhatsApp message: ${errorMessage}`);
+      }
+    } catch (error: any) {
+      console.error('WhatsApp API error:', error);
+      console.error('Error details:', error.response?.data || error.message);
+      // Return false instead of throwing to allow the process to continue
       return false;
     }
-  } catch (error) {
-    console.error(`Error sending SMS via Termii:`, error);
-    throw error;
+  } catch (error: any) {
+    console.error('WhatsApp API error:', error);
+    console.error('Error message:', error.message);
+    // Return false instead of throwing to allow the process to continue
+    return false;
   }
 }
 
-// Helper function to send SMS using the configured provider
-async function sendSMS(phone: string, name: string, code: string, message: string, eventLink: string) {
-  const provider = process.env.SMS_PROVIDER || 'africas_talking';
-  
-  if (provider === 'termii') {
-    return sendSMSTermii(phone, name, code, message, eventLink);
-  } else {
-    return sendSMSAfricasTalking(phone, name, code, message, eventLink);
-  }
-}
-
-// Helper function to send email
+// Function to send email
 async function sendEmail(
   email: string,
   name: string,
@@ -183,82 +141,109 @@ async function sendEmail(
   subject: string,
   message: string,
   eventLink: string,
-  imageBuffer?: Buffer
+  emailImageBuffer: number[] | null
 ): Promise<boolean> {
   try {
     // Prepare the email content with the registration code
-    const finalMessage = message
-      .replace(/\{name\}/g, name)
-      .replace(/\{code\}/g, code)
+    const personalizedMessage = message
+      .replace(/\{\{name\}\}/g, name)
+      .replace(/\{\{code\}\}/g, code)
       .replace(/\{link\}/g, eventLink);
 
     // Prepare email attachments if image is provided
-    const attachments = imageBuffer
+    const attachments = emailImageBuffer
       ? [
           {
             filename: 'invitation.jpg',
-            content: imageBuffer,
+            content: Buffer.from(emailImageBuffer),
             cid: 'invitation-image',
           },
         ]
       : [];
 
-    // HTML email template
+    // Prepare HTML content
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #4a5568;">Hello ${name},</h2>
         ${
-          imageBuffer
+          emailImageBuffer
             ? `<div style="text-align: center; margin: 20px 0;">
                 <img src="cid:invitation-image" alt="Event Invitation" style="max-width: 100%; border-radius: 8px;" />
               </div>`
             : ''
         }
-        <div style="margin: 20px 0; line-height: 1.6;">
-          ${finalMessage.replace(/\n/g, '<br>')}
-        </div>
-        <div style="margin: 30px 0; text-align: center;">
-          <div style="background-color: #f7fafc; border: 1px solid #e2e8f0; padding: 15px; border-radius: 5px; display: inline-block;">
-            <p style="margin: 0; font-size: 14px; color: #718096;">Your Registration Code</p>
-            <p style="margin: 5px 0 0; font-size: 24px; font-weight: bold; letter-spacing: 2px; color: #4a5568;">${code}</p>
-          </div>
-        </div>
-        <div style="margin: 20px 0; text-align: center;">
-          <a href="${eventLink}" style="background-color: #4299e1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block; font-weight: bold;">
-            Confirm Your Attendance
-          </a>
-        </div>
-        <p style="color: #718096; font-size: 14px; text-align: center; margin-top: 30px;">
-          Please use this code when confirming your attendance on our website.
-        </p>
+        ${personalizedMessage}
       </div>
     `;
 
-    try {
-      // Try primary email transport
-      const info = await emailTransporter.sendMail({
-        from: `"Event Invitation" <${process.env.SMTP_USER}>`,
-        to: email,
-        subject,
-        text: finalMessage,
-        html: htmlContent,
-        attachments,
-      });
+    // Send the email
+    const info = await emailTransporter.sendMail({
+      from: `"Greenvites" <${process.env.SMTP_USER}>`,
+      to: email,
+      subject: subject,
+      html: htmlContent,
+      attachments: attachments,
+    });
 
-      console.log(`[sendEmail] Email sent to ${email}: ${info.messageId}`);
-      return true;
-    } catch (primaryError) {
-      console.error(`Primary email transport error for ${email}:`, primaryError);
-      
-      // Log the error for debugging but continue with invite creation
-      // In a production environment, you might want to implement a fallback email service here
-      // For example: await sendGridTransport.sendMail(mailOptions)
-      
-      // For now, we'll just track the error but consider it a "soft failure"
-      throw primaryError;
-    }
+    console.log(`Email sent to ${email}: ${info.messageId}`);
+    return true;
   } catch (error) {
-    console.error(`[sendEmail] Error sending email to ${email}:`, error);
+    console.error(`Error sending email to ${email}:`, error);
+    throw error;
+  }
+}
+
+// Helper function to get an invite by ID
+async function getInviteById(id: string): Promise<Invite | null> {
+  try {
+    const invite = await prisma.invite.findUnique({
+      where: { id }
+    });
+    
+    if (!invite) return null;
+    
+    // Cast to our Invite interface with WhatsApp fields
+    return {
+      ...invite,
+      whatsappStatus: invite.smsStatus as string | null,
+      whatsappProvider: invite.smsProvider as string | null
+    } as unknown as Invite;
+  } catch (error) {
+    console.error(`Error getting invite ${id}:`, error);
+    return null;
+  }
+}
+
+// Helper function to update an invite
+async function updateInvite(id: string, data: Partial<Invite>): Promise<Invite> {
+  try {
+    // Map our Invite interface fields to the database schema
+    const dbData: any = { ...data };
+    
+    // Map WhatsApp fields to SMS fields for database compatibility
+    if (data.whatsappStatus !== undefined) {
+      dbData.smsStatus = data.whatsappStatus;
+      delete dbData.whatsappStatus;
+    }
+    
+    if (data.whatsappProvider !== undefined) {
+      dbData.smsProvider = data.whatsappProvider;
+      delete dbData.whatsappProvider;
+    }
+    
+    const updatedInvite = await prisma.invite.update({
+      where: { id },
+      data: dbData
+    });
+    
+    // Cast back to our Invite interface
+    return {
+      ...updatedInvite,
+      whatsappStatus: updatedInvite.smsStatus as string | null,
+      whatsappProvider: updatedInvite.smsProvider as string | null
+    } as unknown as Invite;
+  } catch (error) {
+    console.error(`Error updating invite ${id}:`, error);
     throw error;
   }
 }
@@ -273,155 +258,127 @@ export async function POST(request: NextRequest) {
   try {
     // Parse request body
     const body = await request.json();
-    const { id, email, phone, message, subject, type } = body;
+    const { 
+      inviteId, 
+      phone, 
+      email, 
+      channel, 
+      emailSubject, 
+      emailMessage, 
+      whatsappMessage, 
+      eventLink,
+      enableEmail,
+      enableWhatsApp,
+      emailImageBuffer 
+    } = body;
 
-    if (!id) {
+    if (!inviteId) {
       return NextResponse.json({ error: 'Invite ID is required' }, { status: 400 });
     }
 
     // Get the invite
-    const invite = await getInviteById(id);
+    const invite = await getInviteById(inviteId);
     if (!invite) {
       return NextResponse.json({ error: 'Invite not found' }, { status: 404 });
     }
 
-    // Cast invite to any to handle dynamic properties
-    const inviteAny = invite as any;
+    // Get the registration code
+    const code = invite.code || '';
 
-    // Extract the code from the invite
-    const code = inviteAny.code;
-    if (!code) {
-      return NextResponse.json({ error: 'Invite has no registration code' }, { status: 400 });
-    }
+    // Initialize status variables
+    let emailStatus: string | null = null;
+    let whatsappStatus: string | null = null;
+    let whatsappProvider: string | null = null;
+    let errorMessage: string | null = null;
+    let successfulChannels: string[] = [];
 
-    // Check if the registration code is still valid for this invite
-    try {
-      const prisma = require('@/lib/prisma').prisma;
-      const registrationCode = await prisma.registrationCode.findFirst({
-        where: { 
-          code: code,
-        }
-      });
-
-      if (!registrationCode) {
-        return NextResponse.json({ error: 'Registration code not found' }, { status: 400 });
-      }
-
-      // If the code has status 'invite-sent' but is associated with a different invite,
-      // we should not reuse it
-      if (registrationCode.status === 'invite-sent') {
-        // Check if there's another invite using this code
-        const existingInvite = await prisma.invite.findFirst({
-          where: {
-            code: code,
-            id: { not: id } // Not the current invite
-          }
-        });
-
-        if (existingInvite) {
-          return NextResponse.json({ 
-            error: 'This registration code is already assigned to another invitation' 
-          }, { status: 400 });
-        }
-      }
-    } catch (error) {
-      console.error('Error checking registration code:', error);
-      // Continue with the process, as this is just an additional check
-    }
-
-    // Mark the code as pending while we attempt to resend
-    await markRegistrationCodeAsUsed(code, 'pending');
-
-    // Track successful channels
-    const successfulChannels = [];
-    let emailStatus = inviteAny.emailStatus || null;
-    let smsStatus = inviteAny.smsStatus || null;
-    let errorMessage = null;
-
-    // Get the event link from the request headers
-    const host = request.headers.get('host') || 'greenvites.online';
-    const protocol = host.includes('localhost') ? 'http://' : 'https://';
-    const eventLink = `${protocol}${host}/jessegeorge`;
-
-    // Resend via email if requested
-    if (type === 'email' || type === 'both') {
+    // Send email if requested
+    if ((channel === 'email' || channel === 'both') && email && enableEmail) {
       try {
-        await sendEmail(
-          email || inviteAny.email,
-          inviteAny.name,
+        const emailSuccess = await sendEmail(
+          email,
+          invite.name || '',
           code,
-          subject || 'Your Event Invitation',
-          message || 'Here is your event invitation.',
-          eventLink
+          emailSubject || 'Your Event Invitation',
+          emailMessage || 'Here is your event invitation.',
+          eventLink || '',
+          emailImageBuffer
         );
-        emailStatus = 'sent';
-        successfulChannels.push('email');
+        emailStatus = emailSuccess ? 'sent' : 'failed';
+        if (emailSuccess) {
+          successfulChannels.push('email');
+        } else {
+          errorMessage = 'Email sending failed';
+        }
       } catch (error) {
-        console.error(`Failed to send email to ${inviteAny.name}:`, error);
+        console.error(`Failed to send email to ${invite.name}:`, error);
         emailStatus = 'failed';
-        errorMessage = error instanceof Error ? error.message : 'Unknown email error';
+        errorMessage = (error instanceof Error ? error.message : 'Unknown email error');
       }
     }
 
-    // Resend via SMS if requested
-    if (type === 'sms' || type === 'both') {
+    // Send WhatsApp message if requested
+    if ((channel === 'whatsapp' || channel === 'both') && phone && enableWhatsApp) {
       try {
-        const phoneToUse = phone || inviteAny.phone;
-        if (phoneToUse) {
-          await sendSMSAfricasTalking(
-            phoneToUse,
-            inviteAny.name,
-            code,
-            message || 'Here is your event invitation.',
-            eventLink
-          );
-          smsStatus = 'sent';
-          successfulChannels.push('sms');
+        const whatsappSuccess = await sendWhatsAppMessage(
+          phone,
+          invite.name || '',
+          code,
+          whatsappMessage || '',
+          eventLink || ''
+        );
+        whatsappStatus = whatsappSuccess ? 'sent' : 'failed';
+        whatsappProvider = process.env.WHATSAPP_PROVIDER || 'whatsapp_api';
+        if (whatsappSuccess) {
+          successfulChannels.push('whatsapp');
+        } else {
+          errorMessage = (errorMessage ? errorMessage + '; ' : '') + 'WhatsApp sending failed';
         }
       } catch (error) {
-        console.error(`Failed to send SMS to ${inviteAny.name}:`, error);
-        smsStatus = 'failed';
-        errorMessage = (errorMessage || '') + (error instanceof Error ? error.message : 'Unknown SMS error');
+        console.error(`Failed to send WhatsApp message to ${invite.name}:`, error);
+        whatsappStatus = 'failed';
+        errorMessage = (errorMessage ? errorMessage + '; ' : '') + (error instanceof Error ? error.message : 'Unknown WhatsApp error');
       }
     }
 
     // Determine overall status
-    let status = 'pending';
-    if (successfulChannels.length > 0) {
-      status = successfulChannels.length === (type === 'both' ? 2 : 1) ? 'sent' : 'partial';
-      
-      // Mark the registration code as used if the invite was successfully sent
-      if (status === 'sent' || status === 'partial') {
-        await markRegistrationCodeAsUsed(code, 'used');
-      }
-    } else {
-      status = 'failed';
-      
-      // If the invite failed completely, mark the code as available again
-      await markRegistrationCodeAsUsed(code, 'available');
-    }
+    const status = successfulChannels.length > 0 ? 'sent' : 'failed';
 
-    // Update the invite with the new status
-    const updatedInvite = await updateInvite(id, {
+    // Update the invite in the database
+    const updatedInvite = await updateInvite(inviteId, {
+      phone,
+      email,
+      type: channel,
+      sent: successfulChannels.length > 0,
+      sentAt: new Date(),
       status,
       emailStatus,
-      smsStatus,
+      whatsappStatus,
+      whatsappProvider,
       errorMessage,
-      email: email || inviteAny.email,
-      phone: phone || inviteAny.phone,
-      sent: successfulChannels.length > 0,
-      sentAt: new Date()
+      updatedAt: new Date()
     } as any);
 
     return NextResponse.json({
-      message: 'Invite resent successfully',
-      invite: updatedInvite
+      success: status === 'sent',
+      invite: {
+        id: updatedInvite.id,
+        name: updatedInvite.name,
+        email: updatedInvite.email,
+        phone: updatedInvite.phone,
+        code: updatedInvite.code,
+        channels: successfulChannels.join(', '),
+        whatsappStatus: updatedInvite.whatsappStatus,
+        emailStatus: updatedInvite.emailStatus,
+        whatsappProvider: updatedInvite.whatsappProvider,
+        errorMessage: updatedInvite.errorMessage
+      }
     });
   } catch (error) {
-    console.error('[POST /api/admin/invites/resend] Error:', error);
-    return NextResponse.json({
-      error: 'Failed to resend invite',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 });
+    console.error('Error in resend invite:', error);
+    return NextResponse.json(
+      { error: 'Failed to resend invite' },
+      { status: 500 }
+    );
   }
 }
