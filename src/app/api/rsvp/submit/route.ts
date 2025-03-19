@@ -1,7 +1,150 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
+import nodemailer from 'nodemailer';
+import axios from 'axios';
 
 const prisma = new PrismaClient();
+
+// WhatsApp API configuration
+const WAAPI_TOKEN = process.env.WAAPI_TOKEN;
+const WAAPI_BASE_URL = process.env.WAAPI_BASE_URL || 'https://waapi.app/api/v1';
+const INSTANCE_ID = process.env.WAAPI_INSTANCE_ID;
+
+// Helper function to send confirmation email
+async function sendConfirmationEmail(email: string, name: string): Promise<boolean> {
+  try {
+    console.log(`Sending confirmation email to ${name} (${email})`);
+    
+    const confirmationMessage = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 5px;">
+        <h2 style="color: #2c3e50; text-align: center;">Thank you for your RSVP!</h2>
+        <h3 style="color: #16a085; text-align: center; margin-bottom: 30px;">Jesse Oghenekome George's Church Dedication</h3>
+        
+        <div style="margin: 30px 0; text-align: center;">
+          <p style="font-size: 16px;">Dear ${name},</p>
+          <p style="font-size: 16px;">Thank you for confirming your attendance. Your RSVP has been successfully received.</p>
+          <p style="font-size: 16px;">We will send you further details about the event soon.</p>
+        </div>
+        
+        <p style="text-align: center; margin-top: 30px; color: #7f8c8d; font-size: 14px;">We look forward to celebrating this special occasion with you.</p>
+      </div>
+    `;
+    
+    if (!process.env.SMTP_HOST || !process.env.SMTP_PORT) {
+      console.error('SMTP configuration is incomplete. Missing host or port.');
+      return false;
+    }
+    
+    const transportConfig: any = {
+      host: process.env.SMTP_HOST,
+      port: parseInt(process.env.SMTP_PORT || '587'),
+      secure: process.env.SMTP_SECURE === 'true',
+      tls: {
+        rejectUnauthorized: false
+      }
+    };
+    
+    if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+      transportConfig.auth = {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      };
+    }
+    
+    const transport = nodemailer.createTransport(transportConfig);
+    
+    try {
+      await transport.verify();
+      console.log('SMTP connection verified successfully');
+    } catch (verifyError: any) {
+      console.error('SMTP connection verification failed:', verifyError);
+      console.log('Attempting to send email anyway despite connection verification failure...');
+    }
+    
+    const mailOptions: any = {
+      from: process.env.SMTP_FROM || (process.env.SMTP_USER ? `"Greenvites" <${process.env.SMTP_USER}>` : 'noreply@greenvites.com'),
+      to: email,
+      subject: 'RSVP Confirmation - Jesse Oghenekome George\'s Church Dedication',
+      html: confirmationMessage,
+    };
+    
+    const info = await transport.sendMail(mailOptions);
+    console.log(`Confirmation email sent successfully to ${name} (${email}): ${info.messageId}`);
+    return true;
+  } catch (error) {
+    console.error(`Failed to send confirmation email to ${name}:`, error);
+    return false;
+  }
+}
+
+// Helper function to send WhatsApp confirmation message
+async function sendWhatsAppConfirmation(phone: string, name: string): Promise<boolean> {
+  try {
+    console.log(`Sending WhatsApp confirmation to ${name} (${phone})`);
+    
+    // Format the phone number
+    let formattedPhone = phone.replace(/\s+/g, '');
+    
+    // Remove the '+' if present
+    if (formattedPhone.startsWith('+')) {
+      formattedPhone = formattedPhone.substring(1);
+    }
+    
+    // Handle Nigerian numbers: Convert 0... to 234...
+    if (formattedPhone.startsWith('0') && (formattedPhone.length === 11 || formattedPhone.length === 10)) {
+      formattedPhone = '234' + formattedPhone.substring(1);
+    } 
+    // If it doesn't have a country code (not starting with 1 or 234), assume Nigerian
+    else if (!formattedPhone.startsWith('1') && !formattedPhone.startsWith('234')) {
+      formattedPhone = '234' + formattedPhone.replace(/^0+/, '');
+    }
+    
+    // Check that we have a valid international format
+    const validPhoneRegex = /^(1|234)\d{10}$/;
+    if (!validPhoneRegex.test(formattedPhone)) {
+      console.error(`Invalid phone number format: ${phone} (formatted to ${formattedPhone}). Must be a US or Nigerian number.`);
+      return false;
+    }
+    
+    if (!WAAPI_TOKEN) {
+      console.error('WhatsApp API token is not configured');
+      throw new Error('WhatsApp API token is not configured');
+    }
+    
+    const message = `Dear ${name}, thank you for confirming your attendance to Jesse Oghenekome George's Church Dedication. Your RSVP has been successfully received. We will send you further details about the event soon. We look forward to celebrating this special occasion with you.`;
+    
+    const textPayload = {
+      chatId: formattedPhone+'@c.us',
+      message: message
+    };
+    
+    const textResponse = await axios.post(
+      `${WAAPI_BASE_URL}/instances/${INSTANCE_ID}/client/action/send-message`, 
+      textPayload, 
+      {
+        headers: {
+          'Authorization': `Bearer ${WAAPI_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    
+    console.log('WhatsApp API response:', JSON.stringify(textResponse.data));
+    
+    if (textResponse.data && textResponse.data.data && textResponse.data.data.status === 'success') {
+      console.log(`WhatsApp confirmation message sent successfully to ${formattedPhone}`);
+      return true;
+    } else {
+      const errorMessage = textResponse.data?.data?.message || 'Unknown error';
+      console.error(`Failed to send WhatsApp confirmation: ${errorMessage}`);
+      return false;
+    }
+  } catch (error: any) {
+    console.error('WhatsApp API error:', error);
+    console.error('Error details:', error.response?.data || error.message);
+    return false;
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,7 +160,7 @@ export async function POST(request: NextRequest) {
     // Find the registration code in the database
     const registrationCode = await prisma.registrationCode.findUnique({
       where: { code },
-      include: { rsvp: true }
+      include: { rsvp: true, invite: true }
     });
 
     // Check if code exists
@@ -27,6 +170,15 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    console.log('Registration code found:', JSON.stringify({
+      id: registrationCode.id,
+      code: registrationCode.code,
+      used: registrationCode.used,
+      status: registrationCode.status,
+      hasInvite: !!registrationCode.invite,
+      inviteType: registrationCode.invite?.type
+    }));
 
     // Check if code has already been used
     if (registrationCode.used || registrationCode.rsvp) {
@@ -49,36 +201,72 @@ export async function POST(request: NextRequest) {
     }
 
     // Create RSVP entry and update registration code status
-    const rsvp = await prisma.$transaction(async (tx) => {
-      // Create the RSVP
-      const newRsvp = await tx.rsvp.create({
-        data: {
-          name,
-          email,
-          // Use type assertion since the Prisma client might not be updated
-          // The phone field exists in the schema but TypeScript doesn't recognize it yet
-          ...(phone ? { phone } : {}),
-          hasGuest: !!hasGuest,
-          hasDriver: !!hasDriver,
-          hasAide: !!hasAide,
-          registrationCode: {
-            connect: { id: registrationCode.id }
-          }
-        } as any // Type assertion to bypass TypeScript error until Prisma client is regenerated
-      });
+    let rsvp;
+    try {
+      rsvp = await prisma.$transaction(async (tx) => {
+        // Create the RSVP
+        const newRsvp = await tx.rsvp.create({
+          data: {
+            name,
+            email,
+            // Use type assertion since the Prisma client might not be updated
+            // The phone field exists in the schema but TypeScript doesn't recognize it yet
+            ...(phone ? { phone } : {}),
+            hasGuest: !!hasGuest,
+            hasDriver: !!hasDriver,
+            hasAide: !!hasAide,
+            registrationCode: {
+              connect: { id: registrationCode.id }
+            }
+          } as any // Type assertion to bypass TypeScript error until Prisma client is regenerated
+        });
 
-      // Update the registration code status
-      await tx.registrationCode.update({
-        where: { id: registrationCode.id },
-        data: {
-          used: true,
-          usedAt: new Date(),
-          status: 'used'
-        } as any // Type assertion to bypass TypeScript error until Prisma client is regenerated
-      });
+        // Update the registration code status
+        await tx.registrationCode.update({
+          where: { id: registrationCode.id },
+          data: {
+            used: true,
+            usedAt: new Date(),
+            status: 'used'
+          } as any // Type assertion to bypass TypeScript error until Prisma client is regenerated
+        });
 
-      return newRsvp;
-    });
+        return newRsvp;
+      });
+      
+      console.log('RSVP created successfully:', JSON.stringify({
+        id: rsvp.id,
+        name: rsvp.name,
+        email: rsvp.email,
+        phone: rsvp.phone
+      }));
+    } catch (txError) {
+      console.error('Error in RSVP transaction:', txError);
+      return NextResponse.json(
+        { error: 'An error occurred while creating your RSVP' },
+        { status: 500 }
+      );
+    }
+
+    // Send confirmation message
+    try {
+      // Always send email confirmation
+      console.log(`Sending confirmation email to ${email}`);
+      const emailSent = await sendConfirmationEmail(email, name);
+      console.log(`Confirmation email sent: ${emailSent}`);
+      
+      // Always send WhatsApp confirmation if phone is provided
+      if (phone) {
+        console.log(`Sending WhatsApp confirmation to ${phone}`);
+        const whatsappSent = await sendWhatsAppConfirmation(phone, name);
+        console.log(`WhatsApp confirmation sent: ${whatsappSent}`);
+      } else {
+        console.log('No phone number provided, skipping WhatsApp confirmation');
+      }
+    } catch (messageError) {
+      console.error('Error sending confirmation messages:', messageError);
+      // Don't fail the request if message sending fails
+    }
 
     return NextResponse.json({ 
       success: true, 
