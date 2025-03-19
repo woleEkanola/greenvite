@@ -258,7 +258,7 @@ async function sendEmail(email: string, name: string, code: string, subject: str
     personalizedMessage = personalizedMessage
       .replace(/{{name}}/g, name)
       .replace(/{{code}}/g, code)
-      .replace(/{{link}}/g, `${eventLink}#${code}`)
+      .replace(/{{link}}/g, eventLink ? `${eventLink}#${code}` : `https://greenvites.online/jessegeorge#${code}`)
       .replace(/{{Image}}/g, '<img src="cid:invitation-image" alt="Invitation Image" style="max-width: 100%; height: auto;"/>')
       .replace(/{{image}}/g, '<img src="cid:invitation-image" alt="Invitation Image" style="max-width: 100%; height: auto;"/>');
     

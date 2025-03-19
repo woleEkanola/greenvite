@@ -188,7 +188,7 @@ export default function SendInvites() {
   const [emailSubject, setEmailSubject] = useState('You are invited!')
   const [emailMessage, setEmailMessage] = useState('Confirm Your Attendance\n{{Image}}\nClick the link below, scroll down on the next page, and click the "Confirm Your Attendance" button to fill out the form and secure your reservation.\n{{link}}\nConfirm Your Attendance')
   const [whatsappMessage, setWhatsappMessage] = useState('Hello {{name}}, Click the link below, scroll down on the next page, and click the "Confirm Your Attendance" button to fill out the form and secure your reservation. {{link}}')
-  const [eventLink, setEventLink] = useState('https://greenvites.vercel.app')
+  const [eventLink, setEventLink] = useState('https://greenvites.online/jessegeorge')
   const [emailImage, setEmailImage] = useState<File | null>(null)
   const [emailImagePreview, setEmailImagePreview] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
