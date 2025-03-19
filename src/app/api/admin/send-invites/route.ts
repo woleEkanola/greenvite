@@ -245,9 +245,8 @@ async function sendEmail(email: string, name: string, code: string, subject: str
             <img src="cid:invitation-image" alt="Invitation Image" style="max-width: 100%; height: auto;"/>
           </div>
           <div style="text-align: center; margin: 20px 0;">
-            <p style="margin-bottom: 15px; font-size: 16px;">Click the link below, scroll down on the next page, and click the "Confirm Your Attendance" button to fill out the form and secure your reservation.</p>
-            <p style="margin-bottom: 20px;"><a href="${eventLink}#${code}" style="color: #4CAF50; text-decoration: underline;">${eventLink}#${code}</a></p>
-            <a href="${eventLink}#${code}" style="display: inline-block; background-color: #4CAF50; color: white; padding: 14px 28px; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; text-decoration: none;">
+            <p style="margin-bottom: 15px; font-size: 16px;">Click the  "Confirm Your Attendance" button below to fill out the form and secure your reservation.</p>
+ <a href="${eventLink}#${code}" style="display: inline-block; background-color: #4CAF50; color: white; padding: 14px 28px; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; text-decoration: none;">
               Confirm Your Attendance
             </a>
           </div>
@@ -443,8 +442,8 @@ export async function POST(request: Request) {
         
         <div style="text-align: center; margin: 30px 0;">
           <p>Your personal registration code is: <strong>{{code}}</strong></p>
-          <p style="margin-bottom: 15px; font-size: 16px;">Click the link below, scroll down on the next page, and click the "Confirm Your Attendance" button to fill out the form and secure your reservation.</p>
-          <p style="margin-bottom: 20px;"><a href="{{link}}" style="color: #4CAF50; text-decoration: underline;">{{link}}</a></p>
+          <p style="margin-bottom: 15px; font-size: 16px;">Click the "Confirm Your Attendance" button below to fill out the form and secure your reservation.</p>
+          <p style="margin-bottom: 20px;"></p>
           <a href="{{link}}" style="display: inline-block; background-color: #4CAF50; color: white; padding: 14px 28px; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; text-decoration: none;">
             Confirm Your Attendance
           </a>
