@@ -234,7 +234,25 @@ async function sendEmail(email: string, name: string, code: string, subject: str
     // Add the image placeholder if not already present in the message
     let personalizedMessage = htmlMessage;
     if (imageBuffer && !htmlMessage.includes('{{image}}')) {
-      personalizedMessage = `<div><img src="cid:invitation-image" alt="Invitation Image" style="max-width: 100%; height: auto; margin-bottom: 20px;"/></div>${personalizedMessage}`;
+      personalizedMessage = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="text-align: center; margin: 20px 0;">
+            <a href="${eventLink}#${code}" style="display: inline-block; background-color: #4CAF50; color: white; padding: 14px 28px; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; text-decoration: none;">
+              Confirm Your Attendance
+            </a>
+          </div>
+          <div style="text-align: center; margin: 20px 0;">
+            <img src="cid:invitation-image" alt="Invitation Image" style="max-width: 100%; height: auto;"/>
+          </div>
+          <div style="text-align: center; margin: 20px 0;">
+            <p style="margin-bottom: 15px; font-size: 16px;">Click the link below, scroll down on the next page, and click the "Confirm Your Attendance" button to fill out the form and secure your reservation.</p>
+            <p style="margin-bottom: 20px;"><a href="${eventLink}#${code}" style="color: #4CAF50; text-decoration: underline;">${eventLink}#${code}</a></p>
+            <a href="${eventLink}#${code}" style="display: inline-block; background-color: #4CAF50; color: white; padding: 14px 28px; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; text-decoration: none;">
+              Confirm Your Attendance
+            </a>
+          </div>
+        </div>
+      `;
     }
     
     // Now replace template variables
@@ -242,7 +260,14 @@ async function sendEmail(email: string, name: string, code: string, subject: str
       .replace(/{{name}}/g, name)
       .replace(/{{code}}/g, code)
       .replace(/{{link}}/g, `${eventLink}#${code}`)
-      .replace(/{{image}}/g, '<img src="cid:invitation-image" alt="Invitation Image" style="max-width: 100%; height: auto; margin-bottom: 20px;"/>');
+      .replace(/{{Image}}/g, '<img src="cid:invitation-image" alt="Invitation Image" style="max-width: 100%; height: auto;"/>')
+      .replace(/{{image}}/g, '<img src="cid:invitation-image" alt="Invitation Image" style="max-width: 100%; height: auto;"/>');
+    
+    // Convert simple newlines to HTML breaks for plain text templates
+    if (!personalizedMessage.includes('<div') && !personalizedMessage.includes('<p') && !personalizedMessage.includes('<br')) {
+      personalizedMessage = personalizedMessage.replace(/\n/g, '<br>');
+      personalizedMessage = `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; text-align: center;">${personalizedMessage}</div>`;
+    }
     
     if (!process.env.SMTP_HOST || !process.env.SMTP_PORT) {
       console.error('SMTP configuration is incomplete. Missing host or port.');
@@ -416,10 +441,13 @@ export async function POST(request: Request) {
           <p style="text-align: center; font-size: 18px;">Sunday, April 13, 2025</p>
         </div>
         
-        <div style="margin: 30px 0; text-align: center;">
+        <div style="text-align: center; margin: 30px 0;">
           <p>Your personal registration code is: <strong>{{code}}</strong></p>
-          <a href="{{link}}" style="display: inline-block; background-color: #16a085; color: white; padding: 12px 25px; text-decoration: none; border-radius: 4px; font-weight: bold;">Confirm Your Attendance</a>
-          <p style="margin-top: 15px; font-size: 14px; color: #7f8c8d;">Please click the button above to confirm your attendance or visit <a href="{{link}}" style="color: #16a085;">{{link}}</a></p>
+          <p style="margin-bottom: 15px; font-size: 16px;">Click the link below, scroll down on the next page, and click the "Confirm Your Attendance" button to fill out the form and secure your reservation.</p>
+          <p style="margin-bottom: 20px;"><a href="{{link}}" style="color: #4CAF50; text-decoration: underline;">{{link}}</a></p>
+          <a href="{{link}}" style="display: inline-block; background-color: #4CAF50; color: white; padding: 14px 28px; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; text-decoration: none;">
+            Confirm Your Attendance
+          </a>
         </div>
         
         <p style="text-align: center; margin-top: 30px; color: #7f8c8d; font-size: 14px;">We look forward to celebrating this special occasion with you.</p>

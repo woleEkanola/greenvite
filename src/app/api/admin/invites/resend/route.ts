@@ -265,7 +265,23 @@ async function sendEmail(
     // Add the image placeholder if not already present in the message
     let personalizedMessage = message;
     if (emailImageBuffer && !message.includes('{{image}}')) {
-      personalizedMessage = `<div><img src="cid:invitation-image" alt="Invitation Image" style="max-width: 100%; height: auto; margin-bottom: 20px;"/></div>${personalizedMessage}`;
+      personalizedMessage = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="text-align: center; margin: 20px 0;">
+            <a href="${eventLink}#${code}" style="display: inline-block; background-color: #4CAF50; color: white; padding: 14px 28px; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; text-decoration: none;">
+              Confirm Your Attendance
+            </a>
+          </div>
+          <div style="text-align: center; margin: 20px 0;">
+            <img src="cid:invitation-image" alt="Invitation Image" style="max-width: 100%; height: auto;"/>
+          </div>
+          <div style="text-align: center; margin: 20px 0;">
+            <a href="${eventLink}#${code}" style="display: inline-block; background-color: #4CAF50; color: white; padding: 14px 28px; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; text-decoration: none;">
+              Confirm Your Attendance
+            </a>
+          </div>
+        </div>
+      `;
     }
     
     // Now replace template variables
@@ -273,7 +289,7 @@ async function sendEmail(
       .replace(/{{name}}/g, name)
       .replace(/{{code}}/g, code)
       .replace(/{{link}}/g, `${eventLink}#${code}`)
-      .replace(/{{image}}/g, '<img src="cid:invitation-image" alt="Invitation Image" style="max-width: 100%; height: auto; margin-bottom: 20px;"/>');
+      .replace(/{{image}}/g, '<img src="cid:invitation-image" alt="Invitation Image" style="max-width: 100%; height: auto;"/>');
 
     // Prepare email options
     const mailOptions: any = {

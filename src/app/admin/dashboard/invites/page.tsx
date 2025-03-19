@@ -1,23 +1,181 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo, useCallback, memo } from 'react'
 import Swal from 'sweetalert2'
 import * as XLSX from 'xlsx'
 import Image from 'next/image'
-import { toast } from 'sonner'
-import { AlertCircle, CheckCircle, Clock, RefreshCcw, Send, X } from 'lucide-react'
-import Papa from 'papaparse'
+import { X, Check, Mail, Phone, RefreshCw, Search, ChevronDown } from 'lucide-react'
 import { z } from 'zod'
 import RichTextEditor from '@/components/RichTextEditor'
 import DataTable from '@/components/DataTable'
+import { debounce } from 'lodash'
 
 interface Recipient {
   name: string
-  email?: string
-  phone?: string
+  email: string
+  phone: string
   type: 'email' | 'whatsapp' | 'both'
   code?: string
 }
+
+// Memoized RecipientItem component to prevent unnecessary re-renders
+const RecipientItem = memo(({ 
+  recipient, 
+  index, 
+  onRemove, 
+  onChange,
+  enableEmail,
+  enableWhatsApp
+}: { 
+  recipient: Recipient, 
+  index: number, 
+  onRemove: (index: number) => void, 
+  onChange: (index: number, field: keyof Recipient, value: string) => void,
+  enableEmail: boolean,
+  enableWhatsApp: boolean
+}) => {
+  // Local memoized handlers to prevent new function creation on each render
+  const handleNameChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    onChange(index, 'name', e.target.value);
+  }, [index, onChange]);
+
+  const handleEmailChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    onChange(index, 'email', e.target.value);
+  }, [index, onChange]);
+
+  const handlePhoneChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    onChange(index, 'phone', e.target.value);
+  }, [index, onChange]);
+
+  const handleTypeChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+    onChange(index, 'type', e.target.value as Recipient['type']);
+  }, [index, onChange]);
+
+  const handleRemoveClick = useCallback(() => {
+    onRemove(index);
+  }, [index, onRemove]);
+
+  return (
+    <div className="p-4 border rounded-lg relative mb-4">
+      {index > 0 && (
+        <button
+          type="button"
+          onClick={handleRemoveClick}
+          className="absolute top-2 right-2 text-red-500 hover:text-red-700"
+        >
+          ×
+        </button>
+      )}
+      
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Name
+          </label>
+          <input
+            type="text"
+            value={recipient.name}
+            onChange={handleNameChange}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            required
+          />
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Email
+          </label>
+          <input
+            type="email"
+            value={recipient.email}
+            onChange={handleEmailChange}
+            className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 ${!enableEmail && 'opacity-50'}`}
+            required={recipient.type === 'email' || (recipient.type === 'both' && enableEmail)}
+            disabled={!enableEmail}
+          />
+        </div>
+        
+        <div>
+          <div className="text-xs text-gray-500 mb-1">
+            Phone (format: +234XXXXXXXXXX)
+          </div>
+          <input
+            type="tel"
+            value={recipient.phone}
+            onChange={handlePhoneChange}
+            className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 ${!enableWhatsApp && 'opacity-50'}`}
+            required={recipient.type === 'whatsapp' || (recipient.type === 'both' && enableWhatsApp)}
+            disabled={!enableWhatsApp}
+            placeholder="+234XXXXXXXXXX"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Send via
+          </label>
+          <select
+            value={recipient.type}
+            onChange={handleTypeChange}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          >
+            {enableWhatsApp && <option value="whatsapp">WhatsApp</option>}
+            {enableEmail && <option value="email">Email</option>}
+            {enableEmail && enableWhatsApp && <option value="both">Both</option>}
+          </select>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+// Make sure DisplayName is set for debugging
+RecipientItem.displayName = 'RecipientItem';
+
+// Memoized EmailMessageEditor component
+const EmailMessageEditor = memo(({ 
+  value, 
+  onChange, 
+  disabled 
+}: { 
+  value: string, 
+  onChange: (value: string) => void, 
+  disabled?: boolean 
+}) => {
+  return (
+    <RichTextEditor
+      value={value}
+      onChange={onChange}
+      disabled={disabled}
+      simpleMode={true} // Use simple mode for better performance
+    />
+  );
+});
+
+EmailMessageEditor.displayName = 'EmailMessageEditor';
+
+// Memoized WhatsAppMessageEditor component
+const WhatsAppMessageEditor = memo(({ 
+  value, 
+  onChange, 
+  disabled 
+}: { 
+  value: string, 
+  onChange: (value: string) => void, 
+  disabled?: boolean 
+}) => {
+  return (
+    <textarea
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      rows={8}
+      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono text-sm"
+      disabled={disabled}
+    />
+  );
+});
+
+WhatsAppMessageEditor.displayName = 'WhatsAppMessageEditor';
 
 export default function SendInvites() {
   const [recipients, setRecipients] = useState<Recipient[]>([{ name: '', email: '', phone: '', type: 'whatsapp' }])
@@ -26,94 +184,90 @@ export default function SendInvites() {
   const [showPreview, setShowPreview] = useState(false)
   const [enableEmail, setEnableEmail] = useState(true)
   const [enableWhatsApp, setEnableWhatsApp] = useState(true)
-  const [emailMessage, setEmailMessage] = useState(`
-<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 5px;">
-  {{image}}
-  <h2 style="color: #2c3e50; text-align: center;">You are invited to the church dedication of</h2>
-  <h1 style="color: #16a085; text-align: center; margin-bottom: 30px;">Jesse Oghenekome George</h1>
-  <p style="text-align: center; font-size: 18px;">at RCCG Church, Champions Cathedral.</p>
-  
-  <div style="margin: 30px 0; background-color: #f9f9f9; padding: 15px; border-radius: 5px;">
-    <h3 style="color: #2c3e50; text-align: center; margin-top: 0;">LOCATIONS</h3>
-    <p style="text-align: center; font-weight: bold;">Church Dedication</p>
-    <p style="text-align: center;">RCCG Church, Champions Cathedral</p>
-    <p style="text-align: center;">#16-18 Airport Road, Effurun, Warri Delta</p>
-    <p style="text-align: center;">Nigeria</p>
-    <p style="text-align: center; font-size: 20px; margin: 20px 0;">10:00 AM</p>
-    <p style="text-align: center; font-size: 18px;">Sunday, April 13, 2025</p>
-  </div>
-  
-  <div style="margin: 30px 0; text-align: center;">
-    <p>Your personal registration code is: <strong>{{code}}</strong></p>
-    <a href="{{link}}" style="display: inline-block; background-color: #16a085; color: white; padding: 12px 25px; text-decoration: none; border-radius: 4px; font-weight: bold;">Confirm Your Attendance</a>
-    <p style="text-align: center; margin-top: 30px; color: #7f8c8d; font-size: 14px;">We look forward to celebrating this special occasion with you.</p>
-  </div>
-</div>
-  `)
-  const [whatsappMessage, setWhatsappMessage] = useState(`You're invited to Jesse Oghenekome George's Church Dedication at RCCG Church, Champions Cathedral, #16-18 Airport Road, Effurun, Warri Delta, Nigeria. 10:00 AM, Sunday, April 13, 2025. Your code: {{code}}. RSVP: {{link}}`)
-  const [eventLink, setEventLink] = useState('https://greenvites.online/jessegeorge')
-  const [emailSubject, setEmailSubject] = useState('Invitation to Jesse Oghenekome George\'s Church Dedication')
+  const [showMessageSettings, setShowMessageSettings] = useState(false)
+  const [emailSubject, setEmailSubject] = useState('You are invited!')
+  const [emailMessage, setEmailMessage] = useState('Confirm Your Attendance\n{{Image}}\nClick the link below, scroll down on the next page, and click the "Confirm Your Attendance" button to fill out the form and secure your reservation.\n{{link}}\nConfirm Your Attendance')
+  const [whatsappMessage, setWhatsappMessage] = useState('Hello {{name}}, Click the link below, scroll down on the next page, and click the "Confirm Your Attendance" button to fill out the form and secure your reservation. {{link}}')
+  const [eventLink, setEventLink] = useState('https://greenvites.vercel.app')
   const [emailImage, setEmailImage] = useState<File | null>(null)
   const [emailImagePreview, setEmailImagePreview] = useState<string | null>(null)
-  const [sentInvites, setSentInvites] = useState<any[]>([])
-  const [showSentInvites, setShowSentInvites] = useState(false)
-  const [editingInvite, setEditingInvite] = useState<any>(null)
-  const [editedPhone, setEditedPhone] = useState('')
-  const [editedEmail, setEditedEmail] = useState('')
-  const [resendChannel, setResendChannel] = useState<'whatsapp' | 'email' | 'both'>('both')
-  const [isLoading, setIsLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Add recipient to the list
   const handleAddRecipient = () => {
     setRecipients([...recipients, { name: '', email: '', phone: '', type: 'whatsapp' }])
   }
 
+  // Remove recipient from the list
   const handleRemoveRecipient = (index: number) => {
     setRecipients(recipients.filter((_, i) => i !== index))
   }
 
-  // Format phone number to ensure it starts with +234
-  const formatPhoneNumber = (phone: string): string => {
-    if (!phone) return '';
-    
-    // Remove any non-digit characters except the leading '+'
-    let formatted = phone.trim().replace(/(?!^\+)[^\d]/g, '');
-    
-    // If the number doesn't start with '+', add it
-    if (!formatted.startsWith('+')) {
-      // If it starts with '0', replace the leading '0' with +234
-      if (formatted.startsWith('0')) {
-        formatted = '+234' + formatted.substring(1);
-      } else if (formatted.startsWith('234')) {
-        // If it already starts with 234, add the +
-        formatted = '+' + formatted;
-      } else {
-        // Otherwise, add +234 prefix
-        formatted = '+234' + formatted;
+  // Memoize the formatting function to avoid recreation on each render
+  const formatPhoneNumber = useMemo(() => {
+    return (phone: string) => {
+      if (!phone) return '';
+      
+      // Keep only digits and + symbol
+      let formatted = phone.replace(/[^\d+]/g, '');
+      
+      // If it doesn't start with +, check format
+      if (!formatted.startsWith('+')) {
+        // If it starts with 234, add +
+        if (formatted.startsWith('234')) {
+          formatted = '+' + formatted;
+        } else if (formatted.startsWith('0')) {
+          // If it starts with 0, replace with +234
+          formatted = '+234' + formatted.substring(1);
+        } else {
+          // Otherwise, add +234 prefix
+          formatted = '+234' + formatted;
+        }
       }
-    }
-    
-    return formatted;
-  };
+      
+      return formatted;
+    };
+  }, []);
 
-  const handleRecipientChange = (index: number, field: keyof Recipient, value: string) => {
+  // Two-stage debounced recipient change handling
+  // Stage 1: Raw input handler that updates UI immediately for better responsiveness
+  const handleRecipientChange = useCallback((index: number, field: keyof Recipient, value: string) => {
     const updatedRecipients = [...recipients];
     
-    // Format phone number if that's the field being changed
-    if (field === 'phone') {
-      updatedRecipients[index] = {
-        ...updatedRecipients[index],
-        [field]: formatPhoneNumber(value)
-      };
-    } else {
-      updatedRecipients[index] = {
-        ...updatedRecipients[index],
-        [field]: value
-      };
-    }
+    // For UI responsiveness, update with raw value first
+    updatedRecipients[index] = {
+      ...updatedRecipients[index],
+      [field]: value
+    };
     
     setRecipients(updatedRecipients);
-  }
+    
+    // Then debounce the formatting and validation
+    if (field === 'phone') {
+      debouncedPhoneFormatting(index, value);
+    }
+  }, [recipients]);
+
+  // Stage 2: Debounced formatter that runs after user stops typing
+  const debouncedPhoneFormatting = useCallback(
+    debounce((index: number, value: string) => {
+      setRecipients(prevRecipients => {
+        // Avoid unnecessary state updates if component unmounted or value already changed
+        if (!prevRecipients[index] || prevRecipients[index].phone !== value) {
+          return prevRecipients;
+        }
+        
+        const updatedRecipients = [...prevRecipients];
+        updatedRecipients[index] = {
+          ...updatedRecipients[index],
+          phone: formatPhoneNumber(value)
+        };
+        
+        return updatedRecipients;
+      });
+    }, 500), // Longer delay for phone formatting as it's more expensive
+    [formatPhoneNumber]
+  );
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -271,10 +425,24 @@ export default function SendInvites() {
 
       if (response.ok) {
         const data = await response.json()
-        setSentInvites(data.sentInvites)
-        setShowSentInvites(true)
-        Swal.fire('Success', 'Invites sent successfully!', 'success')
-        setRecipients([{ name: '', email: '', phone: '', type: 'whatsapp' }])
+        Swal.fire({
+          title: 'Success',
+          text: 'Invites sent successfully!',
+          icon: 'success',
+          showCancelButton: true,
+          confirmButtonColor: '#10B981',
+          cancelButtonColor: '#6B7280',
+          confirmButtonText: 'View Sent Invites',
+          cancelButtonText: 'Send More',
+        }).then((result) => {
+          // Reset the form regardless
+          setRecipients([{ name: '', email: '', phone: '', type: 'whatsapp' }])
+          
+          // If user clicked View Sent Invites, redirect to the sent-invites page
+          if (result.isConfirmed) {
+            window.location.href = '/admin/dashboard/sent-invites'
+          }
+        })
       } else {
         const error = await response.json()
         throw new Error(error.message || 'Failed to send invites')
@@ -287,229 +455,170 @@ export default function SendInvites() {
     }
   }
 
-  // Function to handle resending failed messages
-  const handleResendInvite = async (invite: any) => {
-    setEditingInvite(invite)
-    setEditedPhone(invite.phone || '')
-    setEditedEmail(invite.email || '')
-    setResendChannel(invite.type === 'both' ? 'both' : (invite.type as 'whatsapp' | 'email'))
-    
-    // Show the edit dialog
-    Swal.fire({
-      title: 'Edit and Resend Invite',
-      html: `
-        <div class="mb-4">
-          <label class="block text-sm font-medium text-gray-700 mb-1">Recipient Name</label>
-          <div class="text-lg font-semibold">${invite.name}</div>
-        </div>
-        ${invite.phone ? `
-        <div class="mb-4">
-          <label for="phone" class="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
-          <input id="phone" type="text" class="w-full p-2 border rounded" value="${invite.phone}">
-        </div>
-        ` : ''}
-        ${invite.email ? `
-        <div class="mb-4">
-          <label for="email" class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
-          <input id="email" type="email" class="w-full p-2 border rounded" value="${invite.email}">
-        </div>
-        ` : ''}
-        <div class="mb-4">
-          <label class="block text-sm font-medium text-gray-700 mb-1">Resend Via</label>
-          <select id="channel" class="w-full p-2 border rounded">
-            ${invite.type === 'both' ? '<option value="both">Both WhatsApp & Email</option>' : ''}
-            ${invite.phone ? '<option value="whatsapp">WhatsApp Only</option>' : ''}
-            ${invite.email ? '<option value="email">Email Only</option>' : ''}
-          </select>
-        </div>
-      `,
-      showCancelButton: true,
-      confirmButtonText: 'Resend',
-      preConfirm: () => {
-        const phone = (document.getElementById('phone') as HTMLInputElement)?.value
-        const email = (document.getElementById('email') as HTMLInputElement)?.value
-        const channel = (document.getElementById('channel') as HTMLSelectElement)?.value as 'whatsapp' | 'email' | 'both'
-        
-        return { phone, email, channel }
-      }
-    }).then(async (result) => {
-      if (result.isConfirmed) {
-        const { phone, email, channel } = result.value as { phone: string, email: string, channel: 'whatsapp' | 'email' | 'both' }
-        
-        setIsLoading(true)
-        try {
-          // Prepare email image if available
-          let emailImageBuffer = null
-          if (emailImage) {
-            const arrayBuffer = await emailImage.arrayBuffer()
-            emailImageBuffer = Array.from(new Uint8Array(arrayBuffer))
-          }
-          
-          const response = await fetch('/api/admin/invites/resend', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              id: invite.id,
-              phone,
-              email,
-              channel,
-              whatsappMessage,
-              emailSubject,
-              emailMessage,
-              eventLink,
-              emailImageBuffer
-            }),
-          })
-          
-          const data = await response.json()
-          
-          if (response.ok) {
-            Swal.fire('Success', 'Invite resent successfully!', 'success')
-            // Update the invite in the list
-            setSentInvites(prevInvites => 
-              prevInvites.map(i => i.id === invite.id ? data.invite : i)
-            )
-          } else {
-            Swal.fire('Error', data.error || 'Failed to resend invite', 'error')
-          }
-        } catch (error) {
-          console.error('Error resending invite:', error)
-          Swal.fire('Error', 'Failed to resend invite', 'error')
-        } finally {
-          setIsLoading(false)
-          setEditingInvite(null)
-        }
-      }
-    })
-  }
-
-  // Function to fetch all invites
-  const fetchSentInvites = async () => {
-    try {
-      const response = await fetch('/api/admin/invites')
-      if (response.ok) {
-        const data = await response.json()
-        setSentInvites(data.invites)
-        setShowSentInvites(true)
-      } else {
-        console.error('Failed to fetch invites')
-      }
-    } catch (error) {
-      console.error('Error fetching invites:', error)
-    }
-  }
-
-  // Fetch invites when the component mounts
-  useEffect(() => {
-    // Set default image preview when component mounts
-    setEmailImagePreview('/jessegeorge.jpg');
-    
-    // Load sent invites
-    fetchSentInvites();
-  }, []);
-
-  // Function to get status badge color
-  const getStatusBadgeColor = (status: string) => {
-    switch (status) {
-      case 'sent':
-        return 'bg-blue-100 text-blue-800'
-      case 'delivered':
-        return 'bg-green-100 text-green-800'
-      case 'failed':
-        return 'bg-red-100 text-red-800'
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800'
-      default:
-        return 'bg-gray-100 text-gray-800'
-    }
-  }
-
-  // Function to get status icon
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'sent':
-        return '✓'
-      case 'delivered':
-        return '✓✓'
-      case 'failed':
-        return '✗'
-      case 'pending':
-        return '⏱'
-      default:
-        return '?'
-    }
-  }
-
   return (
     <div className="max-w-6xl mx-auto">
-      <h1 className="text-2xl font-light text-gray-800 mb-8">Send Invites</h1>
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-2xl font-light text-gray-800">Send Invites</h1>
+        <a 
+          href="/admin/dashboard/sent-invites" 
+          className="flex items-center px-4 py-2 bg-emerald-500 text-white rounded-md hover:bg-emerald-600 transition-colors"
+        >
+          <Mail className="h-4 w-4 mr-2" />
+          View Sent Invites
+        </a>
+      </div>
 
       <div className="bg-white rounded-lg shadow-md p-6">
         <div className="mb-6 space-y-4">
-          <div className="flex gap-4">
-            <button
-              type="button"
-              onClick={downloadTemplate}
-              className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
-            >
-              Download Template
-            </button>
-            <label className="px-4 py-2 text-sm bg-emerald-500 text-white rounded-md hover:bg-emerald-600 cursor-pointer">
-              Upload File
-              <input
-                type="file"
-                accept=".xlsx,.xls"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
-            </label>
+          <div className="flex flex-col lg:flex-row gap-4">
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Type of Invites
+              </label>
+              <div className="flex gap-4">
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={enableEmail}
+                    onChange={() => setEnableEmail(!enableEmail)}
+                    className="form-checkbox h-5 w-5 text-emerald-500 rounded"
+                  />
+                  <span>Email</span>
+                </label>
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={enableWhatsApp}
+                    onChange={() => setEnableWhatsApp(!enableWhatsApp)}
+                    className="form-checkbox h-5 w-5 text-emerald-500 rounded"
+                  />
+                  <span>WhatsApp</span>
+                </label>
+              </div>
+            </div>
+            
+            <div className="flex-1">
+              <button
+                type="button"
+                onClick={() => setShowMessageSettings(!showMessageSettings)}
+                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-md flex items-center"
+              >
+                {showMessageSettings ? 'Hide Message Settings' : 'Customize Message Settings'}
+                <ChevronDown className={`ml-2 h-4 w-4 transition-transform ${showMessageSettings ? 'rotate-180' : ''}`} />
+              </button>
+            </div>
           </div>
           
-          {showPreview && (
-            <div className="mt-6">
-              <h2 className="text-lg font-medium mb-4">Preview ({previewData.length} recipients)</h2>
-              <div className="max-h-60 overflow-y-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {previewData.map((recipient, index) => (
-                      <tr key={index}>
-                        <td className="px-6 py-4 whitespace-nowrap">{recipient.name}</td>
-                        <td className="px-6 py-4 whitespace-nowrap">{recipient.email}</td>
-                        <td className="px-6 py-4 whitespace-nowrap">{recipient.phone}</td>
-                        <td className="px-6 py-4 whitespace-nowrap">{recipient.type}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="mt-4 flex gap-4">
-                <button
-                  type="button"
-                  onClick={handleConfirmUpload}
-                  className="px-4 py-2 bg-emerald-500 text-white rounded-md hover:bg-emerald-600"
-                >
-                  Confirm Upload
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowPreview(false)
-                    setPreviewData([])
-                  }}
-                  className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
+          {/* Message Settings Section - Hidden by default */}
+          {showMessageSettings && (
+            <div className="mt-6 p-4 border border-gray-200 rounded-md bg-gray-50">
+              <h3 className="text-lg font-medium mb-4">Message Settings</h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <h4 className="font-medium">Email</h4>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Subject
+                    </label>
+                    <input
+                      type="text"
+                      value={emailSubject}
+                      onChange={(e) => setEmailSubject(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      placeholder="Email subject"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Message
+                    </label>
+                    <EmailMessageEditor
+                      value={emailMessage}
+                      onChange={setEmailMessage}
+                      disabled={false}
+                    />
+                    <div className="mt-2 text-xs text-gray-500">
+                      Available variables: {'{{name}}, {{code}}, {{link}}, {{Image}}'}
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Image (optional)
+                    </label>
+                    <div className="flex items-center space-x-4">
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        accept="image/*"
+                        onChange={handleEmailImageChange}
+                        className="hidden"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+                      >
+                        Choose Image
+                      </button>
+                      {emailImagePreview && (
+                        <button
+                          type="button"
+                          onClick={clearEmailImage}
+                          className="px-4 py-2 border border-red-300 text-red-500 rounded-md hover:bg-red-50"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                    {emailImagePreview && (
+                      <div className="mt-2">
+                        <div className="relative w-full h-32 bg-gray-100 rounded-md overflow-hidden">
+                          <Image
+                            src={emailImagePreview}
+                            alt="Email image preview"
+                            fill
+                            style={{ objectFit: 'contain' }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="space-y-4">
+                  <h4 className="font-medium">WhatsApp</h4>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Message
+                    </label>
+                    <WhatsAppMessageEditor
+                      value={whatsappMessage}
+                      onChange={setWhatsappMessage}
+                      disabled={false}
+                    />
+                    <div className="mt-2 text-xs text-gray-500">
+                      Available variables: {'{{name}}, {{code}}, {{link}}'}
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Event Link
+                    </label>
+                    <input
+                      type="text"
+                      value={eventLink}
+                      onChange={(e) => setEventLink(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      placeholder="https://yourevent.com"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -517,211 +626,85 @@ export default function SendInvites() {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="p-4 border rounded-lg">
-            <h2 className="text-lg font-medium mb-4">Message Settings</h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-md font-medium">Email Settings</h3>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input 
-                      type="checkbox" 
-                      className="sr-only peer"
-                      checked={enableEmail}
-                      onChange={() => setEnableEmail(!enableEmail)}
-                    />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
-                    <span className="ml-3 text-sm font-medium text-gray-900">{enableEmail ? 'Enabled' : 'Disabled'}</span>
-                  </label>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Email Subject
-                  </label>
-                  <input
-                    type="text"
-                    value={emailSubject}
-                    onChange={(e) => setEmailSubject(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    disabled={!enableEmail}
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Email Image (Optional)
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*"
-                      onChange={handleEmailImageChange}
-                      className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"
-                      disabled={!enableEmail}
-                    />
-                    {emailImagePreview && (
-                      <button
-                        type="button"
-                        onClick={clearEmailImage}
-                        className="text-red-500 hover:text-red-700"
-                      >
-                        Clear
-                      </button>
-                    )}
-                  </div>
-                  {emailImagePreview && (
-                    <div className="mt-2 relative w-full h-40">
-                      <Image 
-                        src={emailImagePreview} 
-                        alt="Email image preview" 
-                        fill
-                        style={{ objectFit: 'contain' }}
-                      />
-                    </div>
-                  )}
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Email Message
-                  </label>
-                  <RichTextEditor
-                    value={emailMessage}
-                    onChange={setEmailMessage}
-                    placeholder="Enter your email message. You can use {{name}}, {{code}}, and {{link}} as placeholders."
-                    height={300}
-                    disabled={!enableEmail}
-                  />
-                </div>
-              </div>
-              
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-md font-medium">WhatsApp Settings</h3>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input 
-                      type="checkbox" 
-                      className="sr-only peer"
-                      checked={enableWhatsApp}
-                      onChange={() => setEnableWhatsApp(!enableWhatsApp)}
-                    />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
-                    <span className="ml-3 text-sm font-medium text-gray-900">{enableWhatsApp ? 'Enabled' : 'Disabled'}</span>
-                  </label>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    WhatsApp Message
-                  </label>
-                  <div className="text-xs text-gray-500 mb-2">
-                    Use {"{{name}}"}, {"{{code}}"}, and {"{{link}}"} as placeholders
-                  </div>
-                  <textarea
-                    value={whatsappMessage}
-                    onChange={(e) => setWhatsappMessage(e.target.value)}
-                    rows={8}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono text-sm"
-                    disabled={!enableWhatsApp}
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Event Link
-                  </label>
-                  <div className="text-xs text-gray-500 mb-2">
-                    This link will replace the {"{{link}}"} placeholder in messages
-                  </div>
-                  <input
-                    type="text"
-                    value={eventLink}
-                    onChange={(e) => setEventLink(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <div className="p-4 border rounded-lg">
             <h2 className="text-lg font-medium mb-4">Recipients</h2>
             
-            {recipients.map((recipient, index) => (
-              <div key={index} className="p-4 border rounded-lg relative mb-4">
-                {index > 0 && (
+            <div className="flex gap-4 mb-6">
+              <button
+                type="button"
+                onClick={downloadTemplate}
+                className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
+              >
+                Download Template
+              </button>
+              <label className="px-4 py-2 text-sm bg-emerald-500 text-white rounded-md hover:bg-emerald-600 cursor-pointer">
+                Upload File
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+              </label>
+            </div>
+            
+            {showPreview && (
+              <div className="mt-6">
+                <h2 className="text-lg font-medium mb-4">Preview ({previewData.length} recipients)</h2>
+                <div className="max-h-60 overflow-y-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {previewData.map((recipient, index) => (
+                        <tr key={index}>
+                          <td className="px-6 py-4 whitespace-nowrap">{recipient.name}</td>
+                          <td className="px-6 py-4 whitespace-nowrap">{recipient.email}</td>
+                          <td className="px-6 py-4 whitespace-nowrap">{recipient.phone}</td>
+                          <td className="px-6 py-4 whitespace-nowrap">{recipient.type}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="mt-4 flex gap-4">
                   <button
                     type="button"
-                    onClick={() => handleRemoveRecipient(index)}
-                    className="absolute top-2 right-2 text-red-500 hover:text-red-700"
+                    onClick={handleConfirmUpload}
+                    className="px-4 py-2 bg-emerald-500 text-white rounded-md hover:bg-emerald-600"
                   >
-                    ×
+                    Confirm Upload
                   </button>
-                )}
-                
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Name
-                    </label>
-                    <input
-                      type="text"
-                      value={recipient.name}
-                      onChange={(e) => handleRecipientChange(index, 'name', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                      required
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Email
-                    </label>
-                    <input
-                      type="email"
-                      value={recipient.email}
-                      onChange={(e) => handleRecipientChange(index, 'email', e.target.value)}
-                      className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 ${!enableEmail && 'opacity-50'}`}
-                      required={recipient.type === 'email' || (recipient.type === 'both' && enableEmail)}
-                      disabled={!enableEmail}
-                    />
-                  </div>
-                  
-                  <div>
-                    <div className="text-xs text-gray-500 mb-1">
-                      Phone (format: +234XXXXXXXXXX)
-                    </div>
-                    <input
-                      type="tel"
-                      value={recipient.phone}
-                      onChange={(e) => handleRecipientChange(index, 'phone', e.target.value)}
-                      className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 ${!enableWhatsApp && 'opacity-50'}`}
-                      required={recipient.type === 'whatsapp' || (recipient.type === 'both' && enableWhatsApp)}
-                      disabled={!enableWhatsApp}
-                      placeholder="+234XXXXXXXXXX"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Send via
-                    </label>
-                    <select
-                      value={recipient.type}
-                      onChange={(e) => handleRecipientChange(index, 'type', e.target.value as 'email' | 'whatsapp' | 'both')}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    >
-                      {enableWhatsApp && <option value="whatsapp">WhatsApp</option>}
-                      {enableEmail && <option value="email">Email</option>}
-                      {enableEmail && enableWhatsApp && <option value="both">Both</option>}
-                    </select>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowPreview(false)
+                      setPreviewData([])
+                    }}
+                    className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
                 </div>
               </div>
+            )}
+            
+            {recipients.map((recipient, index) => (
+              <RecipientItem 
+                key={index} 
+                recipient={recipient} 
+                index={index} 
+                onRemove={handleRemoveRecipient} 
+                onChange={handleRecipientChange}
+                enableEmail={enableEmail}
+                enableWhatsApp={enableWhatsApp}
+              />
             ))}
-
             <div className="flex gap-4">
               <button
                 type="button"
@@ -730,7 +713,6 @@ export default function SendInvites() {
               >
                 Add Recipient
               </button>
-              
               <button
                 type="submit"
                 disabled={isSending}
@@ -742,127 +724,6 @@ export default function SendInvites() {
             </div>
           </div>
         </form>
-      </div>
-
-      {/* Sent Invites Section */}
-      <div className="mt-8">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold">Sent Invites</h2>
-          <button 
-            onClick={fetchSentInvites}
-            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-md flex items-center"
-          >
-            <RefreshCcw className="h-4 w-4 mr-2" /> Refresh
-          </button>
-        </div>
-        
-        {sentInvites.length > 0 ? (
-          <DataTable
-            data={sentInvites}
-            columns={[
-              {
-                header: 'Recipient',
-                accessor: (invite: any) => (
-                  <div>
-                    <div className="text-sm font-medium text-gray-900">{invite.name}</div>
-                    <div className="text-sm text-gray-500">Code: {invite.code || 'N/A'}</div>
-                  </div>
-                ),
-                searchable: false
-              },
-              {
-                header: 'Contact Info',
-                accessor: (invite: any) => (
-                  <div>
-                    {invite.phone && (
-                      <div className="text-sm text-gray-500">
-                        📱 {invite.phone}
-                      </div>
-                    )}
-                    {invite.email && (
-                      <div className="text-sm text-gray-500">
-                        ✉️ {invite.email}
-                      </div>
-                    )}
-                  </div>
-                ),
-                searchable: false
-              },
-              {
-                header: 'WhatsApp Status',
-                accessor: (invite: any) => (
-                  <div>
-                    {invite.whatsappStatus ? (
-                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadgeColor(invite.whatsappStatus)}`}>
-                        {getStatusIcon(invite.whatsappStatus)} {invite.whatsappStatus}
-                      </span>
-                    ) : (
-                      <span className="text-gray-400">N/A</span>
-                    )}
-                    {invite.whatsappProvider && (
-                      <div className="text-xs text-gray-500 mt-1">
-                        via {invite.whatsappProvider === 'twilio' ? 'Twilio' : 'Nexmo'}
-                      </div>
-                    )}
-                  </div>
-                ),
-                searchable: false
-              },
-              {
-                header: 'Email Status',
-                accessor: (invite: any) => (
-                  <div>
-                    {invite.emailStatus ? (
-                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadgeColor(invite.emailStatus)}`}>
-                        {getStatusIcon(invite.emailStatus)} {invite.emailStatus}
-                      </span>
-                    ) : (
-                      <span className="text-gray-400">N/A</span>
-                    )}
-                  </div>
-                ),
-                searchable: false
-              },
-              {
-                header: 'Actions',
-                accessor: (invite: any) => (
-                  <div className="text-right">
-                    {(invite.whatsappStatus === 'failed' || invite.emailStatus === 'failed') && (
-                      <button
-                        onClick={() => handleResendInvite(invite)}
-                        className="text-indigo-600 hover:text-indigo-900 mr-4"
-                      >
-                        Edit & Resend
-                      </button>
-                    )}
-                    {invite.errorMessage && (
-                      <button
-                        onClick={() => Swal.fire('Error Details', invite.errorMessage, 'error')}
-                        className="text-red-600 hover:text-red-900"
-                      >
-                        View Error
-                      </button>
-                    )}
-                  </div>
-                ),
-                searchable: false
-              }
-            ]}
-            itemsPerPage={10}
-            searchPlaceholder="Search invites by name, email, or phone..."
-            emptyMessage="No invites sent yet or no data available."
-          />
-        ) : (
-          <div className="bg-white p-6 rounded-lg shadow-md text-center">
-            <p className="text-gray-500">No invites sent yet or no data available.</p>
-            <button 
-              onClick={fetchSentInvites}
-              className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
-            >
-              Check for Invites
-            </button>
-          </div>
-        )}
       </div>
     </div>
   )

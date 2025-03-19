@@ -1,11 +1,15 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import 'react-quill/dist/quill.snow.css'
+import { debounce } from 'lodash'
 
 // Dynamically import ReactQuill to avoid SSR issues
-const ReactQuill = dynamic(() => import('react-quill'), { ssr: false })
+const ReactQuill = dynamic(() => import('react-quill'), { 
+  ssr: false,
+  loading: () => <div className="border rounded-md p-4 animate-pulse h-48 bg-gray-50" />
+})
 
 interface RichTextEditorProps {
   value: string
@@ -14,6 +18,7 @@ interface RichTextEditorProps {
   height?: number
   disabled?: boolean
   showImageVariable?: boolean
+  simpleMode?: boolean
 }
 
 const RichTextEditor = ({ 
@@ -22,53 +27,74 @@ const RichTextEditor = ({
   placeholder = 'Enter your content here...', 
   height = 200, 
   disabled = false,
-  showImageVariable = true
+  showImageVariable = true,
+  simpleMode = false
 }: RichTextEditorProps) => {
   // State to track if the component is mounted (for SSR)
   const [mounted, setMounted] = useState(false)
+  // Local state to avoid re-renders during typing
+  const [localValue, setLocalValue] = useState(value)
 
   // Set mounted to true when component mounts
   useEffect(() => {
     setMounted(true)
   }, [])
 
-  // Define the toolbar options
+  // Update local value when prop value changes
+  useEffect(() => {
+    setLocalValue(value)
+  }, [value])
+
+  // Define the toolbar options - simplified for better performance
   const modules = {
-    toolbar: [
-      [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
-      ['bold', 'italic', 'underline', 'strike'],
-      [{ 'color': [] }, { 'background': [] }],
-      [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-      [{ 'align': [] }],
-      ['link', 'image'],
-      ['clean']
-    ],
+    toolbar: simpleMode 
+      ? [
+          ['bold', 'italic', 'underline'],
+          ['link'],
+          ['clean']
+        ]
+      : [
+          [{ 'header': [1, 2, false] }],
+          ['bold', 'italic', 'underline'],
+          [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+          ['link'],
+          ['clean']
+        ],
   }
 
-  // Define the formats we want to support
-  const formats = [
-    'header',
-    'bold', 'italic', 'underline', 'strike',
-    'color', 'background',
-    'list', 'bullet',
-    'align',
-    'link', 'image'
-  ]
+  // Define the formats we want to support - reduced for better performance
+  const formats = simpleMode
+    ? ['bold', 'italic', 'underline', 'link']
+    : [
+        'header',
+        'bold', 'italic', 'underline',
+        'list', 'bullet',
+        'link'
+      ]
 
-  // Custom handler to preserve template variables
+  // Debounce the onChange to prevent excessive updates
+  const debouncedOnChange = useCallback(
+    debounce((content: string) => {
+      // Process content to preserve template variables
+      let processedContent = content
+      
+      // Check for and preserve template variables like {{name}}, {{code}}, {{link}}
+      const templateVars = ['{{name}}', '{{code}}', '{{link}}', '{{image}}']
+      templateVars.forEach(variable => {
+        // Create a regex that matches the variable even if it's wrapped in HTML tags
+        const regex = new RegExp(`(<[^>]*>)?${variable.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(<[^>]*>)?`, 'g')
+        processedContent = processedContent.replace(regex, variable)
+      })
+      
+      onChange(processedContent)
+    }, 300),
+    [onChange]
+  )
+
+  // Handle local updates immediately for responsive UI
   const handleChange = (content: string) => {
-    // Process content to preserve template variables
-    let processedContent = content
-    
-    // Check for and preserve template variables like {{name}}, {{code}}, {{link}}
-    const templateVars = ['{{name}}', '{{code}}', '{{link}}', '{{image}}']
-    templateVars.forEach(variable => {
-      // Create a regex that matches the variable even if it's wrapped in HTML tags
-      const regex = new RegExp(`(<[^>]*>)?${variable.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(<[^>]*>)?`, 'g')
-      processedContent = processedContent.replace(regex, variable)
-    })
-    
-    onChange(processedContent)
+    setLocalValue(content)
+    debouncedOnChange(content)
   }
 
   return (
@@ -76,7 +102,7 @@ const RichTextEditor = ({
       {mounted && (
         <ReactQuill
           theme="snow"
-          value={value}
+          value={localValue}
           onChange={handleChange}
           modules={modules}
           formats={formats}
@@ -88,12 +114,11 @@ const RichTextEditor = ({
       <div className="text-xs text-gray-500 pt-[50px]">
         <strong>Available template variables:</strong> <code>{'{{name}}'}</code> - Recipient&apos;s name
         <br />
-        {/* Only show code and link variables if they're likely to be used */}
-        If registration code is enabled: <code>{'{{code}}'}</code> - Registration code, <code>{'{{link}}'}</code> - Event link with code
+        <code>{'{{code}}'}</code> - Registration code, <code>{'{{link}}'}</code> - Event link with code
         {showImageVariable && (
           <>
             <br />
-            <code>{'{{image}}'}</code> - Insert the uploaded invitation image (will appear as an embedded image in email)
+            <code>{'{{image}}'}</code> - Insert the uploaded invitation image
           </>
         )}
       </div>
