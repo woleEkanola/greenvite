@@ -405,8 +405,8 @@ export default function SendInvites() {
 
       // Create FormData for file upload
       const formData = new FormData()
-      formData.append('emailSubject', emailSubject)
-      formData.append('emailMessage', emailMessage)
+      formData.append('subject', emailSubject)
+      formData.append('message', emailMessage)
       formData.append('whatsappMessage', whatsappMessage)
       formData.append('eventLink', eventLink)
       formData.append('enableEmail', String(enableEmail))
@@ -417,6 +417,16 @@ export default function SendInvites() {
       }
       
       formData.append('recipients', JSON.stringify(validRecipients))
+      
+      // Debug form data
+      console.log('Form data being sent:');
+      console.log('- subject:', emailSubject);
+      console.log('- message:', emailMessage);
+      console.log('- whatsappMessage:', whatsappMessage ? 'present' : 'missing');
+      console.log('- eventLink:', eventLink);
+      console.log('- enableEmail:', enableEmail);
+      console.log('- enableWhatsApp:', enableWhatsApp);
+      console.log('- recipients:', validRecipients.length);
 
       const response = await fetch('/api/admin/send-invites', {
         method: 'POST',

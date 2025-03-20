@@ -451,21 +451,65 @@ export async function POST(request: Request) {
     // Process form data
     const formData = await request.formData();
     const recipientsJson = formData.get('recipients') as string;
-    const subject = formData.get('subject') as string;
-    const message = formData.get('message') as string;
-    const whatsappMessage = formData.get('whatsappMessage') as string;
+    const subject = formData.get('subject') as string || 'Invitation to Jesse Oghenekome George\'s Church Dedication';
+    const message = formData.get('message') as string || `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 5px;">
+        <h2 style="color: #2c3e50; text-align: center;">You are invited to the church dedication of</h2>
+        <h1 style="color: #16a085; text-align: center; margin-bottom: 30px;">Jesse Oghenekome George</h1>
+        <p style="text-align: center; font-size: 18px;">at RCCG Church, Champions Cathedral </p>
+        
+        <div style="margin: 30px 0; background-color: #f9f9f9; padding: 15px; border-radius: 5px;">
+          <h3 style="color: #2c3e50; text-align: center; margin-top: 0;">LOCATIONS</h3>
+          <p style="text-align: center; font-weight: bold;">Church Dedication</p>
+          <p style="text-align: center;">RCCG Church, Champions Cathedral</p>
+          <p style="text-align: center;">#16-18 Airport Road, Effurun, Warri Delta</p>
+          <p style="text-align: center;">Nigeria</p>
+          <p style="text-align: center; font-size: 20px; margin: 20px 0;">10:00 AM</p>
+          <p style="text-align: center; font-size: 18px;">Sunday, April 13, 2025</p>
+        </div>
+        
+        <div style="text-align: center; margin: 30px 0;">
+          <p>Your personal registration code is: <strong>{{code}}</strong></p>
+          <p style="margin-bottom: 15px; font-size: 16px;">Click the "Confirm Your Attendance" button below to fill out the form and secure your reservation. This will help us plan accordingly. Attendance is by invitation only, and submitting the completed form will grant you an access code for the event.</p>
+          <p style="margin-bottom: 20px;"><a href="{{link}}" style="color: #4CAF50; text-decoration: underline;">{{link}}</a></p>
+          <a href="{{link}}" style="display: inline-block; background-color: #4CAF50; color: white; padding: 14px 28px; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; text-decoration: none;">
+            Confirm Your Attendance
+          </a>
+        </div>
+        
+        <p style="text-align: center; margin-top: 30px; color: #7f8c8d; font-size: 14px;">We look forward to celebrating this special occasion with you.</p>
+      </div>
+    `;
+    const whatsappMessage = formData.get('whatsappMessage') as string || `You're invited to Jesse Oghenekome George's Church Dedication at RCCG Church, Champions Cathedral, #16-18 Airport Road, Effurun, Warri Delta, Nigeria. 10:00 AM, Sunday, April 13, 2025. Your code: {{code}}. Click the link below to complete the form and secure your reservation. This will help us plan accordingly. Attendance is by invitation only, and submitting the completed form will grant you an access code for the event. RSVP: {{link}}`;
     const eventLink = formData.get('eventLink') as string;
     const enableEmail = formData.get('enableEmail') === 'true';
     const enableWhatsApp = formData.get('enableWhatsApp') === 'true';
     
+    // Log received form data
+    console.log('[POST /api/admin/send-invites] Received form data:');
+    console.log('- recipientsJson:', recipientsJson ? 'present' : 'missing');
+    console.log('- subject:', subject || 'missing');
+    console.log('- message:', message ? 'present' : 'missing');
+    console.log('- whatsappMessage:', whatsappMessage ? 'present' : 'missing');
+    console.log('- eventLink:', eventLink || 'missing');
+    console.log('- enableEmail:', enableEmail);
+    console.log('- enableWhatsApp:', enableWhatsApp);
+    
     // Validate inputs
-    if (!recipientsJson || !subject || !message || !eventLink) {
+    const missingFields = [];
+    if (!recipientsJson) missingFields.push('recipients');
+    if (!subject) missingFields.push('subject');
+    if (!message) missingFields.push('message');
+    if (!eventLink) missingFields.push('eventLink');
+    
+    if (missingFields.length > 0) {
+      console.error(`[POST /api/admin/send-invites] Missing required fields: ${missingFields.join(', ')}`);
       return NextResponse.json(
-        { success: false, error: 'Missing required fields' },
+        { success: false, error: `Missing required fields: ${missingFields.join(', ')}` },
         { status: 400 }
       );
     }
-
+    
     let recipients: Recipient[];
     try {
       recipients = JSON.parse(recipientsJson);
