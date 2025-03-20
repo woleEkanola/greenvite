@@ -106,8 +106,12 @@ async function sendWhatsAppMessage(phone: string, name: string, code: string, me
     return success;
   } catch (error) {
     // Check if it's a timeout error (504) - treat as success
-    if (axios.isAxiosError(error) && (error.code === 'ECONNABORTED' || error.response?.status === 504)) {
-      console.log(`WhatsApp message to ${phone} timed out, but treating as success`);
+    if (axios.isAxiosError(error) && (
+      error.code === 'ECONNABORTED' || 
+      error.response?.status === 504 ||
+      error.message.includes('timeout')
+    )) {
+      console.log(`WhatsApp message to ${phone} timed out (504), but treating as success`);
       return true;
     }
     
@@ -491,8 +495,12 @@ export async function POST(request: Request) {
             }
           } catch (error) {
             // Check if it's a timeout error (504) - treat as success
-            if (axios.isAxiosError(error) && (error.code === 'ECONNABORTED' || error.response?.status === 504)) {
-              console.log(`WhatsApp message to ${phone} timed out, but treating as success`);
+            if (axios.isAxiosError(error) && (
+              error.code === 'ECONNABORTED' || 
+              error.response?.status === 504 ||
+              error.message.includes('timeout')
+            )) {
+              console.log(`WhatsApp message to ${phone} timed out (504), but treating as success`);
               whatsappStatus = 'sent';
               whatsappProvider = process.env.WHATSAPP_PROVIDER || 'whatsapp_api';
               successfulChannels.push('whatsapp');
