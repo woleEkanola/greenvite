@@ -65,7 +65,7 @@ export async function POST(request: Request) {
       </div>
     `;
     const defaultWhatsappMessage = `You're invited to Jesse Oghenekome George's Church Dedication at RCCG Church, Champions Cathedral, #16-18 Airport Road, Effurun, Warri Delta, Nigeria. 10:00 AM, Sunday, April 13, 2025. Your code: {{code}}. Click the link below to complete the form and secure your reservation. This will help us plan accordingly. Attendance is by invitation only, and submitting the completed form will grant you an access code for the event. RSVP: {{link}}`;
-    const eventLink = process.env.NEXT_PUBLIC_EVENT_URL || 'https://jessegeorge.greenvites.online/jessegeorge';
+    const eventLink = process.env.NEXT_PUBLIC_EVENT_URL || 'https://greenvites.online/jessegeorge/jessegeorge';
 
     // Process each invite
     const results = await Promise.allSettled(invites.map(async (invite) => {
