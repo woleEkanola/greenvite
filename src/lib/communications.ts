@@ -11,6 +11,9 @@ const INSTANCE_ID = process.env.WAAPI_INSTANCE_ID;
  * Sends a WhatsApp message using the WhatsApp API
  */
 export async function sendWhatsApp(phone: string, name: string, code: string, message: string, eventLink: string, imageBuffer?: Buffer): Promise<boolean> {
+  // Check if running on Vercel
+  const isVercel = process.env.VERCEL === '1';
+  
   // Format the phone number (remove any non-numeric characters except the + sign)
   const formattedPhone = phone.replace(/[^\d+]/g, '');
   
@@ -34,6 +37,9 @@ export async function sendWhatsApp(phone: string, name: string, code: string, me
     
     // Create a personalized media caption
     const mediaCaption = `Hello ${name}, Click the link below to complete the form and secure your reservation. This will help us plan accordingly. Attendance is by invitation only, and submitting the completed form will grant you an access code for the event. ${eventLink}#${code}`;
+    
+    // Set a reasonable timeout based on environment (shorter for Vercel)
+    const timeoutMs = isVercel ? 25000 : 30000; // 25 seconds for Vercel, 30 seconds for other environments
     
     let resizedImageBuffer;
     if (imageBuffer) {
@@ -74,7 +80,7 @@ export async function sendWhatsApp(phone: string, name: string, code: string, me
               'Authorization': `Bearer ${WAAPI_TOKEN}`,
               'Content-Type': 'application/json'
             },
-            timeout: 30000 // 30 second timeout
+            timeout: timeoutMs // Use the environment-specific timeout
           }
         );
         
@@ -120,7 +126,7 @@ export async function sendWhatsApp(phone: string, name: string, code: string, me
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${WAAPI_TOKEN}`
         },
-        timeout: 30000 // 30 seconds timeout
+        timeout: timeoutMs // Use the environment-specific timeout
       }
     );
     

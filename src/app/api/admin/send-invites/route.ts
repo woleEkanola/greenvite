@@ -372,6 +372,45 @@ function generateRandomCode(length = 6): string {
 }
 
 export async function POST(request: Request) {
+  // Check if running on Vercel
+  const isVercel = process.env.VERCEL === '1';
+  console.log(`Running on Vercel: ${isVercel}`);
+  
+  try {
+    // Add a timeout to the entire request processing
+    const timeoutPromise = new Promise((_, reject) => {
+      const timeoutMs = isVercel ? 50000 : 60000; // 50 seconds for Vercel, 60 seconds otherwise
+      setTimeout(() => reject(new Error('Request processing timed out')), timeoutMs);
+    });
+    
+    // Process the request with a timeout
+    const responsePromise = processRequest(request);
+    
+    return await Promise.race([responsePromise, timeoutPromise]);
+  } catch (error) {
+    console.error('[POST /api/admin/send-invites] Error:', error);
+    
+    // Special handling for timeout errors - return success to prevent retries
+    if (error instanceof Error && 
+        (error.message.includes('timeout') || 
+         error.message.includes('ECONNABORTED') || 
+         error.message.includes('504'))) {
+      console.log('[POST /api/admin/send-invites] Timeout error, treating as partial success');
+      return NextResponse.json(
+        { success: true, partial: true, message: 'Request processed with partial success (timeout)' },
+        { status: 200 }
+      );
+    }
+    
+    return NextResponse.json(
+      { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
+      { status: 500 }
+    );
+  }
+}
+
+// Process the request separately to handle timeout
+async function processRequest(request: Request) {
   try {
     console.log('[POST /api/admin/send-invites] Processing invites...');
     
