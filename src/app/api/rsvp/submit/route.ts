@@ -225,16 +225,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if code is available - both 'available' and 'invite-sent' status should be valid for RSVP
-    // Cast to any to access the status field which might not be in the TypeScript type yet
+    // Check if code status is "used" - only block "used" status
     const regCodeWithStatus = registrationCode as any;
-    if (regCodeWithStatus.status && 
-        regCodeWithStatus.status !== 'available' && 
-        regCodeWithStatus.status !== 'invite-sent') {
+    if (regCodeWithStatus.status && regCodeWithStatus.status === 'used') {
       return NextResponse.json(
         { 
           success: false,
-          error: 'This registration code is not available for use' 
+          error: 'This registration code has already been used' 
         },
         { status: 400 }
       );
