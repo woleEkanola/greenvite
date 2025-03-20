@@ -136,32 +136,7 @@ export async function getRegistrationCodes(status?: 'available' | 'used' | 'pend
     let whereClause: any = {};
     
     if (status) {
-      // For backward compatibility with older database schemas
-      if (status === 'available') {
-        try {
-          // Try with OR condition first
-          return await prismaClient.registrationCode.findMany({
-            where: {
-              OR: [
-                { status: 'available' },
-                { status: null, used: false }
-              ]
-            },
-            include: {
-              rsvp: true,
-            },
-            orderBy: {
-              createdAt: 'desc',
-            },
-          });
-        } catch (error) {
-          console.log('[getRegistrationCodes] Error using OR condition, falling back to simple query:', error);
-          // If that fails, try with just status
-          whereClause = { status: 'available' };
-        }
-      } else {
-        whereClause = { status };
-      }
+      whereClause = { status };
     }
     
     const codes = await prismaClient.registrationCode.findMany({
@@ -212,50 +187,24 @@ export async function createRsvp(data: RsvpData) {
 export async function getRsvpStats() {
   console.log('[getRsvpStats] Fetching RSVP statistics')
   try {
-    const [totalRsvp, totalRegistrationCodes] = await Promise.all([
+    const [
+      totalRsvp, 
+      totalRegistrationCodes,
+      availableRegistrations,
+      pendingRegistrations,
+      usedRegistrations,
+      inviteSentRegistrations
+    ] = await Promise.all([
       prismaClient.rsvp.count(),
       prismaClient.registrationCode.count(),
-    ])
-
-    // For available codes, try with OR condition first, but fall back to just status if needed
-    let availableRegistrations;
-    try {
-      availableRegistrations = await prismaClient.registrationCode.count({
-        where: {
-          OR: [
-            { status: 'available' },
-            { status: null, used: false }
-          ]
-        },
-      });
-    } catch (error) {
-      console.log('[getRsvpStats] Error using OR condition for available codes, falling back to simple query:', error);
-      availableRegistrations = await prismaClient.registrationCode.count({
+      prismaClient.registrationCode.count({
         where: { status: 'available' },
-      });
-    }
-
-    // For used codes, try with OR condition first, but fall back to just status if needed
-    let usedRegistrations;
-    try {
-      usedRegistrations = await prismaClient.registrationCode.count({
-        where: { 
-          OR: [
-            { status: 'used' },
-            { status: null, used: true }
-          ]
-        },
-      });
-    } catch (error) {
-      console.log('[getRsvpStats] Error using OR condition for used codes, falling back to simple query:', error);
-      usedRegistrations = await prismaClient.registrationCode.count({
-        where: { status: 'used' },
-      });
-    }
-
-    const [pendingRegistrations, inviteSentRegistrations] = await Promise.all([
+      }),
       prismaClient.registrationCode.count({
         where: { status: 'pending' },
+      }),
+      prismaClient.registrationCode.count({
+        where: { status: 'used' },
       }),
       prismaClient.registrationCode.count({
         where: { status: 'invite-sent' },
@@ -450,34 +399,17 @@ export async function markRegistrationCodeAsUsed(code: string, status: 'pending'
     }
 
     // Update the registration code status
-    try {
-      const updatedCode = await prismaClient.registrationCode.update({
-        where: { id: registrationCode.id },
-        data: {
-          used: status === 'used',
-          usedAt: status === 'used' ? new Date() : null,
-          status,
-        },
-      })
-      console.log(`[markRegistrationCodeAsUsed] Successfully updated code ${code} to ${status}`)
-      return updatedCode
-    } catch (updateError) {
-      console.error(`[markRegistrationCodeAsUsed] Error updating code ${code} with status:`, updateError)
-      
-      // If the update failed, try again without setting status to null
-      console.log(`[markRegistrationCodeAsUsed] Trying alternative update for code ${code}`)
-      const updatedCode = await prismaClient.registrationCode.update({
-        where: { id: registrationCode.id },
-        data: {
-          used: status === 'used',
-          usedAt: status === 'used' ? new Date() : null,
-          // Always set a status value
-          status: status,
-        },
-      })
-      console.log(`[markRegistrationCodeAsUsed] Successfully updated code ${code} with alternative approach`)
-      return updatedCode
-    }
+    const updatedCode = await prismaClient.registrationCode.update({
+      where: { id: registrationCode.id },
+      data: {
+        used: status === 'used',
+        usedAt: status === 'used' ? new Date() : null,
+        status,
+      },
+    })
+    
+    console.log(`[markRegistrationCodeAsUsed] Successfully updated code ${code} to ${status}`)
+    return updatedCode
   } catch (error) {
     console.error(`[markRegistrationCodeAsUsed] Error updating code ${code}:`, error)
     throw error
