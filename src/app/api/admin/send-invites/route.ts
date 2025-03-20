@@ -8,6 +8,17 @@ import axios from 'axios'; // Import axios for Termii API
 import { prisma } from '@/lib/prisma'; // Import prisma
 import sharp from 'sharp'
 
+// Define the Recipient type
+type Recipient = {
+  name: string;
+  email: string;
+  phone: string;
+  type: 'email' | 'whatsapp' | 'both';
+};
+
+// Remove the duplicate prisma declaration
+// const prisma = prisma // Use the imported prisma instance
+
 // WhatsApp API configuration
 const WAAPI_BASE_URL = process.env.WAAPI_BASE_URL || 'https://waapi.app/api/v1';
 const WAAPI_TOKEN = process.env.WAAPI_TOKEN;
@@ -419,13 +430,6 @@ function generateRandomCode(length = 6): string {
 
 // ... rest of the code remains the same ...
 
-interface Recipient {
-  name: string
-  email?: string
-  phone?: string
-  type: 'email' | 'whatsapp' | 'both'
-}
-
 interface RegistrationCode {
   id: string;
   code: string;
@@ -462,7 +466,7 @@ export async function POST(request: Request) {
       );
     }
 
-    let recipients;
+    let recipients: Recipient[];
     try {
       recipients = JSON.parse(recipientsJson);
     } catch (error) {
@@ -522,7 +526,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const invitePromises = recipients.map(async (recipient) => {
+    const invitePromises = recipients.map(async (recipient: Recipient) => {
       try {
         const name = recipient.name || '';
         const email = recipient.email || '';

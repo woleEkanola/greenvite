@@ -424,28 +424,47 @@ export default function SendInvites() {
       })
 
       if (response.ok) {
-        const data = await response.json()
-        Swal.fire({
-          title: 'Success',
-          text: 'Invites sent successfully!',
-          icon: 'success',
-          showCancelButton: true,
-          confirmButtonColor: '#10B981',
-          cancelButtonColor: '#6B7280',
-          confirmButtonText: 'View Sent Invites',
-          cancelButtonText: 'Send More',
-        }).then((result) => {
-          // Reset the form regardless
+        try {
+          const data = await response.json()
+          Swal.fire({
+            title: 'Success',
+            text: 'Invites sent successfully!',
+            icon: 'success',
+            showCancelButton: true,
+            confirmButtonColor: '#10B981',
+            cancelButtonColor: '#6B7280',
+            confirmButtonText: 'View Sent Invites',
+            cancelButtonText: 'Send More',
+          }).then((result) => {
+            // Reset the form regardless
+            setRecipients([{ name: '', email: '', phone: '', type: 'whatsapp' }])
+            
+            // If user clicked View Sent Invites, redirect to the sent-invites page
+            if (result.isConfirmed) {
+              window.location.href = '/admin/dashboard/sent-invites'
+            }
+          })
+        } catch (jsonError) {
+          console.error('Error parsing success response:', jsonError)
+          // If we can't parse the JSON but the response was OK, still show success
+          Swal.fire({
+            title: 'Success',
+            text: 'Invites sent successfully!',
+            icon: 'success',
+          })
           setRecipients([{ name: '', email: '', phone: '', type: 'whatsapp' }])
-          
-          // If user clicked View Sent Invites, redirect to the sent-invites page
-          if (result.isConfirmed) {
-            window.location.href = '/admin/dashboard/sent-invites'
-          }
-        })
+        }
       } else {
-        const error = await response.json()
-        throw new Error(error.message || 'Failed to send invites')
+        let errorMessage = 'Failed to send invites. Please try again.'
+        try {
+          const error = await response.json()
+          errorMessage = error.error || error.message || errorMessage
+        } catch (jsonError) {
+          console.error('Error parsing error response:', jsonError)
+          // If we can't parse the JSON, use the status text
+          errorMessage = `Error (${response.status}): ${response.statusText || errorMessage}`
+        }
+        throw new Error(errorMessage)
       }
     } catch (error) {
       console.error('Error sending invites:', error)
