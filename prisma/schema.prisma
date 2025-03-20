@@ -71,6 +71,21 @@ model Invite {
   code              String?  // The registration code text
   registrationCode  RegistrationCode? @relation(fields: [registrationCodeId], references: [id])
   registrationCodeId String? @unique
+  batch             Batch?   @relation(fields: [batchId], references: [id])
+  batchId           String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+}
+
+// Batch of invites sent at the same time
+model Batch {
+  id          String   @id @default(cuid())
+  name        String?  // Optional name for the batch
+  status      String   @default("pending") // "pending", "sent", "failed"
+  totalInvites Int     @default(0)
+  sentInvites  Int     @default(0)
+  failedInvites Int    @default(0)
+  invites     Invite[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }

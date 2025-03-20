@@ -478,3 +478,197 @@ export async function isCodeUsedByActiveInvite(code: string): Promise<boolean> {
     return true
   }
 }
+
+/**
+ * Creates a new batch for sending invites
+ * @param name Optional name for the batch
+ * @returns The created batch
+ */
+export async function createBatch(name?: string) {
+  console.log(`[createBatch] Creating new batch${name ? ` with name: ${name}` : ''}`)
+  try {
+    const batch = await prismaClient.batch.create({
+      data: {
+        name: name || `Batch ${new Date().toISOString()}`,
+        status: 'pending',
+      },
+    })
+    console.log(`[createBatch] Successfully created batch: ${batch.id}`)
+    return batch
+  } catch (error) {
+    console.error('[createBatch] Error creating batch:', error)
+    throw error
+  }
+}
+
+/**
+ * Updates a batch with the latest counts and status
+ * @param batchId The ID of the batch to update
+ * @returns The updated batch
+ */
+export async function updateBatchStatus(batchId: string) {
+  console.log(`[updateBatchStatus] Updating batch status: ${batchId}`)
+  try {
+    // Get counts of invites in this batch by status
+    const [totalInvites, sentInvites, failedInvites, pendingInvites] = await Promise.all([
+      prismaClient.invite.count({
+        where: { batchId },
+      }),
+      prismaClient.invite.count({
+        where: { 
+          batchId,
+          OR: [
+            { status: 'sent' },
+            { status: 'delivered' }
+          ]
+        },
+      }),
+      prismaClient.invite.count({
+        where: { 
+          batchId,
+          status: 'failed'
+        },
+      }),
+      prismaClient.invite.count({
+        where: { 
+          batchId,
+          status: 'pending'
+        },
+      }),
+    ])
+
+    // Determine overall batch status
+    let status = 'pending'
+    if (pendingInvites === 0) {
+      status = failedInvites > 0 ? 'failed' : 'sent'
+    }
+
+    // Update the batch
+    const updatedBatch = await prismaClient.batch.update({
+      where: { id: batchId },
+      data: {
+        status,
+        totalInvites,
+        sentInvites,
+        failedInvites,
+      },
+    })
+
+    console.log(`[updateBatchStatus] Successfully updated batch ${batchId} to ${status}`)
+    return updatedBatch
+  } catch (error) {
+    console.error(`[updateBatchStatus] Error updating batch ${batchId}:`, error)
+    throw error
+  }
+}
+
+/**
+ * Gets all batches
+ * @param status Optional status filter
+ * @returns Array of batches
+ */
+export async function getBatches(status?: 'pending' | 'sent' | 'failed') {
+  console.log(`[getBatches] Fetching batches${status ? ` with status: ${status}` : ''}`)
+  try {
+    const whereClause: any = {}
+    if (status) {
+      whereClause.status = status
+    }
+
+    const batches = await prismaClient.batch.findMany({
+      where: whereClause,
+      include: {
+        invites: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    })
+    console.log(`[getBatches] Successfully fetched ${batches.length} batches`)
+    return batches
+  } catch (error) {
+    console.error('[getBatches] Error fetching batches:', error)
+    throw error
+  }
+}
+
+/**
+ * Gets a batch by ID
+ * @param id The ID of the batch to get
+ * @returns The batch
+ */
+export async function getBatch(id: string) {
+  console.log(`[getBatch] Fetching batch: ${id}`)
+  try {
+    const batch = await prismaClient.batch.findUnique({
+      where: { id },
+      include: {
+        invites: true,
+      },
+    })
+    console.log(`[getBatch] Batch found: ${!!batch}`)
+    return batch
+  } catch (error) {
+    console.error(`[getBatch] Error fetching batch ${id}:`, error)
+    throw error
+  }
+}
+
+/**
+ * Gets all pending invites (those in batches that are not marked as sent)
+ * @returns Array of invites
+ */
+export async function getPendingInvites() {
+  console.log('[getPendingInvites] Fetching pending invites')
+  try {
+    const invites = await prismaClient.invite.findMany({
+      where: {
+        batch: {
+          status: {
+            not: 'sent'
+          }
+        }
+      },
+      include: {
+        batch: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    })
+    console.log(`[getPendingInvites] Successfully fetched ${invites.length} pending invites`)
+    return invites
+  } catch (error) {
+    console.error('[getPendingInvites] Error fetching pending invites:', error)
+    throw error
+  }
+}
+
+/**
+ * Marks an invite as sent
+ * @param id The ID of the invite to mark as sent
+ * @returns The updated invite
+ */
+export async function markInviteAsSent(id: string) {
+  console.log(`[markInviteAsSent] Marking invite ${id} as sent`)
+  try {
+    const invite = await prismaClient.invite.update({
+      where: { id },
+      data: {
+        status: 'sent',
+        sent: true,
+      },
+    })
+    
+    // Update the batch status if this invite is part of a batch
+    if (invite.batchId) {
+      await updateBatchStatus(invite.batchId)
+    }
+    
+    console.log(`[markInviteAsSent] Successfully marked invite ${id} as sent`)
+    return invite
+  } catch (error) {
+    console.error(`[markInviteAsSent] Error marking invite ${id} as sent:`, error)
+    throw error
+  }
+}

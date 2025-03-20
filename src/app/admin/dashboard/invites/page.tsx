@@ -182,13 +182,14 @@ export default function SendInvites() {
   const [isSending, setIsSending] = useState(false)
   const [previewData, setPreviewData] = useState<Recipient[]>([])
   const [showPreview, setShowPreview] = useState(false)
-  const [enableEmail, setEnableEmail] = useState(true)
+  const [enableEmail, setEnableEmail] = useState(false)
   const [enableWhatsApp, setEnableWhatsApp] = useState(true)
   const [showMessageSettings, setShowMessageSettings] = useState(false)
-  const [emailSubject, setEmailSubject] = useState('You are invited!')
-  const [emailMessage, setEmailMessage] = useState('Confirm Your Attendance\n{{Image}}\nClick the "Confirm Your Attendance" button below to complete the form and secure your reservation. This will help us plan accordingly. Attendance is by invitation only, and submitting the completed form will grant you an access code for the event.\n{{link}}\nConfirm Your Attendance')
-  const [whatsappMessage, setWhatsappMessage] = useState('Hello {{name}}, Click the link below to complete the form and secure your reservation. This will help us plan accordingly. Attendance is by invitation only, and submitting the completed form will grant you an access code for the event. {{link}}')
-  const [eventLink, setEventLink] = useState('https://greenvites.online/jessegeorge')
+  const [emailSubject, setEmailSubject] = useState('Invitation to Jesse Oghenekome George\'s Church Dedication')
+  const [emailMessage, setEmailMessage] = useState('')
+  const [whatsappMessage, setWhatsappMessage] = useState('')
+  const [eventLink, setEventLink] = useState('https://jessegeorge.greenvites.online')
+  const [batchName, setBatchName] = useState(`Batch ${new Date().toISOString().split('T')[0]}`)
   const [emailImage, setEmailImage] = useState<File | null>(null)
   const [emailImagePreview, setEmailImagePreview] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -411,6 +412,7 @@ export default function SendInvites() {
       formData.append('eventLink', eventLink)
       formData.append('enableEmail', String(enableEmail))
       formData.append('enableWhatsApp', String(enableWhatsApp))
+      formData.append('batchName', batchName)
       
       if (emailImage) {
         formData.append('emailImage', emailImage)
@@ -426,6 +428,7 @@ export default function SendInvites() {
       console.log('- eventLink:', eventLink);
       console.log('- enableEmail:', enableEmail);
       console.log('- enableWhatsApp:', enableWhatsApp);
+      console.log('- batchName:', batchName);
       console.log('- recipients:', validRecipients.length);
 
       const response = await fetch('/api/admin/send-invites', {
@@ -635,17 +638,34 @@ export default function SendInvites() {
                     </div>
                   </div>
                   
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Event Link
-                    </label>
-                    <input
-                      type="text"
-                      value={eventLink}
-                      onChange={(e) => setEventLink(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                      placeholder="https://yourevent.com"
-                    />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label htmlFor="eventLink" className="block text-sm font-medium text-gray-700 mb-1">
+                        Event Link
+                      </label>
+                      <input
+                        type="text"
+                        id="eventLink"
+                        className="w-full p-2 border border-gray-300 rounded-md focus:ring-emerald-500 focus:border-emerald-500"
+                        value={eventLink}
+                        onChange={(e) => setEventLink(e.target.value)}
+                        placeholder="https://jessegeorge.greenvites.online"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label htmlFor="batchName" className="block text-sm font-medium text-gray-700 mb-1">
+                        Batch Name
+                      </label>
+                      <input
+                        type="text"
+                        id="batchName"
+                        className="w-full p-2 border border-gray-300 rounded-md focus:ring-emerald-500 focus:border-emerald-500"
+                        value={batchName}
+                        onChange={(e) => setBatchName(e.target.value)}
+                        placeholder="Enter a name for this batch of invites"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
