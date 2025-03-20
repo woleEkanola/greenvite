@@ -59,6 +59,13 @@ emailTransporter.verify(function(error, success) {
 
 // Function to send WhatsApp message using WhatsApp API
 async function sendWhatsAppMessage(phone: string, name: string, code: string, message: string, eventLink: string, imageBuffer?: Buffer): Promise<boolean> {
+  // Format the phone number (remove any non-numeric characters except the + sign)
+  const formattedPhone = phone.replace(/[^\d+]/g, '');
+  
+  // Format the phone number for WhatsApp API
+  // Remove the + sign if present
+  const whatsappPhone = formattedPhone.replace(/^\+/, '');
+  
   try {
     console.log(`Sending WhatsApp message to ${name} (${phone})`);
     
@@ -67,20 +74,93 @@ async function sendWhatsAppMessage(phone: string, name: string, code: string, me
       return false;
     }
     
-    // Format the phone number (remove any non-numeric characters except the + sign)
-    const formattedPhone = phone.replace(/[^\d+]/g, '');
-    
     // Replace placeholders in the message
     const formattedMessage = message
       .replace(/{{code}}/g, code)
       .replace(/{{link}}/g, eventLink)
       .replace(/{{name}}/g, name);
     
-    // Send the message
+    // Create a personalized media caption
+    const mediaCaption = `Hello ${name}, Click the link below to complete the form and secure your reservation. This will help us plan accordingly. Attendance is by invitation only, and submitting the completed form will grant you an access code for the event. ${eventLink}#${code}`;
+    
+    let resizedImageBuffer;
+    if (imageBuffer) {
+      try {
+        // Import sharp dynamically to avoid issues with Next.js
+        const sharp = (await import('sharp')).default;
+        
+        resizedImageBuffer = await sharp(imageBuffer)
+          .resize({ width: 800 }) // Resize to width of 800px, maintaining aspect ratio
+          .jpeg({ quality: 80 }) // Compress as JPEG with 80% quality
+          .toBuffer();
+        
+        console.log(`Original image size: ${imageBuffer.length} bytes, Resized image size: ${resizedImageBuffer.length} bytes`);
+      } catch (resizeError) {
+        console.error('Error resizing image:', resizeError);
+        // Continue without the image if resizing fails
+      }
+    }
+
+    // Send the media message with caption if we have an image
+    if (resizedImageBuffer) {
+      try {
+        console.log('Sending WhatsApp media message...');
+        
+        // According to https://waapi.readme.io/reference/post_instances-id-client-action-send-media
+        const mediaPayload = {
+          chatId: whatsappPhone + '@c.us',
+          mediaBase64: resizedImageBuffer.toString('base64'),
+          mediaName: 'invitation.jpg',
+          mediaCaption: mediaCaption
+        };
+
+        const mediaResponse = await axios.post(
+          `${WAAPI_BASE_URL}/instances/${INSTANCE_ID}/client/action/send-media`, 
+          mediaPayload, 
+          {
+            headers: {
+              'Authorization': `Bearer ${WAAPI_TOKEN}`,
+              'Content-Type': 'application/json'
+            },
+            timeout: 30000 // 30 second timeout
+          }
+        );
+        
+        console.log('WhatsApp media API response:', mediaResponse.data);
+        
+        // Check if the message was sent successfully
+        const success = mediaResponse.data?.data?.status === 'success';
+        
+        if (success) {
+          console.log(`WhatsApp media message sent successfully to ${whatsappPhone}@c.us`);
+        } else {
+          console.error(`Failed to send WhatsApp media message to ${whatsappPhone}@c.us:`, mediaResponse.data);
+        }
+        
+        return success;
+      } catch (mediaError) {
+        // Check if it's a timeout error (504) - treat as success
+        if (axios.isAxiosError(mediaError) && (
+          mediaError.code === 'ECONNABORTED' || 
+          mediaError.response?.status === 504 ||
+          mediaError.message.includes('timeout')
+        )) {
+          console.log(`WhatsApp media message to ${whatsappPhone}@c.us timed out (504), but treating as success`);
+          return true;
+        }
+        
+        console.error(`Error sending WhatsApp media message to ${whatsappPhone}@c.us:`, mediaError);
+        console.log('Falling back to text message...');
+        // Fall back to sending a text message
+      }
+    }
+    
+    // Send a text message (either as fallback or if no image was provided)
+    console.log('Sending WhatsApp text message...');
     const response = await axios.post(
       `${WAAPI_BASE_URL}/instances/${INSTANCE_ID}/client/action/send-message`,
       {
-        number: formattedPhone,
+        chatId: whatsappPhone + '@c.us',
         message: formattedMessage
       },
       {
@@ -98,9 +178,9 @@ async function sendWhatsAppMessage(phone: string, name: string, code: string, me
     const success = response.data?.data?.status === 'success';
     
     if (success) {
-      console.log(`WhatsApp confirmation message sent successfully to ${formattedPhone}`);
+      console.log(`WhatsApp confirmation message sent successfully to ${whatsappPhone}@c.us`);
     } else {
-      console.error(`Failed to send WhatsApp message to ${formattedPhone}:`, response.data);
+      console.error(`Failed to send WhatsApp message to ${whatsappPhone}@c.us:`, response.data);
     }
     
     return success;
@@ -111,11 +191,11 @@ async function sendWhatsAppMessage(phone: string, name: string, code: string, me
       error.response?.status === 504 ||
       error.message.includes('timeout')
     )) {
-      console.log(`WhatsApp message to ${phone} timed out (504), but treating as success`);
+      console.log(`WhatsApp message to ${whatsappPhone}@c.us timed out (504), but treating as success`);
       return true;
     }
     
-    console.error(`Error sending WhatsApp message to ${phone}:`, error);
+    console.error(`Error sending WhatsApp message to ${whatsappPhone}@c.us:`, error);
     return false;
   }
 }
@@ -139,7 +219,7 @@ async function sendEmail(email: string, name: string, code: string, subject: str
             <img src="cid:invitation-image" alt="Invitation Image" style="max-width: 100%; height: auto;"/>
           </div>
           <div style="text-align: center; margin: 20px 0;">
-            <p style="margin-bottom: 15px; font-size: 16px;">Click the "Confirm Your Attendance" button below to complete the form and secure your reservation. This will help us plan accordingly. Attendance is by invitation only, and submitting the completed form will grant you an access code for the event.</p>
+            <p style="margin-bottom: 15px; font-size: 16px;">Click the "Confirm Your Attendance" button below to fill out the form and secure your reservation. This will help us plan accordingly. Attendance is by invitation only, and submitting the completed form will grant you an access code for the event.</p>
             <p style="margin-bottom: 20px;"><a href="${eventLink}#${code}" style="color: #4CAF50; text-decoration: underline;">${eventLink}#${code}</a></p>
             <a href="${eventLink}#${code}" style="display: inline-block; background-color: #4CAF50; color: white; padding: 14px 28px; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; text-decoration: none;">
               Confirm Your Attendance
@@ -360,7 +440,9 @@ export async function POST(request: Request) {
     if (missingFields.length > 0) {
       console.error(`[POST /api/admin/send-invites] Missing required fields: ${missingFields.join(', ')}`);
       return NextResponse.json(
-        { success: false, error: `Missing required fields: ${missingFields.join(', ')}` },
+        { 
+          success: false, 
+          error: `Missing required fields: ${missingFields.join(', ')}` },
         { status: 400 }
       );
     }
@@ -405,7 +487,9 @@ export async function POST(request: Request) {
     
     if (availableCodes.length < recipients.length) {
       return NextResponse.json(
-        { success: false, error: `Not enough registration codes available. Need ${recipients.length}, but only have ${availableCodes.length}` },
+        { 
+          success: false, 
+          error: `Not enough registration codes available. Need ${recipients.length}, but only have ${availableCodes.length}` },
         { status: 400 }
       )
     }

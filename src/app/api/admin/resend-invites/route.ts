@@ -118,8 +118,15 @@ export async function POST(request: Request) {
             }
           } catch (error) {
             // Check if it's a timeout error (504) - treat as success
-            if (axios.isAxiosError(error) && (error.code === 'ECONNABORTED' || error.response?.status === 504)) {
-              console.log(`WhatsApp message to ${phone} timed out, but treating as success`);
+            if (axios.isAxiosError(error) && (
+              error.code === 'ECONNABORTED' || 
+              error.response?.status === 504 ||
+              error.message.includes('timeout')
+            )) {
+              // Format the phone number for logging
+              const formattedPhone = phone.replace(/[^\d+]/g, '');
+              const whatsappPhone = formattedPhone.replace(/^\+/, '') + '@c.us';
+              console.log(`WhatsApp message to ${whatsappPhone} timed out, but treating as success`);
               whatsappStatus = 'sent';
               successfulChannels.push('whatsapp');
             } else {
