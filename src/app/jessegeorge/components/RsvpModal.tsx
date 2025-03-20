@@ -49,24 +49,38 @@ export default function RsvpModal({ isOpen, onClose, onSubmit }: RsvpModalProps)
       })
 
       if (response.ok) {
-        // Navigate to success page
-        window.location.href = '/success'
-      } else {
-        // Improved error handling
-        let errorMessage = 'There was an error submitting the form. Please try again.';
         try {
-          const errorData = await response.json();
-          errorMessage = errorData.error || errorMessage;
+          const result = await response.json()
+          if (result.success) {
+            // Navigate to success page
+            window.location.href = '/success'
+          } else {
+            // Server returned success: false
+            const errorMessage = result.error || 'There was an error submitting the form. Please try again.'
+            Swal.fire('Error', errorMessage, 'error')
+          }
         } catch (jsonError) {
-          console.error('Error parsing error response:', jsonError);
-          // If we can't parse the JSON, use the status text
-          errorMessage = `Error (${response.status}): ${response.statusText || errorMessage}`;
+          console.error('Error parsing success response:', jsonError)
+          // If we can't parse the JSON but the response was OK, still redirect
+          window.location.href = '/success'
         }
-        Swal.fire('Error', errorMessage, 'error');
+      } else {
+        // Response not OK - handle error
+        let errorMessage = 'There was an error submitting the form. Please try again.'
+        try {
+          const errorData = await response.json()
+          errorMessage = errorData.error || `Error (${response.status}): ${response.statusText || errorMessage}`
+        } catch (jsonError) {
+          console.error('Error parsing error response:', jsonError)
+          // If we can't parse the JSON, use the status text
+          errorMessage = `Error (${response.status}): ${response.statusText || errorMessage}`
+        }
+        Swal.fire('Error', errorMessage, 'error')
       }
     } catch (error) {
-      console.error('Error submitting form:', error);
-      Swal.fire('Error', 'There was an error submitting the form. Please try again.', 'error');
+      // Network or other errors
+      console.error('Network error submitting form:', error)
+      Swal.fire('Connection Error', 'Could not connect to the server. Please check your internet connection and try again.', 'error')
     } finally {
       setIsSubmitting(false)
     }

@@ -41,7 +41,10 @@ async function sendConfirmationEmail(email: string, name: string): Promise<boole
       secure: process.env.SMTP_SECURE === 'true',
       tls: {
         rejectUnauthorized: false
-      }
+      },
+      connectionTimeout: 10000, // 10 seconds timeout
+      greetingTimeout: 10000,   // 10 seconds timeout
+      socketTimeout: 15000      // 15 seconds timeout
     };
     
     if (process.env.SMTP_USER && process.env.SMTP_PASS) {
@@ -57,7 +60,7 @@ async function sendConfirmationEmail(email: string, name: string): Promise<boole
       await transport.verify();
       console.log('SMTP connection verified successfully');
     } catch (verifyError: any) {
-      console.error('SMTP connection verification failed:', verifyError);
+      console.error('SMTP connection verification failed:', verifyError.message);
       console.log('Attempting to send email anyway despite connection verification failure...');
     }
     
@@ -68,11 +71,16 @@ async function sendConfirmationEmail(email: string, name: string): Promise<boole
       html: confirmationMessage,
     };
     
-    const info = await transport.sendMail(mailOptions);
-    console.log(`Confirmation email sent successfully to ${name} (${email}): ${info.messageId}`);
-    return true;
-  } catch (error) {
-    console.error(`Failed to send confirmation email to ${name}:`, error);
+    try {
+      const info = await transport.sendMail(mailOptions);
+      console.log(`Confirmation email sent successfully to ${name} (${email}): ${info.messageId}`);
+      return true;
+    } catch (sendError: any) {
+      console.error(`Failed to send confirmation email to ${name}:`, sendError.message);
+      return false;
+    }
+  } catch (error: any) {
+    console.error(`Error in email confirmation function:`, error.message);
     return false;
   }
 }
@@ -106,9 +114,9 @@ async function sendWhatsAppConfirmation(phone: string, name: string): Promise<bo
       return false;
     }
     
-    if (!WAAPI_TOKEN) {
-      console.error('WhatsApp API token is not configured');
-      throw new Error('WhatsApp API token is not configured');
+    if (!WAAPI_TOKEN || !INSTANCE_ID) {
+      console.error('WhatsApp API configuration is incomplete. Token or Instance ID missing.');
+      return false; 
     }
     
     const message = `Dear ${name}, thank you for confirming your attendance to Jesse Oghenekome George's Church Dedication. Your RSVP has been successfully received. We will send you further details about the event soon. We look forward to celebrating this special occasion with you.`;
@@ -118,31 +126,37 @@ async function sendWhatsAppConfirmation(phone: string, name: string): Promise<bo
       message: message
     };
     
-    const textResponse = await axios.post(
-      `${WAAPI_BASE_URL}/instances/${INSTANCE_ID}/client/action/send-message`, 
-      textPayload, 
-      {
-        headers: {
-          'Authorization': `Bearer ${WAAPI_TOKEN}`,
-          'Content-Type': 'application/json'
+    try {
+      const textResponse = await axios.post(
+        `${WAAPI_BASE_URL}/instances/${INSTANCE_ID}/client/action/send-message`, 
+        textPayload, 
+        {
+          headers: {
+            'Authorization': `Bearer ${WAAPI_TOKEN}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 5000 
         }
+      );
+      
+      console.log('WhatsApp API response:', JSON.stringify(textResponse.data));
+      
+      if (textResponse.data && textResponse.data.data && textResponse.data.data.status === 'success') {
+        console.log(`WhatsApp confirmation message sent successfully to ${formattedPhone}`);
+        return true;
+      } else {
+        const errorMessage = textResponse.data?.data?.message || 'Unknown error';
+        console.error(`Failed to send WhatsApp confirmation: ${errorMessage}`);
+        return false;
       }
-    );
-    
-    console.log('WhatsApp API response:', JSON.stringify(textResponse.data));
-    
-    if (textResponse.data && textResponse.data.data && textResponse.data.data.status === 'success') {
-      console.log(`WhatsApp confirmation message sent successfully to ${formattedPhone}`);
-      return true;
-    } else {
-      const errorMessage = textResponse.data?.data?.message || 'Unknown error';
-      console.error(`Failed to send WhatsApp confirmation: ${errorMessage}`);
-      return false;
+    } catch (apiError: any) {
+      console.error('WhatsApp API request failed:', apiError.message);
+      console.error('Error details:', apiError.response?.data || 'No response data');
+      return false; 
     }
   } catch (error: any) {
-    console.error('WhatsApp API error:', error);
-    console.error('Error details:', error.response?.data || error.message);
-    return false;
+    console.error('Error in WhatsApp confirmation function:', error.message);
+    return false; 
   }
 }
 
@@ -250,28 +264,52 @@ export async function POST(request: NextRequest) {
 
     // Send confirmation message
     try {
-      // Always send email confirmation
-      console.log(`Sending confirmation email to ${email}`);
-      const emailSent = await sendConfirmationEmail(email, name);
-      console.log(`Confirmation email sent: ${emailSent}`);
+      // Always send email confirmation if email is provided
+      let emailSent = false;
+      let whatsappSent = false;
       
-      // Always send WhatsApp confirmation if phone is provided
+      if (email) {
+        console.log(`Sending confirmation email to ${email}`);
+        emailSent = await sendConfirmationEmail(email, name);
+        console.log(`Confirmation email sent: ${emailSent}`);
+      } else {
+        console.log('No email provided, skipping email confirmation');
+      }
+      
+      // Send WhatsApp confirmation if phone is provided
       if (phone) {
         console.log(`Sending WhatsApp confirmation to ${phone}`);
-        const whatsappSent = await sendWhatsAppConfirmation(phone, name);
+        whatsappSent = await sendWhatsAppConfirmation(phone, name);
         console.log(`WhatsApp confirmation sent: ${whatsappSent}`);
       } else {
-        console.log('No phone number provided, skipping WhatsApp confirmation');
+        console.log('No phone provided, skipping WhatsApp confirmation');
       }
-    } catch (messageError) {
-      console.error('Error sending confirmation messages:', messageError);
-      // Don't fail the request if message sending fails
+      
+      // Log confirmation status
+      console.log(`Confirmation status: Email: ${emailSent}, WhatsApp: ${whatsappSent}`);
+      
+      // Return success response even if confirmations failed
+      // The RSVP was still created successfully
+      return NextResponse.json({
+        success: true,
+        message: 'RSVP submitted successfully',
+        confirmations: {
+          email: emailSent,
+          whatsapp: whatsappSent
+        }
+      });
+    } catch (confirmError) {
+      // Log the error but still return success since the RSVP was created
+      console.error('Error sending confirmation messages:', confirmError);
+      return NextResponse.json({
+        success: true,
+        message: 'RSVP submitted successfully, but there was an issue sending confirmation messages',
+        confirmations: {
+          email: false,
+          whatsapp: false
+        }
+      });
     }
-
-    return NextResponse.json({ 
-      success: true, 
-      rsvp 
-    });
   } catch (error) {
     console.error('Error submitting RSVP:', error);
     
