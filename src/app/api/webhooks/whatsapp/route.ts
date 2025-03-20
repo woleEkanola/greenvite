@@ -2,18 +2,30 @@ import { NextResponse } from 'next/server';
 import { sendWhatsApp } from '@/lib/communications';
 import crypto from 'crypto';
 
-// Store your security tokens in environment variables
-const SECURITY_TOKENS: { [key: string]: string } = {
-  [process.env.WAAPI_INSTANCE_ID || '']: process.env.WAAPI_TOKEN || '',
-};
-
 // Verify HMAC signature
-function verifyHmacSignature(body: string, signature: string, secret: string): boolean {
-  const computedSignature = crypto
-    .createHmac('sha256', secret)
-    .update(body)
-    .digest('hex');
-  return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(computedSignature));
+function verifyHmacSignature(body: string, signature: string, token: string): boolean {
+  try {
+    // Clean the token and signature
+    const cleanToken = token.trim();
+    const cleanSignature = signature.trim().toLowerCase();
+    
+    const computedSignature = crypto
+      .createHmac('sha256', cleanToken)
+      .update(body)
+      .digest('hex')
+      .toLowerCase(); // WAAPI uses lowercase hex
+
+    console.log('HMAC verification:', {
+      computedSignature,
+      receivedSignature: cleanSignature,
+      match: computedSignature === cleanSignature
+    });
+
+    return computedSignature === cleanSignature;
+  } catch (error) {
+    console.error('Error verifying signature:', error);
+    return false;
+  }
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -23,14 +35,16 @@ export async function POST(request: Request): Promise<Response> {
     const body = JSON.parse(rawBody);
     
     // Get headers
-    const instanceId = request.headers.get('x-waapi-instance-id');
-    const hmacSignature = request.headers.get('x-waapi-hmac');
-    const requestId = request.headers.get('x-waapi-request-id');
+    const instanceId = request.headers.get('x-waapi-instance-id')?.trim();
+    const hmacSignature = request.headers.get('x-waapi-hmac')?.trim();
+    const requestId = request.headers.get('x-waapi-request-id')?.trim();
 
     console.log('Webhook received:', {
       instanceId,
       requestId,
-      body: JSON.stringify(body, null, 2)
+      hmacSignature,
+      event: body.event,
+      messageType: body.data?.message?.type
     });
 
     if (!instanceId || !hmacSignature || !requestId) {
@@ -44,21 +58,22 @@ export async function POST(request: Request): Promise<Response> {
       );
     }
 
-    // Get the security token for this instance
-    const securityToken = SECURITY_TOKENS[instanceId];
-    if (!securityToken) {
-      console.log('Unknown instance ID:', instanceId);
+    // Get the API token
+    const apiToken = process.env.WAAPI_TOKEN?.trim();
+    if (!apiToken) {
+      console.error('WAAPI_TOKEN not configured');
       return new Response(
-        JSON.stringify({ error: 'Invalid instance ID' }),
+        JSON.stringify({ error: 'Server configuration error' }),
         { 
-          status: 401,
+          status: 500,
           headers: { 'Content-Type': 'application/json' }
         }
       );
     }
 
     // Verify HMAC signature
-    if (!verifyHmacSignature(rawBody, hmacSignature, securityToken)) {
+    const isValidSignature = verifyHmacSignature(rawBody, hmacSignature, apiToken);
+    if (!isValidSignature) {
       console.log('Invalid HMAC signature');
       return new Response(
         JSON.stringify({ error: 'Invalid signature' }),
@@ -70,16 +85,17 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     // Handle message event
-    if (body.event === 'message') {
-      const messageData = body.data?.message;
+    if (body.event === 'message' && body.data?.message) {
+      const message = body.data.message;
       
-      if (messageData?.type === 'chat') {
-        const messageSenderId = messageData.from;
-        const messageContent = messageData.body;
-        const phoneNumber = messageSenderId.replace('@c.us', '');
+      if (message.type === 'chat' && !message.fromMe) {
+        const phoneNumber = message.from.replace('@c.us', '');
+        const messageContent = message.body;
+        const senderName = message._data?.notifyName || 'User';
 
-        console.log('Received message:', {
+        console.log('Processing message:', {
           from: phoneNumber,
+          name: senderName,
           content: messageContent
         });
 
@@ -88,7 +104,7 @@ export async function POST(request: Request): Promise<Response> {
         
         await sendWhatsApp(
           phoneNumber,
-          '', // name (not needed for auto-response)
+          senderName,
           '', // code (not needed for auto-response)
           autoResponse,
           '', // eventLink (not needed for auto-response)
@@ -97,7 +113,12 @@ export async function POST(request: Request): Promise<Response> {
         return new Response(
           JSON.stringify({ 
             success: true,
-            message: 'Auto-response sent successfully'
+            message: 'Auto-response sent successfully',
+            details: {
+              to: phoneNumber,
+              name: senderName,
+              originalMessage: messageContent
+            }
           }),
           { 
             status: 200,
@@ -111,7 +132,8 @@ export async function POST(request: Request): Promise<Response> {
     return new Response(
       JSON.stringify({ 
         success: true,
-        message: 'Event received but no action taken'
+        message: 'Event received but no action taken',
+        event: body.event
       }),
       { 
         status: 200,
