@@ -371,14 +371,14 @@ function generateRandomCode(length = 6): string {
   return result;
 }
 
-export async function POST(request: Request) {
+export async function POST(request: Request): Promise<Response> {
   // Check if running on Vercel
   const isVercel = process.env.VERCEL === '1';
   console.log(`Running on Vercel: ${isVercel}`);
   
   try {
     // Add a timeout to the entire request processing
-    const timeoutPromise = new Promise((_, reject) => {
+    const timeoutPromise = new Promise<Response>((_, reject) => {
       const timeoutMs = isVercel ? 50000 : 60000; // 50 seconds for Vercel, 60 seconds otherwise
       setTimeout(() => reject(new Error('Request processing timed out')), timeoutMs);
     });
@@ -396,28 +396,39 @@ export async function POST(request: Request) {
          error.message.includes('ECONNABORTED') || 
          error.message.includes('504'))) {
       console.log('[POST /api/admin/send-invites] Timeout error, treating as partial success');
-      return NextResponse.json(
-        { success: true, partial: true, message: 'Request processed with partial success (timeout)' },
-        { status: 200 }
+      return new Response(
+        JSON.stringify({ success: true, partial: true, message: 'Request processed with partial success (timeout)' }),
+        { 
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        }
       );
     }
     
-    return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
+    return new Response(
+      JSON.stringify({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }),
+      { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      }
     );
   }
 }
 
 // Process the request separately to handle timeout
-async function processRequest(request: Request) {
+async function processRequest(request: Request): Promise<Response> {
   try {
     console.log('[POST /api/admin/send-invites] Processing invites...');
     
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession(authOptions);
     if (!session) {
-      console.error('[POST /api/admin/send-invites] Unauthorized access attempt')
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+      return new Response(
+        JSON.stringify({ success: false, error: 'Unauthorized' }),
+        { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
     }
 
     // Process form data
@@ -478,11 +489,14 @@ async function processRequest(request: Request) {
     
     if (missingFields.length > 0) {
       console.error(`[POST /api/admin/send-invites] Missing required fields: ${missingFields.join(', ')}`);
-      return NextResponse.json(
-        { 
+      return new Response(
+        JSON.stringify({ 
           success: false, 
-          error: `Missing required fields: ${missingFields.join(', ')}` },
-        { status: 400 }
+          error: `Missing required fields: ${missingFields.join(', ')}` }),
+        { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        }
       );
     }
     
@@ -491,9 +505,12 @@ async function processRequest(request: Request) {
       recipients = JSON.parse(recipientsJson);
     } catch (error) {
       console.error('Error parsing recipients JSON:', error);
-      return NextResponse.json(
-        { success: false, error: 'Invalid recipients format' },
-        { status: 400 }
+      return new Response(
+        JSON.stringify({ success: false, error: 'Invalid recipients format' }),
+        { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        }
       );
     }
 
@@ -525,11 +542,14 @@ async function processRequest(request: Request) {
     }
     
     if (availableCodes.length < recipients.length) {
-      return NextResponse.json(
-        { 
+      return new Response(
+        JSON.stringify({ 
           success: false, 
-          error: `Not enough registration codes available. Need ${recipients.length}, but only have ${availableCodes.length}` },
-        { status: 400 }
+          error: `Not enough registration codes available. Need ${recipients.length}, but only have ${availableCodes.length}` }),
+        { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        }
       )
     }
 
@@ -694,44 +714,62 @@ async function processRequest(request: Request) {
       console.error('[POST /api/admin/send-invites] Some invites failed:', failures);
       
       if (failures.length === recipients.length) {
-        return NextResponse.json(
-          { 
+        return new Response(
+          JSON.stringify({ 
             success: false, 
             error: 'All invites failed to send. Please check your WhatsApp and email configuration.', 
             failures,
             batchId: batch.id
-          },
-          { status: 500 }
+          }),
+          { 
+            status: 500,
+            headers: { 'Content-Type': 'application/json' }
+          }
         );
       }
       
-      return NextResponse.json({ 
+      return new Response(
+        JSON.stringify({ 
+          success: true,
+          message: `Successfully sent ${successfulInvites.length} out of ${recipients.length} invites`,
+          sentInvites: successfulInvites,
+          failedCount: failures.length,
+          failureReasons: failures.map(failure => failure.reason),
+          batchId: batch.id
+        }),
+        { 
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
+    return new Response(
+      JSON.stringify({
         success: true,
-        message: `Successfully sent ${successfulInvites.length} out of ${recipients.length} invites`,
+        message: `Successfully sent ${successfulInvites.length} invites`,
         sentInvites: successfulInvites,
         failedCount: failures.length,
         failureReasons: failures.map(failure => failure.reason),
         batchId: batch.id
-      });
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: `Successfully sent ${successfulInvites.length} invites`,
-      sentInvites: successfulInvites,
-      failedCount: failures.length,
-      failureReasons: failures.map(failure => failure.reason),
-      batchId: batch.id
-    });
+      }),
+      { 
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
   } catch (error) {
     console.error('[POST /api/admin/send-invites] Error:', error);
-    return NextResponse.json(
-      { 
+    return new Response(
+      JSON.stringify({ 
         success: false, 
         error: error instanceof Error ? error.message : 'Failed to send invites',
         errorType: error instanceof Error ? error.constructor.name : 'Unknown'
-      },
-      { status: 500 }
+      }),
+      { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      }
     );
   }
 }

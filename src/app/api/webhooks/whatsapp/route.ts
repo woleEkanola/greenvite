@@ -6,7 +6,7 @@ const SECURITY_TOKENS: { [key: string]: string } = {
   [process.env.WAAPI_INSTANCE_ID || '']: process.env.WAAPI_TOKEN || '',
 };
 
-export async function POST(request: Request) {
+export async function POST(request: Request): Promise<Response> {
   try {
     const body = await request.json();
     
@@ -20,13 +20,19 @@ export async function POST(request: Request) {
 
     if (!securityToken || !instanceId || !eventName || !eventData) {
       console.log('Invalid request');
-      return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
+      return new Response(JSON.stringify({ error: 'Invalid request' }), { 
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     // Validate security token
     if (SECURITY_TOKENS[instanceId] !== securityToken) {
       console.log('Authentication failed');
-      return NextResponse.json({ error: 'Authentication failed' }, { status: 401 });
+      return new Response(JSON.stringify({ error: 'Authentication failed' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     // Handle message event
@@ -49,16 +55,24 @@ export async function POST(request: Request) {
           '', // eventLink (not needed for auto-response)
         );
 
-        return NextResponse.json({ success: true }, { status: 200 });
+        return new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
     }
 
-    return NextResponse.json({ error: 'Unhandled event type' }, { status: 404 });
+    return new Response(JSON.stringify({ error: 'Unhandled event type' }), {
+      status: 404,
+      headers: { 'Content-Type': 'application/json' }
+    });
   } catch (error) {
     console.error('Webhook error:', error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
+    return new Response(
+      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      }
     );
   }
 }
