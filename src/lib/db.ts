@@ -2,7 +2,7 @@ import { PrismaClient } from '@prisma/client'
 import { hash } from 'bcryptjs'
 import { prisma } from './prisma'
 
-const prismaClient = prisma as PrismaClient
+export const prismaClient = prisma as PrismaClient
 
 export interface User {
   id: string
@@ -125,10 +125,47 @@ export async function createRegistrationCodes(count: number) {
   }
 }
 
-export async function getRegistrationCodes() {
-  console.log('[getRegistrationCodes] Fetching all registration codes')
+/**
+ * Get all registration codes, optionally filtered by status
+ * @param status Optional status filter ('available', 'used', 'pending', 'invite-sent')
+ * @returns Array of registration codes
+ */
+export async function getRegistrationCodes(status?: 'available' | 'used' | 'pending' | 'invite-sent') {
+  console.log(`[getRegistrationCodes] Fetching registration codes${status ? ` with status: ${status}` : ''}`)
   try {
+    let whereClause: any = {};
+    
+    if (status) {
+      // For backward compatibility with older database schemas
+      if (status === 'available') {
+        try {
+          // Try with OR condition first
+          return await prismaClient.registrationCode.findMany({
+            where: {
+              OR: [
+                { status: 'available' },
+                { status: null, used: false }
+              ]
+            },
+            include: {
+              rsvp: true,
+            },
+            orderBy: {
+              createdAt: 'desc',
+            },
+          });
+        } catch (error) {
+          console.log('[getRegistrationCodes] Error using OR condition, falling back to simple query:', error);
+          // If that fails, try with just status
+          whereClause = { status: 'available' };
+        }
+      } else {
+        whereClause = { status };
+      }
+    }
+    
     const codes = await prismaClient.registrationCode.findMany({
+      where: whereClause,
       include: {
         rsvp: true,
       },
@@ -136,10 +173,10 @@ export async function getRegistrationCodes() {
         createdAt: 'desc',
       },
     })
-    console.log(`[getRegistrationCodes] Successfully fetched ${codes.length} codes`)
+    console.log(`[getRegistrationCodes] Successfully fetched ${codes.length} codes${status ? ` with status: ${status}` : ''}`)
     return codes
   } catch (error) {
-    console.error('[getRegistrationCodes] Error fetching registration codes:', error)
+    console.error(`[getRegistrationCodes] Error fetching registration codes${status ? ` with status: ${status}` : ''}:`, error)
     throw error
   }
 }
@@ -175,30 +212,64 @@ export async function createRsvp(data: RsvpData) {
 export async function getRsvpStats() {
   console.log('[getRsvpStats] Fetching RSVP statistics')
   try {
-    const [totalRsvp, availableRegistrations, pendingRegistrations, usedRegistrations, inviteSentRegistrations] = await Promise.all([
+    const [totalRsvp, totalRegistrationCodes] = await Promise.all([
       prismaClient.rsvp.count(),
-      prismaClient.registrationCode.count({
+      prismaClient.registrationCode.count(),
+    ])
+
+    // For available codes, try with OR condition first, but fall back to just status if needed
+    let availableRegistrations;
+    try {
+      availableRegistrations = await prismaClient.registrationCode.count({
+        where: {
+          OR: [
+            { status: 'available' },
+            { status: null, used: false }
+          ]
+        },
+      });
+    } catch (error) {
+      console.log('[getRsvpStats] Error using OR condition for available codes, falling back to simple query:', error);
+      availableRegistrations = await prismaClient.registrationCode.count({
         where: { status: 'available' },
-      }),
+      });
+    }
+
+    // For used codes, try with OR condition first, but fall back to just status if needed
+    let usedRegistrations;
+    try {
+      usedRegistrations = await prismaClient.registrationCode.count({
+        where: { 
+          OR: [
+            { status: 'used' },
+            { status: null, used: true }
+          ]
+        },
+      });
+    } catch (error) {
+      console.log('[getRsvpStats] Error using OR condition for used codes, falling back to simple query:', error);
+      usedRegistrations = await prismaClient.registrationCode.count({
+        where: { status: 'used' },
+      });
+    }
+
+    const [pendingRegistrations, inviteSentRegistrations] = await Promise.all([
       prismaClient.registrationCode.count({
         where: { status: 'pending' },
-      }),
-      prismaClient.registrationCode.count({
-        where: { status: 'used' },
       }),
       prismaClient.registrationCode.count({
         where: { status: 'invite-sent' },
       }),
     ])
 
-    console.log(`[getRsvpStats] Stats - Total RSVPs: ${totalRsvp}, Available Codes: ${availableRegistrations}, Pending: ${pendingRegistrations}, Used: ${usedRegistrations}, Invite Sent: ${inviteSentRegistrations}`)
+    console.log(`[getRsvpStats] Stats - Total RSVPs: ${totalRsvp}, Available Codes: ${availableRegistrations}, Pending: ${pendingRegistrations}, Used: ${usedRegistrations}, Invite Sent: ${inviteSentRegistrations}, Total Codes: ${totalRegistrationCodes}`)
     return {
       totalRsvp,
       availableRegistrations,
       pendingRegistrations,
       usedRegistrations,
       inviteSentRegistrations,
-      totalRegistrationCodes: availableRegistrations + pendingRegistrations + usedRegistrations + inviteSentRegistrations
+      totalRegistrationCodes
     }
   } catch (error) {
     console.error('[getRsvpStats] Error fetching RSVP stats:', error)
@@ -226,10 +297,11 @@ export async function createInvites(invites: InviteData[]) {
 export async function getInviteStats() {
   console.log('[getInviteStats] Fetching invite statistics')
   try {
-    const [totalInvitesSent, emailInvites, smsInvites, bothInvites, successfulInvites, failedInvites] = await Promise.all([
-      prismaClient.invite.count({
-        where: { sent: true },
-      }),
+    // Get total invites
+    const totalInvitesSent = await prismaClient.invite.count()
+    
+    // Count invites by type
+    const [emailInvites, smsInvites, bothInvites] = await Promise.all([
       prismaClient.invite.count({
         where: { type: 'email' },
       }),
@@ -239,22 +311,41 @@ export async function getInviteStats() {
       prismaClient.invite.count({
         where: { type: 'both' },
       }),
+    ])
+    
+    // Count invites by status
+    const [successfulInvites, failedInvites, pendingInvites, canceledInvites] = await Promise.all([
       prismaClient.invite.count({
-        where: { status: 'sent' },
+        where: { 
+          OR: [
+            { status: 'sent' },
+            { status: 'partial' }
+          ]
+        },
       }),
       prismaClient.invite.count({
         where: { status: 'failed' },
       }),
+      prismaClient.invite.count({
+        where: { status: 'pending' },
+      }),
+      prismaClient.invite.count({
+        where: { status: 'canceled' },
+      }),
     ])
 
-    console.log(`[getInviteStats] Total invites sent: ${totalInvitesSent}, Email: ${emailInvites}, SMS: ${smsInvites}, Both: ${bothInvites}, Success: ${successfulInvites}, Failed: ${failedInvites}`)
+    console.log(`[getInviteStats] Total invites: ${totalInvitesSent}, Email: ${emailInvites}, SMS: ${smsInvites}, Both: ${bothInvites}`)
+    console.log(`[getInviteStats] Status - Success: ${successfulInvites}, Failed: ${failedInvites}, Pending: ${pendingInvites}, Canceled: ${canceledInvites}`)
+    
     return { 
       totalInvitesSent,
       emailInvites,
       smsInvites,
       bothInvites,
       successfulInvites,
-      failedInvites
+      failedInvites,
+      pendingInvites,
+      canceledInvites
     }
   } catch (error) {
     console.error('[getInviteStats] Error fetching invite stats:', error)
@@ -359,19 +450,99 @@ export async function markRegistrationCodeAsUsed(code: string, status: 'pending'
     }
 
     // Update the registration code status
-    const updatedCode = await prismaClient.registrationCode.update({
-      where: { id: registrationCode.id },
-      data: {
-        used: status === 'used',
-        usedAt: status === 'used' ? new Date() : null,
-        status,
-      },
-    })
-
-    console.log(`[markRegistrationCodeAsUsed] Successfully updated code ${code} to ${status}`)
-    return updatedCode
+    try {
+      const updatedCode = await prismaClient.registrationCode.update({
+        where: { id: registrationCode.id },
+        data: {
+          used: status === 'used',
+          usedAt: status === 'used' ? new Date() : null,
+          status,
+        },
+      })
+      console.log(`[markRegistrationCodeAsUsed] Successfully updated code ${code} to ${status}`)
+      return updatedCode
+    } catch (updateError) {
+      console.error(`[markRegistrationCodeAsUsed] Error updating code ${code} with status:`, updateError)
+      
+      // If the update failed, try again without setting status to null
+      console.log(`[markRegistrationCodeAsUsed] Trying alternative update for code ${code}`)
+      const updatedCode = await prismaClient.registrationCode.update({
+        where: { id: registrationCode.id },
+        data: {
+          used: status === 'used',
+          usedAt: status === 'used' ? new Date() : null,
+          // Always set a status value
+          status: status,
+        },
+      })
+      console.log(`[markRegistrationCodeAsUsed] Successfully updated code ${code} with alternative approach`)
+      return updatedCode
+    }
   } catch (error) {
     console.error(`[markRegistrationCodeAsUsed] Error updating code ${code}:`, error)
     throw error
+  }
+}
+
+/**
+ * Deletes an invite and marks its registration code as available
+ * @param id The ID of the invite to delete
+ * @returns The deleted invite
+ */
+export async function deleteInvite(id: string) {
+  console.log(`[deleteInvite] Deleting invite with id: ${id}`)
+  try {
+    // Get the invite to retrieve the code
+    const invite = await prismaClient.invite.findUnique({
+      where: { id }
+    }) as any; // Use any type to bypass TypeScript checks for dynamic properties
+
+    if (!invite) {
+      throw new Error(`Invite with id ${id} not found`)
+    }
+
+    // If the invite has a code, mark it as available before deleting
+    if (invite.hasOwnProperty('code') && invite.code) {
+      await markRegistrationCodeAsUsed(invite.code, 'available');
+      console.log(`[deleteInvite] Registration code ${invite.code} marked as available`)
+    }
+
+    // Delete the invite
+    const deletedInvite = await prismaClient.invite.delete({
+      where: { id }
+    });
+
+    return deletedInvite
+  } catch (error) {
+    console.error(`[deleteInvite] Error deleting invite with id ${id}:`, error)
+    throw error
+  }
+}
+
+/**
+ * Checks if a registration code is already being used by a non-cancelled invite
+ * @param code The registration code to check
+ * @returns True if the code is already being used by a non-cancelled invite, false otherwise
+ */
+export async function isCodeUsedByActiveInvite(code: string): Promise<boolean> {
+  console.log(`[isCodeUsedByActiveInvite] Checking if code ${code} is used by an active invite`)
+  try {
+    // Find invites that use this code and are not cancelled
+    const invites = await prismaClient.invite.findMany({
+      where: {
+        code: code,
+        status: {
+          not: 'canceled'
+        }
+      }
+    })
+    
+    const isUsed = invites.length > 0
+    console.log(`[isCodeUsedByActiveInvite] Code ${code} is ${isUsed ? 'used' : 'not used'} by an active invite`)
+    return isUsed
+  } catch (error) {
+    console.error(`[isCodeUsedByActiveInvite] Error checking code ${code}:`, error)
+    // In case of error, assume it's used to be safe
+    return true
   }
 }

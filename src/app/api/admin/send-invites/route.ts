@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { createRegistrationCodes, getRegistrationCodes, markRegistrationCodeAsUsed } from '@/lib/db'
+import { createRegistrationCodes, getRegistrationCodes, markRegistrationCodeAsUsed, isCodeUsedByActiveInvite } from '@/lib/db'
 import nodemailer from 'nodemailer'
 import { v4 as uuidv4 } from 'uuid'
 import axios from 'axios'; // Import axios for Termii API
@@ -15,9 +15,6 @@ type Recipient = {
   phone: string;
   type: 'email' | 'whatsapp' | 'both';
 };
-
-// Remove the duplicate prisma declaration
-// const prisma = prisma // Use the imported prisma instance
 
 // WhatsApp API configuration
 const WAAPI_BASE_URL = process.env.WAAPI_BASE_URL || 'https://waapi.app/api/v1';
@@ -523,27 +520,24 @@ export async function POST(request: Request) {
 
     const emailImageFile = formData.get('emailImage') as File | null
     
-    const registrationCodes = await getRegistrationCodes()
-    console.log(`Found ${registrationCodes.length} registration codes`)
+    // Fetch only available registration codes
+    const availableRegistrationCodes = await getRegistrationCodes('available')
+    console.log(`Found ${availableRegistrationCodes.length} available registration codes`)
     
-    let availableCodes = registrationCodes
-      .filter((code: any) => {
-        return !code.used && (!code.status || code.status === 'available');
-      })
-      .map((code: any) => code.code)
-    console.log(`Found ${availableCodes.length} available registration codes`)
+    // Extract just the code values from the registration codes
+    let availableCodes = availableRegistrationCodes.map((code: any) => code.code)
     
-    if (availableCodes.length < recipients.length) {
-      console.log(`Need to generate ${recipients.length - availableCodes.length} more registration codes`)
-      const newCodes = await createRegistrationCodes(recipients.length - availableCodes.length)
+    // We'll verify each code before using it, so we might need more codes than initially thought
+    // Request more codes to be safe
+    const extraCodesBuffer = 5;
+    if (availableCodes.length < recipients.length + extraCodesBuffer) {
+      console.log(`Need to generate ${recipients.length + extraCodesBuffer - availableCodes.length} more registration codes`)
+      const newCodes = await createRegistrationCodes(recipients.length + extraCodesBuffer - availableCodes.length)
       console.log(`Generated ${newCodes.count} new registration codes`)
       
-      const updatedRegistrationCodes = await getRegistrationCodes()
-      availableCodes = updatedRegistrationCodes
-        .filter((code: any) => {
-          return !code.used && (!code.status || code.status === 'available');
-        })
-        .map((code: any) => code.code)
+      // Fetch the updated list of available codes
+      const updatedRegistrationCodes = await getRegistrationCodes('available')
+      availableCodes = updatedRegistrationCodes.map((code: any) => code.code)
       console.log(`Now have ${availableCodes.length} available registration codes`)
     }
     
@@ -577,14 +571,32 @@ export async function POST(request: Request) {
         const phone = recipient.phone || '';
         const type = recipient.type;
         
-        let codeValue: string;
-        if (availableCodes.length > 0) {
+        // Initialize codeValue with a default
+        let codeValue: string = generateRandomCode();
+        let codeFound = false;
+        
+        // Try to find an available code that's not used by any active invite
+        while (availableCodes.length > 0 && !codeFound) {
           const regCode = availableCodes.pop();
-          codeValue = regCode ? regCode : generateRandomCode();
+          if (!regCode) continue;
           
-          await markRegistrationCodeAsUsed(codeValue, 'pending');
-        } else {
-          codeValue = generateRandomCode();
+          // Check if this code is already used by a non-cancelled invite
+          const isUsed = await isCodeUsedByActiveInvite(regCode);
+          if (!isUsed) {
+            codeValue = regCode;
+            codeFound = true;
+            
+            // Mark the code as pending
+            await markRegistrationCodeAsUsed(codeValue, 'pending');
+            console.log(`[Invite to ${name}] Using registration code ${codeValue}`);
+          } else {
+            console.log(`[Invite to ${name}] Code ${regCode} is already used by an active invite, trying another one`);
+          }
+        }
+        
+        // If we couldn't find a code, we'll use the default random code initialized above
+        if (!codeFound) {
+          console.log(`[Invite to ${name}] No available codes found, using generated code ${codeValue}`);
         }
         
         const successfulChannels: string[] = [];

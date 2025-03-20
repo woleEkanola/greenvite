@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import Swal from 'sweetalert2'
 import DataTable from '@/components/DataTable'
-import { Search, RefreshCw, CheckCircle, XCircle, Mail, Phone } from 'lucide-react'
+import { Search, RefreshCw, CheckCircle, XCircle, Mail, Phone, Trash2, Edit } from 'lucide-react'
 
 interface SentInvite {
   id: string
@@ -37,6 +37,8 @@ export default function SentInvitesPage() {
   const [totalPages, setTotalPages] = useState(1)
   const [totalItems, setTotalItems] = useState(0)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [isUpdating, setIsUpdating] = useState(false)
 
   const fetchInvites = async (page = 1, search = '') => {
     setIsLoading(true)
@@ -81,6 +83,114 @@ export default function SentInvitesPage() {
   const handlePageChange = (page: number) => {
     setCurrentPage(page)
   }
+
+  const handleDeleteInvite = async (id: string, name: string) => {
+    // Confirm deletion
+    const result = await Swal.fire({
+      title: 'Delete Invite',
+      text: `Are you sure you want to delete the invite sent to ${name}? This will also make the registration code available again.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      confirmButtonText: 'Yes, delete it!',
+      cancelButtonText: 'Cancel'
+    });
+    
+    if (result.isConfirmed) {
+      setIsDeleting(true);
+      try {
+        const response = await fetch(`/api/admin/invites/${id}`, {
+          method: 'DELETE',
+        });
+        
+        if (response.ok) {
+          Swal.fire({
+            title: 'Deleted!',
+            text: `Invite to ${name} has been deleted and the registration code is now available.`,
+            icon: 'success',
+            timer: 2000,
+            showConfirmButton: false,
+          });
+          
+          // Update the local state to remove the deleted invite
+          setInvites(prevInvites => prevInvites.filter(invite => invite.id !== id));
+        } else {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to delete invite');
+        }
+      } catch (error) {
+        console.error('Error deleting invite:', error);
+        Swal.fire('Error', error instanceof Error ? error.message : 'Failed to delete invite', 'error');
+      } finally {
+        setIsDeleting(false);
+      }
+    }
+  };
+
+  const handleUpdateStatus = async (id: string, name: string, currentStatus: string) => {
+    // Show status update modal
+    const { value: newStatus } = await Swal.fire({
+      title: 'Update Invite Status',
+      text: `Current status: ${currentStatus}`,
+      input: 'select',
+      inputOptions: {
+        'pending': 'Pending',
+        'sent': 'Sent',
+        'failed': 'Failed',
+        'partial': 'Partial',
+        'canceled': 'Canceled'
+      },
+      inputValue: currentStatus,
+      showCancelButton: true,
+      inputValidator: (value) => {
+        if (!value) {
+          return 'You need to select a status!';
+        }
+      }
+    });
+    
+    if (newStatus) {
+      setIsUpdating(true);
+      try {
+        const response = await fetch(`/api/admin/invites/${id}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ status: newStatus }),
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          Swal.fire({
+            title: 'Updated!',
+            text: `Invite status for ${name} has been updated to ${newStatus}.`,
+            icon: 'success',
+            timer: 2000,
+            showConfirmButton: false,
+          });
+          
+          // Update the local state to reflect the change
+          setInvites(prevInvites => 
+            prevInvites.map(invite => 
+              invite.id === id 
+                ? { ...invite, status: newStatus } 
+                : invite
+            )
+          );
+        } else {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to update status');
+        }
+      } catch (error) {
+        console.error('Error updating invite status:', error);
+        Swal.fire('Error', error instanceof Error ? error.message : 'Failed to update invite status', 'error');
+      } finally {
+        setIsUpdating(false);
+      }
+    }
+  };
 
   // Define table columns
   const columns = [
@@ -205,6 +315,33 @@ export default function SentInvitesPage() {
               )}
             </div>
             <div><span className="font-semibold">RSVP Date:</span> {format(new Date(details.createdAt), 'MMM d, yyyy')}</div>
+          </div>
+        );
+      },
+      searchable: false
+    },
+    {
+      header: 'Actions',
+      accessor: (invite: SentInvite) => {
+        return (
+          <div className="flex space-x-2">
+            <button
+              onClick={() => handleUpdateStatus(invite.id, invite.name, invite.status)}
+              disabled={isUpdating || isDeleting}
+              className="text-blue-600 hover:text-blue-900 p-1 rounded"
+              title="Update Status"
+            >
+              <Edit className="h-4 w-4" />
+            </button>
+            
+            <button
+              onClick={() => handleDeleteInvite(invite.id, invite.name)}
+              disabled={isUpdating || isDeleting}
+              className="text-red-600 hover:text-red-900 p-1 rounded"
+              title="Delete Invite"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
           </div>
         );
       },

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useSession } from 'next-auth/react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts'
 import { RefreshCw } from 'lucide-react'
 
@@ -17,9 +18,12 @@ interface DashboardStats {
   bothInvites: number
   successfulInvites: number
   failedInvites: number
+  pendingInvites: number
+  canceledInvites: number
 }
 
 export default function Dashboard() {
+  const { data: session, status } = useSession()
   const [stats, setStats] = useState<DashboardStats>({
     totalRsvp: 0,
     availableRegistrations: 0,
@@ -32,7 +36,9 @@ export default function Dashboard() {
     smsInvites: 0,
     bothInvites: 0,
     successfulInvites: 0,
-    failedInvites: 0
+    failedInvites: 0,
+    pendingInvites: 0,
+    canceledInvites: 0
   })
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -40,10 +46,20 @@ export default function Dashboard() {
   const fetchStats = async () => {
     try {
       setIsRefreshing(true)
+      console.log('Session Status:', status)
+      console.log('Session Data:', session)
+      
       const response = await fetch('/api/admin/stats')
+      console.log('API Response Status:', response.status)
+      
       if (response.ok) {
         const data = await response.json()
+        console.log('API Response Data:', data)
         setStats(data)
+      } else {
+        // If the response is not OK, log the error
+        const errorData = await response.json().catch(() => ({}))
+        console.error('API Error Response:', response.status, errorData)
       }
     } catch (error) {
       console.error('Error fetching stats:', error)
@@ -73,7 +89,9 @@ export default function Dashboard() {
 
   const inviteStatusData: { name: string; value: number; color: string }[] = [
     { name: 'Successful', value: stats.successfulInvites, color: '#10b981' },
-    { name: 'Failed', value: stats.failedInvites, color: '#ef4444' }
+    { name: 'Failed', value: stats.failedInvites, color: '#ef4444' },
+    { name: 'Pending', value: stats.pendingInvites, color: '#f59e0b' },
+    { name: 'Canceled', value: stats.canceledInvites, color: '#6b7280' }
   ].filter(item => item.value > 0)
 
   // Type definitions for chart data
@@ -140,7 +158,7 @@ export default function Dashboard() {
           <h2 className="text-lg font-light text-gray-600 mb-2">Invites Sent</h2>
           <p className="text-3xl font-light text-emerald-500">{stats.totalInvitesSent}</p>
           <div className="mt-2 text-sm text-gray-500">
-            {stats.successfulInvites} successful, {stats.failedInvites} failed
+            {stats.successfulInvites} successful, {stats.failedInvites} failed, {stats.pendingInvites} pending
           </div>
         </div>
       </div>

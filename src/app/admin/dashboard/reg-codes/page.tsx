@@ -18,6 +18,7 @@ export default function RegCodes() {
   const [isLoading, setIsLoading] = useState(true)
   const [isGenerating, setIsGenerating] = useState(false)
   const [codeCount, setCodeCount] = useState(1)
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
 
   useEffect(() => {
     fetchRegCodes()
@@ -70,11 +71,11 @@ export default function RegCodes() {
     }
   }
 
-  const handleDeleteCode = async (codeId: string, codeValue: string) => {
+  const handleDeleteCode = async (id: string, code: string) => {
     // Confirm deletion
     const result = await Swal.fire({
       title: 'Delete Registration Code',
-      text: `Are you sure you want to delete code ${codeValue}?`,
+      text: `Are you sure you want to delete code ${code}?`,
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#d33',
@@ -89,12 +90,12 @@ export default function RegCodes() {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ codeId }),
+          body: JSON.stringify({ codeId: id }),
         });
         
         if (response.ok) {
           await fetchRegCodes(); // Refresh the list
-          Swal.fire('Deleted!', `Registration code ${codeValue} has been deleted.`, 'success');
+          Swal.fire('Deleted!', `Registration code ${code} has been deleted.`, 'success');
         } else {
           const error = await response.json();
           throw new Error(error.error || 'Failed to delete code');
@@ -103,6 +104,49 @@ export default function RegCodes() {
         console.error('Error deleting code:', error);
         Swal.fire('Error', 'Failed to delete registration code', 'error');
       }
+    }
+  };
+
+  // Function to update the status of a registration code
+  const handleUpdateStatus = async (code: string, newStatus: 'available' | 'used' | 'pending' | 'invite-sent') => {
+    try {
+      setIsUpdatingStatus(true);
+      
+      const response = await fetch('/api/admin/update-code-status', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ code, status: newStatus }),
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        Swal.fire({
+          title: 'Success',
+          text: `Registration code ${code} status updated to ${newStatus}`,
+          icon: 'success',
+          timer: 2000,
+          showConfirmButton: false,
+        });
+        
+        // Update the local state to reflect the change
+        setRegCodes(prevCodes => 
+          prevCodes.map(c => 
+            c.code === code 
+              ? { ...c, status: newStatus, used: newStatus === 'used' } 
+              : c
+          )
+        );
+      } else {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to update status');
+      }
+    } catch (error) {
+      console.error('Error updating code status:', error);
+      Swal.fire('Error', error instanceof Error ? error.message : 'Failed to update registration code status', 'error');
+    } finally {
+      setIsUpdatingStatus(false);
     }
   };
 
@@ -158,18 +202,34 @@ export default function RegCodes() {
     {
       header: 'Actions',
       accessor: (code: RegCode) => {
-        // Only show delete button for available codes
-        if (code.status === 'available' && !code.used) {
-          return (
-            <button
-              onClick={() => handleDeleteCode(code.id, code.code)}
-              className="text-red-600 hover:text-red-900"
-            >
-              Delete
-            </button>
-          );
-        }
-        return null;
+        return (
+          <div className="flex space-x-2">
+            {/* Status update dropdown */}
+            <div className="relative inline-block text-left">
+              <select
+                disabled={isUpdatingStatus}
+                value={code.status || 'available'}
+                onChange={(e) => handleUpdateStatus(code.code, e.target.value as 'available' | 'used' | 'pending' | 'invite-sent')}
+                className="block w-full pl-3 pr-10 py-2 text-sm border-gray-300 focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm rounded-md"
+              >
+                <option value="available">Available</option>
+                <option value="used">Used</option>
+                <option value="pending">Pending</option>
+                <option value="invite-sent">Invite Sent</option>
+              </select>
+            </div>
+            
+            {/* Delete button - only for available codes */}
+            {code.status === 'available' && !code.used && (
+              <button
+                onClick={() => handleDeleteCode(code.id, code.code)}
+                className="text-red-600 hover:text-red-900 px-2 py-1"
+              >
+                Delete
+              </button>
+            )}
+          </div>
+        );
       },
       searchable: false
     }
