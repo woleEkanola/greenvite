@@ -162,11 +162,28 @@ async function sendWhatsAppConfirmation(phone: string, name: string): Promise<bo
 
 export async function POST(request: NextRequest) {
   try {
-    const { name, email, phone, hasGuest, hasDriver, hasAide, code } = await request.json();
+    let requestData;
+    try {
+      requestData = await request.json();
+    } catch (jsonError) {
+      console.error('Error parsing request JSON:', jsonError);
+      return NextResponse.json(
+        { 
+          success: false,
+          error: 'Invalid JSON in request body' 
+        },
+        { status: 400 }
+      );
+    }
+
+    const { name, email, phone, hasGuest, hasDriver, hasAide, code } = requestData;
 
     if (!name || !email || !code) {
       return NextResponse.json(
-        { error: 'Name, email, and registration code are required' },
+        { 
+          success: false,
+          error: 'Name, email, and registration code are required' 
+        },
         { status: 400 }
       );
     }
@@ -180,7 +197,10 @@ export async function POST(request: NextRequest) {
     // Check if code exists
     if (!registrationCode) {
       return NextResponse.json(
-        { error: 'Invalid registration code' },
+        { 
+          success: false,
+          error: 'Invalid registration code' 
+        },
         { status: 400 }
       );
     }
@@ -197,7 +217,10 @@ export async function POST(request: NextRequest) {
     // Check if code has already been used
     if (registrationCode.used || registrationCode.rsvp) {
       return NextResponse.json(
-        { error: 'This registration code has already been used' },
+        { 
+          success: false,
+          error: 'This registration code has already been used' 
+        },
         { status: 400 }
       );
     }
@@ -209,7 +232,10 @@ export async function POST(request: NextRequest) {
         regCodeWithStatus.status !== 'available' && 
         regCodeWithStatus.status !== 'invite-sent') {
       return NextResponse.json(
-        { error: 'This registration code is not available for use' },
+        { 
+          success: false,
+          error: 'This registration code is not available for use' 
+        },
         { status: 400 }
       );
     }
@@ -257,7 +283,10 @@ export async function POST(request: NextRequest) {
     } catch (txError) {
       console.error('Error in RSVP transaction:', txError);
       return NextResponse.json(
-        { success: false, error: 'An error occurred while creating your RSVP' },
+        { 
+          success: false,
+          error: 'An error occurred while creating your RSVP' 
+        },
         { status: 500 }
       );
     }
@@ -315,7 +344,10 @@ export async function POST(request: NextRequest) {
     
     // Ensure we're returning a properly formatted JSON response
     return NextResponse.json(
-      { success: false, error: 'An error occurred while submitting your RSVP' },
+      { 
+        success: false,
+        error: 'An error occurred while submitting your RSVP' 
+      },
       { status: 500 }
     );
   }

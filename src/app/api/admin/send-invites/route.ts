@@ -80,9 +80,9 @@ async function sendWhatsAppMessage(phone: string, name: string, code: string, me
     
     console.log(`Sending WhatsApp message to: ${formattedPhone} (original: ${phone})`);
 
-    if (!WAAPI_TOKEN) {
-      console.error('WhatsApp API token is not configured');
-      throw new Error('WhatsApp API token is not configured');
+    if (!WAAPI_TOKEN || !INSTANCE_ID || !WAAPI_BASE_URL) {
+      console.error('WhatsApp API configuration is incomplete. Missing token, instance ID, or base URL.');
+      return false; // Return false instead of throwing an error
     }
 
     // Track if message was sent successfully
@@ -91,12 +91,17 @@ async function sendWhatsAppMessage(phone: string, name: string, code: string, me
     // Resize the image to reduce payload size
     let resizedImageBuffer;
     if (imageBuffer) {
-      resizedImageBuffer = await sharp(imageBuffer)
-        .resize({ width: 800 }) // Resize to width of 800px, maintaining aspect ratio
-        .jpeg({ quality: 80 }) // Compress as JPEG with 80% quality
-        .toBuffer();
-      
-      console.log(`Original image size: ${imageBuffer.length} bytes, Resized image size: ${resizedImageBuffer.length} bytes`);
+      try {
+        resizedImageBuffer = await sharp(imageBuffer)
+          .resize({ width: 800 }) // Resize to width of 800px, maintaining aspect ratio
+          .jpeg({ quality: 80 }) // Compress as JPEG with 80% quality
+          .toBuffer();
+        
+        console.log(`Original image size: ${imageBuffer.length} bytes, Resized image size: ${resizedImageBuffer.length} bytes`);
+      } catch (resizeError) {
+        console.error('Error resizing image:', resizeError);
+        // Continue without the image if resizing fails
+      }
     }
 
     // Send the media message with caption
@@ -119,7 +124,8 @@ async function sendWhatsAppMessage(phone: string, name: string, code: string, me
             headers: {
               'Authorization': `Bearer ${WAAPI_TOKEN}`,
               'Content-Type': 'application/json'
-            }
+            },
+            timeout: 15000 // 15 second timeout
           }
         );
         
@@ -133,28 +139,34 @@ async function sendWhatsAppMessage(phone: string, name: string, code: string, me
           console.error(`Failed to send WhatsApp media: ${errorMessage}`);
         }
       } catch (mediaError: any) {
-        console.error('WhatsApp Media API error:', mediaError);
-        console.error('Error details:', mediaError.response?.data || mediaError.message);
+        console.error('WhatsApp Media API error:', mediaError.message);
+        console.error('Error details:', mediaError.response?.data || 'No response data');
         
         if (mediaError.response && mediaError.response.status === 504) {
           console.log(`WhatsApp media message to ${formattedPhone} received a 504 error, treating as successful`);
-          await prisma.invite.create({
-            data: {
-              name,
-              phone,
-              type: 'whatsapp-media',
-              status: '504-error',
-              errorMessage: '504 Gateway Timeout',
-              code
-            }
-          });
+          try {
+            await prisma.invite.create({
+              data: {
+                name,
+                phone,
+                type: 'whatsapp-media',
+                status: '504-error',
+                errorMessage: '504 Gateway Timeout',
+                code
+              }
+            });
+          } catch (dbError) {
+            console.error('Error logging 504 error to database:', dbError);
+          }
           messageSent = true;
         }
       }
-    } else {
-      // If no image is provided, send a text-only message
+    }
+    
+    // If media message failed or no image was provided, try sending a text-only message
+    if (!messageSent) {
       try {
-        console.log('No image provided. Sending WhatsApp text message...');
+        console.log(resizedImageBuffer ? 'Media message failed. Trying text message...' : 'No image provided. Sending WhatsApp text message...');
         
         const textPayload = {
           chatId: formattedPhone+'@c.us',
@@ -168,7 +180,8 @@ async function sendWhatsAppMessage(phone: string, name: string, code: string, me
             headers: {
               'Authorization': `Bearer ${WAAPI_TOKEN}`,
               'Content-Type': 'application/json'
-            }
+            },
+            timeout: 10000 // 10 second timeout
           }
         );
         
@@ -182,21 +195,25 @@ async function sendWhatsAppMessage(phone: string, name: string, code: string, me
           console.error(`Failed to send WhatsApp text message: ${errorMessage}`);
         }
       } catch (textError: any) {
-        console.error('WhatsApp Text API error:', textError);
-        console.error('Error details:', textError.response?.data || textError.message);
+        console.error('WhatsApp Text API error:', textError.message);
+        console.error('Error details:', textError.response?.data || 'No response data');
         
         if (textError.response && textError.response.status === 504) {
           console.log(`WhatsApp text message to ${formattedPhone} received a 504 error, treating as successful`);
-          await prisma.invite.create({
-            data: {
-              name,
-              phone,
-              type: 'whatsapp-text',
-              status: '504-error',
-              errorMessage: '504 Gateway Timeout',
-              code
-            }
-          });
+          try {
+            await prisma.invite.create({
+              data: {
+                name,
+                phone,
+                type: 'whatsapp-text',
+                status: '504-error',
+                errorMessage: '504 Gateway Timeout',
+                code
+              }
+            });
+          } catch (dbError) {
+            console.error('Error logging 504 error to database:', dbError);
+          }
           messageSent = true;
         }
       }
@@ -205,21 +222,24 @@ async function sendWhatsAppMessage(phone: string, name: string, code: string, me
     // Return true if message was sent successfully
     return messageSent;
   } catch (error: any) {
-    console.error('WhatsApp API general error:', error);
-    console.error('Error message:', error.message);
+    console.error('WhatsApp API general error:', error.message);
     
     if (error.response && error.response.status === 504) {
       console.log(`WhatsApp message to ${phone} received a 504 error, treating as successful`);
-      await prisma.invite.create({
-        data: {
-          name,
-          phone,
-          type: 'whatsapp',
-          status: '504-error',
-          errorMessage: '504 Gateway Timeout',
-          code
-        }
-      });
+      try {
+        await prisma.invite.create({
+          data: {
+            name,
+            phone,
+            type: 'whatsapp',
+            status: '504-error',
+            errorMessage: '504 Gateway Timeout',
+            code
+          }
+        });
+      } catch (dbError) {
+        console.error('Error logging 504 error to database:', dbError);
+      }
       return true;
     }
     return false;
@@ -416,82 +436,45 @@ interface RegistrationCode {
 
 export async function POST(request: Request) {
   try {
+    console.log('[POST /api/admin/send-invites] Processing invites...');
+    
     const session = await getServerSession(authOptions)
     if (!session) {
       console.error('[POST /api/admin/send-invites] Unauthorized access attempt')
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
     }
 
-    const formData = await request.formData()
+    // Process form data
+    const formData = await request.formData();
+    const recipientsJson = formData.get('recipients') as string;
+    const subject = formData.get('subject') as string;
+    const message = formData.get('message') as string;
+    const whatsappMessage = formData.get('whatsappMessage') as string;
+    const eventLink = formData.get('eventLink') as string;
+    const enableEmail = formData.get('enableEmail') === 'true';
+    const enableWhatsApp = formData.get('enableWhatsApp') === 'true';
     
-    const emailSubject = formData.get('emailSubject') as string || 'Invitation to Jesse Oghenekome George\'s Church Dedication'
-    const emailMessage = formData.get('emailMessage') as string || `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 5px;">
-        <h2 style="color: #2c3e50; text-align: center;">You are invited to the church dedication of</h2>
-        <h1 style="color: #16a085; text-align: center; margin-bottom: 30px;">Jesse Oghenekome George</h1>
-        <p style="text-align: center; font-size: 18px;">at RCCG Church, Champions Cathedral </p>
-        
-        <div style="margin: 30px 0; background-color: #f9f9f9; padding: 15px; border-radius: 5px;">
-          <h3 style="color: #2c3e50; text-align: center; margin-top: 0;">LOCATIONS</h3>
-          <p style="text-align: center; font-weight: bold;">Church Dedication</p>
-          <p style="text-align: center;">RCCG Church, Champions Cathedral</p>
-          <p style="text-align: center;">#16-18 Airport Road, Effurun, Warri Delta</p>
-          <p style="text-align: center;">Nigeria</p>
-          <p style="text-align: center; font-size: 20px; margin: 20px 0;">10:00 AM</p>
-          <p style="text-align: center; font-size: 18px;">Sunday, April 13, 2025</p>
-        </div>
-        
-        <div style="text-align: center; margin: 30px 0;">
-          <p>Your personal registration code is: <strong>{{code}}</strong></p>
-          <p style="margin-bottom: 15px; font-size: 16px;">Click the "Confirm Your Attendance" button below to fill out the form and secure your reservation. This will help us plan accordingly. Attendance is by invitation only, and submitting the completed form will grant you an access code for the event.</p>
-          <p style="margin-bottom: 20px;"><a href="{{link}}" style="color: #4CAF50; text-decoration: underline;">{{link}}</a></p>
-          <a href="{{link}}" style="display: inline-block; background-color: #4CAF50; color: white; padding: 14px 28px; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; text-decoration: none;">
-            Confirm Your Attendance
-          </a>
-        </div>
-        
-        <p style="text-align: center; margin-top: 30px; color: #7f8c8d; font-size: 14px;">We look forward to celebrating this special occasion with you.</p>
-      </div>
-    `
-    const whatsappMessage = formData.get('whatsappMessage') as string || `You're invited to Jesse Oghenekome George's Church Dedication at RCCG Church, Champions Cathedral, #16-18 Airport Road, Effurun, Warri Delta, Nigeria. 10:00 AM, Sunday, April 13, 2025. Your code: {{code}}. Click the link below to complete the form and secure your reservation. This will help us plan accordingly. Attendance is by invitation only, and submitting the completed form will grant you an access code for the event. RSVP: {{link}}`
-    const eventLink = formData.get('eventLink') as string || ''
-    const enableEmail = formData.get('enableEmail') === 'true'
-    const enableWhatsApp = formData.get('enableWhatsApp') === 'true'
+    // Validate inputs
+    if (!recipientsJson || !subject || !message || !eventLink) {
+      return NextResponse.json(
+        { success: false, error: 'Missing required fields' },
+        { status: 400 }
+      );
+    }
+
+    let recipients;
+    try {
+      recipients = JSON.parse(recipientsJson);
+    } catch (error) {
+      console.error('Error parsing recipients JSON:', error);
+      return NextResponse.json(
+        { success: false, error: 'Invalid recipients format' },
+        { status: 400 }
+      );
+    }
+
     const emailImageFile = formData.get('emailImage') as File | null
     
-    const recipientsJson = formData.get('recipients') as string
-    if (!recipientsJson) {
-      return NextResponse.json(
-        { success: false, error: 'No recipients provided' },
-        { status: 400 }
-      )
-    }
-    
-    const recipients = JSON.parse(recipientsJson) as Recipient[]
-    
-    if (!Array.isArray(recipients) || recipients.length === 0) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid recipients data' },
-        { status: 400 }
-      )
-    }
-
-    let emailImageBuffer: Buffer | undefined
-    if (emailImageFile) {
-      const arrayBuffer = await emailImageFile.arrayBuffer()
-      emailImageBuffer = Buffer.from(arrayBuffer)
-    } else {
-      try {
-        const fs = require('fs');
-        const path = require('path');
-        const defaultImagePath = path.join(process.cwd(), 'public', 'jessegeorge.jpg');
-        emailImageBuffer = fs.readFileSync(defaultImagePath);
-        console.log('Using default image: jessegeorge.jpg');
-      } catch (error) {
-        console.error('Error loading default image:', error);
-      }
-    }
-
     const registrationCodes = await getRegistrationCodes()
     console.log(`Found ${registrationCodes.length} registration codes`)
     
@@ -523,6 +506,22 @@ export async function POST(request: Request) {
       )
     }
 
+    let emailImageBuffer: Buffer | undefined
+    if (emailImageFile) {
+      const arrayBuffer = await emailImageFile.arrayBuffer()
+      emailImageBuffer = Buffer.from(arrayBuffer)
+    } else {
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        const defaultImagePath = path.join(process.cwd(), 'public', 'jessegeorge.jpg');
+        emailImageBuffer = fs.readFileSync(defaultImagePath);
+        console.log('Using default image: jessegeorge.jpg');
+      } catch (error) {
+        console.error('Error loading default image:', error);
+      }
+    }
+
     const invitePromises = recipients.map(async (recipient) => {
       try {
         const name = recipient.name || '';
@@ -548,12 +547,12 @@ export async function POST(request: Request) {
 
         if ((type === 'email' || type === 'both') && email && enableEmail) {
           try {
-            const emailSuccess = await sendEmail(email, name, codeValue, emailSubject, emailMessage, eventLink, emailImageBuffer);
+            const emailSuccess = await sendEmail(email, name, codeValue, subject, message, eventLink, emailImageBuffer);
             emailStatus = emailSuccess ? 'sent' : 'failed';
             if (emailSuccess) {
               successfulChannels.push('email');
             } else {
-              errorMessage = 'Email sending failed';
+              errorMessage = (errorMessage ? errorMessage + '; ' : '') + 'Email sending failed';
             }
           } catch (error) {
             console.error(`Failed to send email to ${name}:`, error);
@@ -579,38 +578,39 @@ export async function POST(request: Request) {
           }
         }
 
-        if (successfulChannels.length > 0 || true) {
-          let status = 'pending';
-          if (successfulChannels.length > 0) {
-            status = successfulChannels.length === (type === 'both' ? 2 : 1) ? 'sent' : 'partial';
-            
-            if (status === 'sent' || status === 'partial') {
+        // Always consider the invite as successful if at least one channel worked
+        // or if we want to record the attempt even if all channels failed
+        let status = 'pending';
+        if (successfulChannels.length > 0) {
+          status = successfulChannels.length === (type === 'both' ? 2 : 1) ? 'sent' : 'partial';
+          
+          if (status === 'sent' || status === 'partial') {
+            try {
               await markRegistrationCodeAsUsed(codeValue, 'invite-sent');
+            } catch (markError) {
+              console.error(`Failed to mark code ${codeValue} as used:`, markError);
+              // Continue despite the error
             }
-          } else {
-            status = 'failed';
-            
-            await markRegistrationCodeAsUsed(codeValue, 'available');
           }
-          
-          const invite = await prisma.$queryRaw`
-            INSERT INTO "Invite" (
-              "id", "name", "email", "phone", "sent", "sentAt", "type", 
-              "status", "emailStatus", "whatsappStatus", "whatsappProvider", "errorMessage", "code",
-              "createdAt", "updatedAt"
-            ) 
-            VALUES (
-              ${uuidv4()}, ${name}, ${email}, ${phone}, ${successfulChannels.length > 0}, 
-              ${new Date()}, ${type}, ${status}, ${emailStatus}, ${whatsappStatus}, 
-              ${whatsappProvider}, ${errorMessage}, ${codeValue}, ${new Date()}, ${new Date()}
-            )
-            RETURNING *
-          `
-          
-          return Array.isArray(invite) ? invite[0] : invite
         } else {
-          throw new Error(`No successful channels to send invite to ${name}`)
+          status = 'failed';
         }
+        
+        const invite = await prisma.$queryRaw`
+          INSERT INTO "Invite" (
+            "id", "name", "email", "phone", "sent", "sentAt", "type", 
+            "status", "emailStatus", "whatsappStatus", "whatsappProvider", "errorMessage", "code",
+            "createdAt", "updatedAt"
+          ) 
+          VALUES (
+            ${uuidv4()}, ${name}, ${email}, ${phone}, ${successfulChannels.length > 0}, 
+            ${new Date()}, ${type}, ${status}, ${emailStatus}, ${whatsappStatus}, 
+            ${whatsappProvider}, ${errorMessage}, ${codeValue}, ${new Date()}, ${new Date()}
+          )
+          RETURNING *
+        `
+        
+        return Array.isArray(invite) ? invite[0] : invite
       } catch (error) {
         console.error(`Failed to process invite for ${recipient.name}:`, error)
         return Promise.reject(error)
@@ -682,13 +682,14 @@ export async function POST(request: Request) {
       failureReasons: failures.map(failure => failure.reason)
     })
   } catch (error) {
-    console.error('[POST /api/admin/send-invites] Error:', error)
+    console.error('[POST /api/admin/send-invites] Error:', error);
     return NextResponse.json(
       { 
         success: false, 
-        error: error instanceof Error ? error.message : 'Failed to send invites' 
+        error: error instanceof Error ? error.message : 'Failed to send invites',
+        errorType: error instanceof Error ? error.constructor.name : 'Unknown'
       },
       { status: 500 }
-    )
+    );
   }
 }
