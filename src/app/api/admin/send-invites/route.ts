@@ -419,7 +419,7 @@ export async function POST(request: Request) {
     const session = await getServerSession(authOptions)
     if (!session) {
       console.error('[POST /api/admin/send-invites] Unauthorized access attempt')
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
     }
 
     const formData = await request.formData()
@@ -462,7 +462,7 @@ export async function POST(request: Request) {
     const recipientsJson = formData.get('recipients') as string
     if (!recipientsJson) {
       return NextResponse.json(
-        { error: 'No recipients provided' },
+        { success: false, error: 'No recipients provided' },
         { status: 400 }
       )
     }
@@ -471,7 +471,7 @@ export async function POST(request: Request) {
     
     if (!Array.isArray(recipients) || recipients.length === 0) {
       return NextResponse.json(
-        { error: 'Invalid recipients data' },
+        { success: false, error: 'Invalid recipients data' },
         { status: 400 }
       )
     }
@@ -518,7 +518,7 @@ export async function POST(request: Request) {
     
     if (availableCodes.length < recipients.length) {
       return NextResponse.json(
-        { error: `Not enough registration codes available. Need ${recipients.length}, but only have ${availableCodes.length}` },
+        { success: false, error: `Not enough registration codes available. Need ${recipients.length}, but only have ${availableCodes.length}` },
         { status: 400 }
       )
     }
@@ -640,7 +640,7 @@ export async function POST(request: Request) {
       
       if (failures.length === recipients.length) {
         return NextResponse.json(
-          { error: 'All invites failed to send. Please check your WhatsApp and email configuration.', failures },
+          { success: false, error: 'All invites failed to send. Please check your WhatsApp and email configuration.', failures },
           { status: 500 }
         )
       }
@@ -684,7 +684,10 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('[POST /api/admin/send-invites] Error:', error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to send invites' },
+      { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to send invites' 
+      },
       { status: 500 }
     )
   }

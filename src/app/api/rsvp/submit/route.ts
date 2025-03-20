@@ -243,7 +243,7 @@ export async function POST(request: NextRequest) {
     } catch (txError) {
       console.error('Error in RSVP transaction:', txError);
       return NextResponse.json(
-        { error: 'An error occurred while creating your RSVP' },
+        { success: false, error: 'An error occurred while creating your RSVP' },
         { status: 500 }
       );
     }
@@ -274,8 +274,10 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Error submitting RSVP:', error);
+    
+    // Ensure we're returning a properly formatted JSON response
     return NextResponse.json(
-      { error: 'An error occurred while submitting your RSVP' },
+      { success: false, error: 'An error occurred while submitting your RSVP' },
       { status: 500 }
     );
   }

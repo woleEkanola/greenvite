@@ -52,12 +52,21 @@ export default function RsvpModal({ isOpen, onClose, onSubmit }: RsvpModalProps)
         // Navigate to success page
         window.location.href = '/success'
       } else {
-        const errorData = await response.json();
-        Swal.fire('Error', errorData.error || 'There was an error submitting the form. Please try again.', 'error')
+        // Improved error handling
+        let errorMessage = 'There was an error submitting the form. Please try again.';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch (jsonError) {
+          console.error('Error parsing error response:', jsonError);
+          // If we can't parse the JSON, use the status text
+          errorMessage = `Error (${response.status}): ${response.statusText || errorMessage}`;
+        }
+        Swal.fire('Error', errorMessage, 'error');
       }
     } catch (error) {
-      console.error('Error submitting form:', error)
-      Swal.fire('Error', 'There was an error submitting the form. Please try again.', 'error')
+      console.error('Error submitting form:', error);
+      Swal.fire('Error', 'There was an error submitting the form. Please try again.', 'error');
     } finally {
       setIsSubmitting(false)
     }
