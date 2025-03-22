@@ -4,6 +4,16 @@ import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts'
 import { RefreshCw } from 'lucide-react'
+import Link from 'next/link'
+import { Button } from '@/components/ui/button'
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+} from '@/components/ui/card'
 
 interface DashboardStats {
   totalRsvp: number
@@ -163,7 +173,32 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Charts Section */}
+      <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Ushers</CardTitle>
+            <CardDescription>Manage event ushers and staff</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/admin/dashboard/hosts">
+              <Button className="w-full">View Ushers</Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Souvenirs</CardTitle>
+            <CardDescription>Manage event souvenirs and gifts</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/admin/dashboard/souvenirs">
+              <Button className="w-full">View Souvenirs</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+
       <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Registration Status Chart */}
         <div className="bg-white rounded-lg shadow-md p-6">

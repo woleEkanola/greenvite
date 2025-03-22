@@ -1,0 +1,146 @@
+# Greenvites Development Guide
+
+## Project Overview
+Greenvites is a modern event invitation management system built with Next.js and TypeScript. It provides a comprehensive solution for managing event registrations, access codes, table assignments, and invitation distribution.
+
+## Tech Stack
+- **Frontend**: Next.js 14, React 18, TypeScript
+- **Database**: PostgreSQL with Prisma ORM
+- **Authentication**: NextAuth.js
+- **UI Components**: Tailwind CSS, Headless UI, Radix UI
+- **API**: RESTful API with TypeScript
+- **Email/SMS**: Nodemailer, Africa's Talking
+- **PDF Generation**: PDFKit
+- **Notifications**: SweetAlert2, Sonner
+
+## Key Features
+
+### 1. RSVP System
+- Registration code validation
+- Multi-step verification process
+- Guest, driver, and aide management
+- Email/SMS invitation system
+- Custom event routing (e.g., jessegeorge.greenvites.online)
+
+### 2. Admin Dashboard
+- User authentication and role-based access
+- RSVP management
+- Access code generation and tracking
+- Table assignment system
+- Invitation sending system
+- Statistics and analytics
+
+### 3. Table Management
+- Table creation and management
+- Capacity-based seating
+- Color-coded tables
+- Access code assignment
+- Real-time status updates
+
+## Project Structure
+```
+src/
+├── app/                    # Next.js App Router
+│   ├── api/               # API routes
+│   │   ├── admin/        # Admin API endpoints
+│   │   │   ├── tables/   # Table management
+│   │   │   ├── rsvps/   # RSVP management
+│   │   │   └── invites/ # Invitation system
+│   │   └── auth/        # Authentication endpoints
+│   └── admin/            # Admin dashboard pages
+├── components/           # Reusable React components
+├── lib/                  # Utility functions and configurations
+└── types/               # TypeScript type definitions
+```
+
+## Important Notes
+
+### 1. Database Schema
+- Uses Prisma ORM with PostgreSQL
+- Key models: User, Table, AccessCode, Rsvp, RegistrationCode, Invite
+- Relational structure for RSVPs and access codes
+- Table assignment system with capacity constraints
+
+### 2. Authentication
+- NextAuth.js implementation
+- Role-based access control
+- Protected admin routes
+- Custom middleware for route protection
+
+### 3. Environment Variables
+- Requires proper configuration in `.env` file
+- Includes database URL, email/SMS credentials
+- API keys for external services
+
+## Potential Improvements
+
+1. **Performance**
+   - Implement pagination for large datasets
+   - Add caching for frequently accessed data
+   - Optimize database queries
+
+2. **Security**
+   - Implement rate limiting for API endpoints
+   - Add input validation middleware
+   - Enhance password security
+
+3. **Features**
+   - Add export functionality for RSVP data
+   - Implement bulk actions for access codes
+   - Add more detailed analytics
+   - Improve mobile responsiveness
+
+4. **Code Quality**
+   - Add more unit tests
+   - Implement E2E testing
+   - Add better error handling
+   - Improve TypeScript types
+
+## Deployment
+
+1. **Local Development**
+```bash
+# Install dependencies
+npm install
+
+# Generate Prisma client
+npm run prisma:generate
+
+# Run development server
+npm run dev
+```
+
+2. **Production Deployment**
+- Uses Vercel for deployment
+- Requires proper environment variable configuration
+- Uses postinstall script for Prisma client generation
+
+## Common Issues and Fixes
+
+1. **TypeScript Errors**
+   - Ensure Prisma client is properly generated
+   - Check model names in API routes
+   - Verify schema migrations
+
+2. **Authentication Issues**
+   - Check session configuration
+   - Verify middleware implementation
+   - Ensure proper role checks
+
+3. **Database Connection**
+   - Verify DATABASE_URL in .env
+   - Check Prisma schema for changes
+   - Run migrations if needed
+
+## Contributing
+
+1. Create a feature branch
+2. Implement changes
+3. Run tests
+4. Submit pull request
+
+## License
+[Add license information here]
+
+## Contact
+[Add contact information here]

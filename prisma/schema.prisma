@@ -18,21 +18,23 @@ model User {
   updatedAt DateTime @updatedAt
 }
 
-model RegistrationCode {
-  id        String    @id @default(cuid())
-  code      String    @unique
-  used      Boolean   @default(false)
-  usedAt    DateTime?
-  status    String    @default("available")
-  createdAt DateTime  @default(now())
-  invite    Invite?
-  rsvp      Rsvp?
+model Table {
+  id          String       @id @default(cuid())
+  name        String
+  capacity    Int
+  color       String       @default("#000000")
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  accessCodes AccessCode[]
+  hosts       Host[]       @relation("HostToTable")
+  souvenirs   SouvenirAssignment[]
 }
 
 model AccessCode {
   id         String    @id @default(cuid())
   code       String    @unique
-  type       String    // primary/guest/driver/aide
+  rsvpId     String
+  type       String
   name       String
   isAdmitted Boolean   @default(false)
   admittedAt DateTime?
@@ -41,22 +43,9 @@ model AccessCode {
   isSent     Boolean   @default(false)
   sentAt     DateTime?
   tableId    String?
-  rsvpId     String    // Points to the main RSVP this access code belongs to
   rsvp       Rsvp      @relation(fields: [rsvpId], references: [id])
   table      Table?    @relation(fields: [tableId], references: [id])
   souvenirs  SouvenirAssignment[]
-}
-
-model Table {
-  id          String      @id @default(cuid())
-  name        String
-  capacity    Int
-  color       String   @default("#000000")
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  accessCodes AccessCode[]
-  hosts       Host[]      @relation("HostToTable")
-  souvenirs   SouvenirAssignment[]
 }
 
 model Rsvp {
@@ -70,8 +59,19 @@ model Rsvp {
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
   phone            String?
-  accessCodes      AccessCode[]     // All access codes associated with this RSVP
+  accessCodes      AccessCode[]
   registrationCode RegistrationCode @relation(fields: [codeId], references: [id])
+}
+
+model RegistrationCode {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  used      Boolean   @default(false)
+  usedAt    DateTime?
+  status    String    @default("available")
+  createdAt DateTime  @default(now())
+  invite    Invite?
+  rsvp      Rsvp?
 }
 
 model Invite {
@@ -99,14 +99,14 @@ model Invite {
 }
 
 model Batch {
-  id            String    @id @default(cuid())
+  id            String   @id @default(cuid())
   name          String?
-  status        String    @default("pending")
-  totalInvites  Int       @default(0)
-  sentInvites   Int       @default(0)
-  failedInvites Int       @default(0)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  status        String   @default("pending")
+  totalInvites  Int      @default(0)
+  sentInvites   Int      @default(0)
+  failedInvites Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
   invites       Invite[]
 }
 
@@ -139,7 +139,6 @@ model SouvenirAssignment {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   
-  // Assignment can be to a host, table, or access code
   hostId      String?
   host        Host?    @relation(fields: [hostId], references: [id])
   tableId     String?
@@ -147,7 +146,6 @@ model SouvenirAssignment {
   accessCodeId String?
   accessCode  AccessCode? @relation(fields: [accessCodeId], references: [id])
   
-  // The souvenir being assigned
   souvenirId  String
   souvenir    Souvenir @relation(fields: [souvenirId], references: [id])
 

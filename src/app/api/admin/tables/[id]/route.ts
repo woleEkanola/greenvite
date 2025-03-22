@@ -40,7 +40,49 @@ export async function GET(
             )
           ELSE NULL
           END
-        ) FILTER (WHERE ac.id IS NOT NULL) as "accessCodes"
+        ) FILTER (WHERE ac.id IS NOT NULL) as "accessCodes",
+        (
+          SELECT json_agg(
+            json_build_object(
+              'id', h.id,
+              'name', h.name,
+              'email', h.email,
+              'phone', h.phone,
+              'role', h.role
+            )
+          )
+          FROM "Host" h
+          JOIN "_HostToTable" ht ON h.id = ht."A"
+          WHERE ht."B" = t.id
+        ) as hosts,
+        (
+          SELECT json_agg(
+            json_build_object(
+              'id', sa.id,
+              'quantity', sa.quantity,
+              'souvenir', json_build_object(
+                'id', s.id,
+                'name', s.name,
+                'description', s.description,
+                'image', s.image,
+                'quantity', s.quantity
+              ),
+              'host', CASE WHEN h.id IS NOT NULL THEN
+                json_build_object(
+                  'id', h.id,
+                  'name', h.name,
+                  'email', h.email,
+                  'phone', h.phone,
+                  'role', h.role
+                )
+              ELSE NULL END
+            )
+          )
+          FROM "SouvenirAssignment" sa
+          JOIN "Souvenir" s ON sa."souvenirId" = s.id
+          LEFT JOIN "Host" h ON sa."hostId" = h.id
+          WHERE sa."tableId" = t.id
+        ) as souvenirs
       FROM "Table" t
       LEFT JOIN "AccessCode" ac ON ac."tableId" = t.id
       LEFT JOIN "Rsvp" r ON ac."rsvpId" = r.id
@@ -52,7 +94,15 @@ export async function GET(
       return NextResponse.json({ error: 'Table not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, table: table[0] });
+    // Ensure hosts and souvenirs are empty arrays if null
+    const tableData = {
+      ...table[0],
+      hosts: table[0].hosts || [],
+      souvenirs: table[0].souvenirs || [],
+      accessCodes: table[0].accessCodes || []
+    };
+
+    return NextResponse.json({ success: true, table: tableData });
   } catch (error) {
     console.error('Error fetching table:', error);
     return NextResponse.json(
