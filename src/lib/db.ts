@@ -623,14 +623,14 @@ export async function getPendingInvites() {
   try {
     const invites = await prismaClient.invite.findMany({
       where: {
-        batch: {
+        Batch: {
           status: {
             not: 'sent'
           }
         }
       },
       include: {
-        batch: true,
+        Batch: true,
       },
       orderBy: {
         createdAt: 'desc',

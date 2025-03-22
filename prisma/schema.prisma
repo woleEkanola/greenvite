@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -13,79 +7,147 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Admin users for the dashboard
 model User {
   id        String   @id @default(cuid())
   username  String   @unique
-  password  String   // Will store hashed password
-  role      String   @default("admin") // "superadmin" or "admin"
+  password  String
+  role      String   @default("admin")
   email     String?  @unique
   name      String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
-// Registration codes for RSVP
+model Table {
+  id          String       @id @default(cuid())
+  name        String
+  capacity    Int
+  color       String       @default("#000000")
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  accessCodes AccessCode[]
+  hosts       Host[]       @relation("HostToTable")
+  souvenirs   SouvenirAssignment[]
+}
+
+model AccessCode {
+  id         String    @id @default(cuid())
+  code       String    @unique
+  rsvpId     String
+  type       String
+  name       String
+  isAdmitted Boolean   @default(false)
+  admittedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  isSent     Boolean   @default(false)
+  sentAt     DateTime?
+  tableId    String?
+  rsvp       Rsvp      @relation(fields: [rsvpId], references: [id])
+  table      Table?    @relation(fields: [tableId], references: [id])
+  souvenirs  SouvenirAssignment[]
+}
+
+model Rsvp {
+  id               String           @id @default(cuid())
+  name             String
+  email            String
+  hasGuest         Boolean          @default(false)
+  hasDriver        Boolean          @default(false)
+  hasAide          Boolean          @default(false)
+  codeId           String           @unique
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  phone            String?
+  accessCodes      AccessCode[]
+  registrationCode RegistrationCode @relation(fields: [codeId], references: [id])
+}
+
 model RegistrationCode {
   id        String    @id @default(cuid())
   code      String    @unique
   used      Boolean   @default(false)
   usedAt    DateTime?
-  status    String    @default("available") // "available", "pending", "used", "canceled"
+  status    String    @default("available")
   createdAt DateTime  @default(now())
-  rsvp      Rsvp?     // Relation to RSVP if code is used
-  invite    Invite?   // Relation to Invite if code is assigned to an invite
+  invite    Invite?
+  rsvp      Rsvp?
 }
 
-// RSVP responses
-model Rsvp {
-  id                String          @id @default(cuid())
-  name             String
-  email            String
-  phone            String?
-  hasGuest         Boolean         @default(false)
-  hasDriver        Boolean         @default(false)
-  hasAide          Boolean         @default(false)
-  registrationCode RegistrationCode @relation(fields: [codeId], references: [id])
-  codeId           String          @unique
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
-}
-
-// Sent invites tracking
 model Invite {
-  id                String   @id @default(cuid())
-  name              String
-  email             String?
-  phone             String?
-  sent              Boolean  @default(true)
-  sentAt            DateTime @default(now())
-  type              String   // "email", "sms", or "both"
-  status            String   // "sent", "delivered", "failed", "pending", "canceled"
-  whatsappStatus    String? // "sent", "delivered", "failed", "pending"
-  whatsappProvider   String? // "whatsapp_api", "another_provider"
-  emailStatus       String? // "sent", "delivered", "failed", "pending"
-  smsStatus         String? // "sent", "delivered", "failed", "pending"
-  smsProvider       String? // "africas_talking", "termii"
-  errorMessage      String? // Error message if any
-  code              String?  // The registration code text
-  registrationCode  RegistrationCode? @relation(fields: [registrationCodeId], references: [id])
-  registrationCodeId String? @unique
-  batch             Batch?   @relation(fields: [batchId], references: [id])
-  batchId           String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id                 String            @id @default(cuid())
+  name               String
+  email              String?
+  phone              String?
+  sent               Boolean           @default(true)
+  sentAt             DateTime          @default(now())
+  type               String
+  status             String
+  emailStatus        String?
+  smsStatus          String?
+  smsProvider        String?
+  errorMessage       String?
+  code               String?
+  registrationCodeId String?           @unique
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  whatsappStatus     String?
+  whatsappProvider   String?
+  batchId            String?
+  Batch              Batch?            @relation(fields: [batchId], references: [id])
+  registrationCode   RegistrationCode? @relation(fields: [registrationCodeId], references: [id])
 }
 
-// Batch of invites sent at the same time
 model Batch {
+  id            String   @id @default(cuid())
+  name          String?
+  status        String   @default("pending")
+  totalInvites  Int      @default(0)
+  sentInvites   Int      @default(0)
+  failedInvites Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  invites       Invite[]
+}
+
+model Host {
   id          String   @id @default(cuid())
-  name        String?  // Optional name for the batch
-  status      String   @default("pending") // "pending", "sent", "failed"
-  totalInvites Int     @default(0)
-  sentInvites  Int     @default(0)
-  failedInvites Int    @default(0)
-  invites     Invite[]
+  name        String
+  email       String   @unique
+  phone       String?
+  role        String   @default("host") // host or hostess
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  tables      Table[]  @relation("HostToTable")
+  souvenirs   SouvenirAssignment[]
+}
+
+model Souvenir {
+  id          String   @id @default(cuid())
+  name        String
+  description String?  @db.Text
+  image       String?
+  quantity    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  assignments SouvenirAssignment[]
+}
+
+model SouvenirAssignment {
+  id          String   @id @default(cuid())
+  quantity    Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  hostId      String?
+  host        Host?    @relation(fields: [hostId], references: [id])
+  tableId     String?
+  table       Table?   @relation(fields: [tableId], references: [id])
+  accessCodeId String?
+  accessCode  AccessCode? @relation(fields: [accessCodeId], references: [id])
+  
+  souvenirId  String
+  souvenir    Souvenir @relation(fields: [souvenirId], references: [id])
+
+  @@unique([souvenirId, hostId, tableId, accessCodeId])
 }

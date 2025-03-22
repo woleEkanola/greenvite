@@ -20,6 +20,7 @@ interface DataTableProps<T> {
     totalItems: number;
     onPageChange: (page: number) => void;
   };
+  onSearch?: (value: string) => void;
 }
 
 export default function DataTable<T>({
@@ -32,51 +33,52 @@ export default function DataTable<T>({
   customHeader,
   useServerPagination = false,
   serverPaginationInfo,
+  onSearch
 }: DataTableProps<T>) {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [filteredData, setFilteredData] = useState<T[]>(data);
 
-  // Update filtered data when search term or data changes
+  // Update filtered data when data changes
   useEffect(() => {
-    if (!useServerPagination) {
-      if (searchTerm.trim() === '') {
-        setFilteredData(data);
-      } else {
-        // Create a stable reference to searchable columns
-        const searchableColumns = columns.filter(column => column.searchable !== false);
-        
-        const filtered = data.filter(item => {
-          return searchableColumns.some(column => {
-            if (typeof column.accessor === 'function') {
-              // Skip function accessors for searching
-              return false;
-            }
-            
-            const value = item[column.accessor as keyof T];
-            if (value === null || value === undefined) return false;
-            
-            return String(value).toLowerCase().includes(searchTerm.toLowerCase());
-          });
-        });
-        
-        setFilteredData(filtered);
-      }
-      
-      // Reset to first page when search changes
-      setCurrentPage(1);
-    } else {
-      // When using server pagination, just use the data as is
-      setFilteredData(data);
+    setFilteredData(data);
+  }, [data]);
+
+  // Handle search
+  const handleSearch = (value: string) => {
+    setSearchTerm(value);
+    
+    if (useServerPagination && onSearch) {
+      onSearch(value);
+      return;
     }
-  }, [searchTerm, data, useServerPagination]);
-  
-  // Handle column changes separately to avoid infinite re-renders
-  useEffect(() => {
-    // This effect only runs when columns change
-    // It doesn't need to do anything, just ensures we're aware of column changes
-    // without causing re-renders in the main data filtering effect
-  }, [columns]);
+
+    if (value.trim() === '') {
+      setFilteredData(data);
+    } else {
+      // Create a stable reference to searchable columns
+      const searchableColumns = columns.filter(column => column.searchable !== false);
+      
+      const filtered = data.filter(item => {
+        return searchableColumns.some(column => {
+          if (typeof column.accessor === 'function') {
+            // Skip function accessors for searching
+            return false;
+          }
+          
+          const value = item[column.accessor as keyof T];
+          if (value === null || value === undefined) return false;
+          
+          return String(value).toLowerCase().includes(searchTerm.toLowerCase());
+        });
+      });
+      
+      setFilteredData(filtered);
+    }
+    
+    // Reset to first page when search changes
+    setCurrentPage(1);
+  };
 
   // Calculate pagination for client-side
   const totalPages = useServerPagination 
@@ -116,26 +118,8 @@ export default function DataTable<T>({
   return (
     <div className={`w-full ${className}`}>
       {/* Custom Header */}
-      {customHeader && (
-        <div className="mb-4">
-          {customHeader}
-        </div>
-      )}
+      {customHeader}
       
-      {/* Search bar */}
-      <div className="mb-4 relative">
-        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <Search className="h-5 w-5 text-gray-400" />
-        </div>
-        <input
-          type="text"
-          placeholder={searchPlaceholder}
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10 w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
-        />
-      </div>
-
       {/* Table */}
       <div className="bg-white shadow-md rounded-lg overflow-hidden">
         <table className="min-w-full divide-y divide-gray-200">
@@ -200,46 +184,19 @@ export default function DataTable<T>({
               disabled={displayCurrentPage === 1}
               className={`px-3 py-1 rounded-md ${
                 displayCurrentPage === 1
-                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                  : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border'
               }`}
             >
               Previous
             </button>
-            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-              // Show pages around current page
-              let pageNum;
-              if (totalPages <= 5) {
-                pageNum = i + 1;
-              } else if (displayCurrentPage <= 3) {
-                pageNum = i + 1;
-              } else if (displayCurrentPage >= totalPages - 2) {
-                pageNum = totalPages - 4 + i;
-              } else {
-                pageNum = displayCurrentPage - 2 + i;
-              }
-              
-              return (
-                <button
-                  key={i}
-                  onClick={() => goToPage(pageNum)}
-                  className={`px-3 py-1 rounded-md ${
-                    displayCurrentPage === pageNum
-                      ? "bg-emerald-500 text-white"
-                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                  }`}
-                >
-                  {pageNum}
-                </button>
-              );
-            })}
             <button
               onClick={() => goToPage(displayCurrentPage + 1)}
               disabled={displayCurrentPage === totalPages}
               className={`px-3 py-1 rounded-md ${
                 displayCurrentPage === totalPages
-                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                  : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border'
               }`}
             >
               Next
