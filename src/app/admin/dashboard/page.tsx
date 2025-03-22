@@ -173,31 +173,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Ushers</CardTitle>
-            <CardDescription>Manage event ushers and staff</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/admin/dashboard/hosts">
-              <Button className="w-full">View Ushers</Button>
-            </Link>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Souvenirs</CardTitle>
-            <CardDescription>Manage event souvenirs and gifts</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/admin/dashboard/souvenirs">
-              <Button className="w-full">View Souvenirs</Button>
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
 
       <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Registration Status Chart */}

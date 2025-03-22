@@ -46,8 +46,8 @@ export default function AdminLogin() {
             <Image
               src="/greenvites.png"
               alt="Greenvites Logo"
-              width={180}
-              height={60}
+              width={60}
+              height={20}
               className="h-auto"
               priority
             />
