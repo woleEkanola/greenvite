@@ -22,7 +22,7 @@ export async function POST(req: Request) {
     }
 
     // Get access codes with RSVP details
-    const accessCodes = await prisma.AccessCode.findMany({
+    const accessCodes = await prisma.accessCode.findMany({
       where: {
         id: { in: codeIds },
         isSent: false
@@ -53,7 +53,7 @@ export async function POST(req: Request) {
         });
 
         // Mark code as sent
-        const updatedCode = await prisma.AccessCode.update({
+        const updatedCode = await prisma.accessCode.update({
           where: { id: code.id },
           data: {
             isSent: true,

@@ -21,7 +21,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { toast } from '@/components/ui/use-toast';
+import Swal from 'sweetalert2';
+
 
 interface Souvenir {
   id: string;
@@ -55,10 +56,10 @@ export default function SouvenirsPage() {
       setSouvenirs(data);
     } catch (error) {
       console.error('Error:', error);
-      toast({
+      Swal.fire({
         title: 'Error',
-        description: 'Failed to fetch souvenirs',
-        variant: 'destructive',
+        text: 'Failed to fetch souvenirs',
+        icon: 'error',
       });
     }
   };
@@ -79,9 +80,10 @@ export default function SouvenirsPage() {
 
       if (!response.ok) throw new Error('Failed to save souvenir');
 
-      toast({
+      Swal.fire({
         title: 'Success',
-        description: `Souvenir ${editingSouvenir ? 'updated' : 'created'} successfully`,
+        text: `Souvenir ${editingSouvenir ? 'updated' : 'created'} successfully`,
+        icon: 'success',
       });
 
       setIsOpen(false);
@@ -90,10 +92,10 @@ export default function SouvenirsPage() {
       fetchSouvenirs();
     } catch (error) {
       console.error('Error:', error);
-      toast({
+      Swal.fire({
         title: 'Error',
-        description: 'Failed to save souvenir',
-        variant: 'destructive',
+        text: 'Failed to save souvenir',
+        icon: 'error',
       });
     }
   };
@@ -119,18 +121,19 @@ export default function SouvenirsPage() {
 
       if (!response.ok) throw new Error('Failed to delete souvenir');
 
-      toast({
+      Swal.fire({
         title: 'Success',
-        description: 'Souvenir deleted successfully',
+        text: 'Souvenir deleted successfully',
+        icon: 'success',
       });
 
       fetchSouvenirs();
     } catch (error) {
       console.error('Error:', error);
-      toast({
+      Swal.fire({
         title: 'Error',
-        description: 'Failed to delete souvenir',
-        variant: 'destructive',
+        text: 'Failed to delete souvenir',
+        icon: 'error',
       });
     }
   };

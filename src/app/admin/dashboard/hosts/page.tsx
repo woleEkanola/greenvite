@@ -21,7 +21,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { toast } from '@/components/ui/use-toast';
+import Swal from 'sweetalert2';
 
 interface Host {
   id: string;
@@ -55,10 +55,10 @@ export default function HostsPage() {
       setHosts(data);
     } catch (error) {
       console.error('Error:', error);
-      toast({
+      Swal.fire({
         title: 'Error',
-        description: 'Failed to fetch hosts',
-        variant: 'destructive',
+        text: 'Failed to fetch hosts',
+        icon: 'error',
       });
     }
   };
@@ -79,9 +79,9 @@ export default function HostsPage() {
 
       if (!response.ok) throw new Error('Failed to save host');
 
-      toast({
+      Swal.fire({
         title: 'Success',
-        description: `Host ${editingHost ? 'updated' : 'created'} successfully`,
+        text: `Host ${editingHost ? 'updated' : 'created'} successfully`,
       });
 
       setIsOpen(false);
@@ -90,10 +90,10 @@ export default function HostsPage() {
       fetchHosts();
     } catch (error) {
       console.error('Error:', error);
-      toast({
+      Swal.fire({
         title: 'Error',
-        description: 'Failed to save host',
-        variant: 'destructive',
+        text: 'Failed to save host',
+        icon: 'error',
       });
     }
   };
@@ -117,20 +117,20 @@ export default function HostsPage() {
         method: 'DELETE',
       });
 
-      if (!response.ok) throw new Error('Failed to delete host');
+      if (!response.ok) throw new Error('Failed to delete usher');
 
-      toast({
+      Swal.fire({
         title: 'Success',
-        description: 'Host deleted successfully',
+        text: 'Usher deleted successfully',
       });
 
       fetchHosts();
     } catch (error) {
       console.error('Error:', error);
-      toast({
+      Swal.fire({
         title: 'Error',
-        description: 'Failed to delete host',
-        variant: 'destructive',
+        text: 'Failed to delete usher',
+        icon: 'error',
       });
     }
   };
@@ -138,19 +138,19 @@ export default function HostsPage() {
   return (
     <div className="container mx-auto p-6">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Hosts</h1>
+        <h1 className="text-3xl font-bold">Ushers</h1>
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
           <DialogTrigger asChild>
             <Button onClick={() => {
               setEditingHost(null);
               setFormData({ name: '', email: '', phone: '', role: 'host' });
             }}>
-              Add Host
+              Add Usher
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>{editingHost ? 'Edit Host' : 'Add New Host'}</DialogTitle>
+              <DialogTitle>{editingHost ? 'Edit Usher' : 'Add New Usher'}</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
@@ -187,24 +187,6 @@ export default function HostsPage() {
                   }
                 />
               </div>
-              <div>
-                <Label htmlFor="role">Role</Label>
-                <Select
-                  value={formData.role}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, role: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="host">Host</SelectItem>
-                    <SelectItem value="staff">Staff</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
               <Button type="submit" className="w-full">
                 {editingHost ? 'Update' : 'Create'}
               </Button>
@@ -214,43 +196,47 @@ export default function HostsPage() {
       </div>
 
       <div className="border rounded-lg">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Phone</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {hosts.map((host) => (
-              <TableRow key={host.id}>
-                <TableCell>{host.name}</TableCell>
-                <TableCell>{host.email}</TableCell>
-                <TableCell>{host.phone}</TableCell>
-                <TableCell className="capitalize">{host.role}</TableCell>
-                <TableCell className="text-right space-x-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleEdit(host)}
-                  >
-                    Edit
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => handleDelete(host.id)}
-                  >
-                    Delete
-                  </Button>
-                </TableCell>
+        {hosts.length === 0 ? (
+          <p className="text-center p-4">No Ushers found.</p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Phone</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {hosts.map((host) => (
+                <TableRow key={host.id}>
+                  <TableCell>{host.name}</TableCell>
+                  <TableCell>{host.email}</TableCell>
+                  <TableCell>{host.phone}</TableCell>
+                  <TableCell className="capitalize">{host.role}</TableCell>
+                  <TableCell className="text-right space-x-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleEdit(host)}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => handleDelete(host.id)}
+                    >
+                      Delete
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
       </div>
     </div>
   );
