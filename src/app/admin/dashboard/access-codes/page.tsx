@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { format } from 'date-fns';
-import { Search, UserCheck, RefreshCw, Send, Filter } from 'lucide-react';
+import { Search, UserCheck, RefreshCw, Send, Filter, X } from 'lucide-react';
 import { useSession } from 'next-auth/react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 interface AccessCode {
   id: string;
@@ -15,10 +16,20 @@ interface AccessCode {
   admittedAt: string | null;
   isSent: boolean;
   sentAt: string | null;
+  tableId: string | null;
+  table: {
+    id: string;
+    name: string;
+    capacity: number;
+  } | null;
   rsvp: {
+    id: string;
     name: string;
     email: string;
     phone: string | null;
+    hasGuest: boolean;
+    hasDriver: boolean;
+    hasAide: boolean;
   };
 }
 
@@ -32,6 +43,7 @@ export default function AccessCodesPage() {
   const [sentFilter, setSentFilter] = useState<'all' | 'sent' | 'not-sent'>('all');
   const [selectedCodes, setSelectedCodes] = useState<string[]>([]);
   const [filteredCodes, setFilteredCodes] = useState<AccessCode[]>([]);
+  const [selectedGuest, setSelectedGuest] = useState<AccessCode | null>(null);
 
   // Fetch access codes
   const fetchAccessCodes = async () => {
@@ -221,6 +233,82 @@ export default function AccessCodesPage() {
         </div>
       </div>
 
+      {/* Guest Details Modal */}
+      <Dialog open={!!selectedGuest} onOpenChange={(open) => !open && setSelectedGuest(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Guest Details</DialogTitle>
+          </DialogHeader>
+          {selectedGuest && (
+            <div className="space-y-4">
+              <div>
+                <h3 className="font-medium">Name</h3>
+                <p>{selectedGuest.rsvp.name}</p>
+              </div>
+              <div>
+                <h3 className="font-medium">Email</h3>
+                <p>{selectedGuest.rsvp.email}</p>
+              </div>
+              {selectedGuest.rsvp.phone && (
+                <div>
+                  <h3 className="font-medium">Phone</h3>
+                  <p>{selectedGuest.rsvp.phone}</p>
+                </div>
+              )}
+              <div>
+                <h3 className="font-medium">Access Code</h3>
+                <p className="font-mono">{selectedGuest.code}</p>
+              </div>
+              <div>
+                <h3 className="font-medium">Type</h3>
+                <span className={`inline-block px-2 py-1 text-xs rounded-full ${
+                  selectedGuest.type === 'primary' ? 'bg-blue-100 text-blue-800' :
+                  selectedGuest.type === 'guest' ? 'bg-purple-100 text-purple-800' :
+                  selectedGuest.type === 'driver' ? 'bg-orange-100 text-orange-800' :
+                  'bg-teal-100 text-teal-800'
+                }`}>
+                  {selectedGuest.type}
+                </span>
+              </div>
+              <div>
+                <h3 className="font-medium">Table Assignment</h3>
+                <p>{selectedGuest.table?.name || 'Not assigned'}</p>
+              </div>
+              <div>
+                <h3 className="font-medium">Status</h3>
+                <div className="space-y-1">
+                  {selectedGuest.isSent && (
+                    <div className="flex items-center gap-1 text-blue-600">
+                      <Send className="w-4 h-4" />
+                      <span>Sent on {format(new Date(selectedGuest.sentAt!), 'MMM d, yyyy HH:mm')}</span>
+                    </div>
+                  )}
+                  {selectedGuest.isAdmitted && (
+                    <div className="flex items-center gap-1 text-green-600">
+                      <UserCheck className="w-4 h-4" />
+                      <span>Admitted on {format(new Date(selectedGuest.admittedAt!), 'MMM d, yyyy HH:mm')}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="mt-6 flex justify-end">
+                <button
+                  onClick={() => {
+                    admitVisitor(selectedGuest.code);
+                    setSelectedGuest(null);
+                  }}
+                  disabled={selectedGuest.isAdmitted}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 
+                    disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {selectedGuest.isAdmitted ? 'Already Admitted' : 'Admit Guest'}
+                </button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Search and Filter Bar */}
       <div className="mb-6 flex gap-4">
         <div className="relative flex-1">
@@ -252,31 +340,30 @@ export default function AccessCodesPage() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   <input
                     type="checkbox"
-                    checked={selectedCodes.length === filteredCodes.length && filteredCodes.length > 0}
+                    checked={selectedCodes.length === filteredCodes.length}
                     onChange={toggleAllCodes}
-                    className="rounded border-gray-300 text-green-600 
-                      focus:ring-green-500"
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   />
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Access Code
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Name
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Type
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  RSVP Details
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Name
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Email
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Table
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
@@ -284,8 +371,10 @@ export default function AccessCodesPage() {
             <tbody className="bg-white divide-y divide-gray-200">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
-                    Loading...
+                  <td colSpan={7} className="px-6 py-4 text-center">
+                    <div className="flex justify-center">
+                      <RefreshCw className="w-6 h-6 animate-spin text-gray-400" />
+                    </div>
                   </td>
                 </tr>
               ) : filteredCodes.length === 0 ? (
@@ -296,25 +385,21 @@ export default function AccessCodesPage() {
                 </tr>
               ) : (
                 filteredCodes.map((code) => (
-                  <tr key={code.id}>
-                    <td className="px-6 py-4">
+                  <tr
+                    key={code.id}
+                    className="hover:bg-gray-50 cursor-pointer"
+                    onClick={() => setSelectedGuest(code)}
+                  >
+                    <td className="px-6 py-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
                         checked={selectedCodes.includes(code.id)}
                         onChange={() => toggleCodeSelection(code.id)}
-                        disabled={code.isSent}
-                        className="rounded border-gray-300 text-green-600 
-                          focus:ring-green-500 disabled:opacity-50"
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                       />
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-mono">
-                      {code.code}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      {code.name}
-                    </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs rounded-full ${
+                      <span className={`inline-block px-2 py-1 text-xs rounded-full ${
                         code.type === 'primary' ? 'bg-blue-100 text-blue-800' :
                         code.type === 'guest' ? 'bg-purple-100 text-purple-800' :
                         code.type === 'driver' ? 'bg-orange-100 text-orange-800' :
@@ -323,51 +408,41 @@ export default function AccessCodesPage() {
                         {code.type}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-sm">
-                      <div>
-                        <div className="font-medium">{code.rsvp.name}</div>
-                        <div className="text-gray-500">{code.rsvp.email}</div>
-                        {code.rsvp.phone && (
-                          <div className="text-gray-500">{code.rsvp.phone}</div>
-                        )}
-                      </div>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {code.rsvp.name}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {code.rsvp.email}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {code.table?.name || 'Not assigned'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="space-y-1">
-                        {code.isSent ? (
-                          <div>
-                            <span className="text-blue-600 flex items-center gap-1">
-                              <Send className="w-4 h-4" />
-                              Sent
-                            </span>
-                            <span className="text-xs text-gray-500">
-                              {format(new Date(code.sentAt!), 'MMM d, yyyy HH:mm')}
-                            </span>
+                        {code.isSent && (
+                          <div className="flex items-center gap-1 text-blue-600">
+                            <Send className="w-4 h-4" />
+                            <span className="text-xs">Sent</span>
                           </div>
-                        ) : (
-                          <span className="text-gray-500">Not sent</span>
                         )}
                         {code.isAdmitted && (
-                          <div>
-                            <span className="text-green-600 flex items-center gap-1">
-                              <UserCheck className="w-4 h-4" />
-                              Admitted
-                            </span>
-                            <span className="text-xs text-gray-500">
-                              {format(new Date(code.admittedAt!), 'MMM d, yyyy HH:mm')}
-                            </span>
+                          <div className="flex items-center gap-1 text-green-600">
+                            <UserCheck className="w-4 h-4" />
+                            <span className="text-xs">Admitted</span>
                           </div>
                         )}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <button
-                        onClick={() => admitVisitor(code.code)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          admitVisitor(code.code);
+                        }}
                         disabled={code.isAdmitted}
-                        className="px-3 py-1 bg-green-600 text-white text-sm rounded-lg
-                          hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="text-green-600 hover:text-green-900 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        {code.isAdmitted ? 'Admitted' : 'Admit'}
+                        Admit
                       </button>
                     </td>
                   </tr>

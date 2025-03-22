@@ -1,64 +1,53 @@
 import React from 'react'
 
-interface TableProps {
-  className?: string
+interface TableProps extends React.TableHTMLAttributes<HTMLTableElement> {
   children: React.ReactNode
 }
 
-export function Table({ className = '', children }: TableProps) {
+export function Table({ className = '', ...props }: TableProps) {
   return (
     <div className="w-full overflow-auto">
-      <table className={`w-full caption-bottom text-sm ${className}`}>
-        {children}
-      </table>
+      <table
+        className={`w-full caption-bottom text-sm ${className}`}
+        {...props}
+      />
     </div>
   )
 }
 
-export function TableHeader({ className = '', children }: TableProps) {
+export function TableHeader({ className = '', ...props }: React.ThHTMLAttributes<HTMLTableSectionElement>) {
   return (
-    <thead className={`border-b bg-gray-50 ${className}`}>
-      {children}
-    </thead>
+    <thead className={`border-b bg-gray-50/50 ${className}`} {...props} />
   )
 }
 
-export function TableBody({ className = '', children }: TableProps) {
+export function TableBody({ className = '', ...props }: React.HTMLAttributes<HTMLTableSectionElement>) {
+  return <tbody className={`[&_tr:last-child]:border-0 ${className}`} {...props} />
+}
+
+export function TableRow({ className = '', ...props }: React.HTMLAttributes<HTMLTableRowElement>) {
   return (
-    <tbody className={`divide-y ${className}`}>
-      {children}
-    </tbody>
+    <tr
+      className={`border-b transition-colors hover:bg-gray-50/50 data-[state=selected]:bg-gray-50 ${className}`}
+      {...props}
+    />
   )
 }
 
-export function TableFooter({ className = '', children }: TableProps) {
+export function TableHead({ className = '', ...props }: React.ThHTMLAttributes<HTMLTableCellElement>) {
   return (
-    <tfoot className={`border-t bg-gray-50 font-medium ${className}`}>
-      {children}
-    </tfoot>
+    <th
+      className={`h-12 px-4 text-left align-middle font-medium text-gray-500 [&:has([role=checkbox])]:pr-0 ${className}`}
+      {...props}
+    />
   )
 }
 
-export function TableRow({ className = '', children }: TableProps) {
+export function TableCell({ className = '', ...props }: React.TdHTMLAttributes<HTMLTableCellElement>) {
   return (
-    <tr className={`border-b transition-colors hover:bg-gray-50 ${className}`}>
-      {children}
-    </tr>
-  )
-}
-
-export function TableHead({ className = '', children }: TableProps) {
-  return (
-    <th className={`h-12 px-4 text-left align-middle font-medium text-gray-500 ${className}`}>
-      {children}
-    </th>
-  )
-}
-
-export function TableCell({ className = '', children }: TableProps) {
-  return (
-    <td className={`p-4 align-middle ${className}`}>
-      {children}
-    </td>
+    <td
+      className={`p-4 align-middle [&:has([role=checkbox])]:pr-0 ${className}`}
+      {...props}
+    />
   )
 }
