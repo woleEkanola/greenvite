@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
-// GET: Fetch tables for a specific event
+// GET: Fetch hosts for a specific event
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -43,13 +43,21 @@ export async function GET(
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
     
-    // Fetch tables for this event
-    const tables = await prisma.table.findMany({
+    // Get query parameters
+    const searchTerm = request.nextUrl.searchParams.get('search') || ''
+    
+    // Fetch hosts for this event
+    const hosts = await prisma.host.findMany({
       where: {
-        eventId: params.id
+        eventId: params.id,
+        OR: searchTerm ? [
+          { name: { contains: searchTerm, mode: 'insensitive' } },
+          { email: { contains: searchTerm, mode: 'insensitive' } },
+          { phone: { contains: searchTerm, mode: 'insensitive' } }
+        ] : undefined
       },
       include: {
-        hosts: true
+        tables: true
       },
       orderBy: {
         name: 'asc'
@@ -58,16 +66,16 @@ export async function GET(
     
     return NextResponse.json({ 
       success: true,
-      tables
+      hosts
     })
     
   } catch (error) {
-    console.error('Error fetching tables:', error)
-    return NextResponse.json({ error: 'Failed to fetch tables' }, { status: 500 })
+    console.error('Error fetching hosts:', error)
+    return NextResponse.json({ error: 'Failed to fetch hosts' }, { status: 500 })
   }
 }
 
-// POST: Create a new table for a specific event
+// POST: Create a new host for a specific event
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -109,43 +117,56 @@ export async function POST(
     
     // Parse the request body
     const body = await request.json()
-    const { name, capacity, color, hostIds } = body
+    const { name, email, phone, role, tableIds } = body
     
-    if (!name || !capacity) {
-      return NextResponse.json({ error: 'Name and capacity are required' }, { status: 400 })
+    if (!name || !email) {
+      return NextResponse.json({ error: 'Name and email are required' }, { status: 400 })
     }
     
-    // Create the table
-    const table = await prisma.table.create({
+    // Check if a host with this email already exists for this event
+    const existingHost = await prisma.host.findFirst({
+      where: {
+        email,
+        eventId: params.id
+      }
+    })
+    
+    if (existingHost) {
+      return NextResponse.json({ error: 'A host with this email already exists' }, { status: 400 })
+    }
+    
+    // Create the host
+    const host = await prisma.host.create({
       data: {
         name,
-        capacity: parseInt(capacity.toString()),
-        color: color || '#000000',
+        email,
+        phone,
+        role: role || 'host',
         eventId: params.id,
-        hosts: hostIds && hostIds.length > 0 ? {
-          connect: hostIds.map((id: string) => ({ id }))
+        tables: tableIds && tableIds.length > 0 ? {
+          connect: tableIds.map((id: string) => ({ id }))
         } : undefined
       },
       include: {
-        hosts: true
+        tables: true
       }
     })
     
     return NextResponse.json({ 
       success: true,
-      table
+      host
     })
     
   } catch (error) {
-    console.error('Error creating table:', error)
-    return NextResponse.json({ error: 'Failed to create table' }, { status: 500 })
+    console.error('Error creating host:', error)
+    return NextResponse.json({ error: 'Failed to create host' }, { status: 500 })
   }
 }
 
-// PUT: Update a table
+// PUT: Update a host
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string, tableId: string } }
+  { params }: { params: { id: string, hostId: string } }
 ) {
   try {
     // Get the user session
@@ -184,60 +205,73 @@ export async function PUT(
     
     // Parse the request body
     const body = await request.json()
-    const { name, capacity, color, hostIds } = body
+    const { name, email, phone, role, tableIds } = body
     
-    if (!name || !capacity) {
-      return NextResponse.json({ error: 'Name and capacity are required' }, { status: 400 })
+    if (!name || !email) {
+      return NextResponse.json({ error: 'Name and email are required' }, { status: 400 })
     }
     
-    // Check if the table exists and belongs to this event
-    const table = await prisma.table.findFirst({
+    // Check if the host exists and belongs to this event
+    const host = await prisma.host.findFirst({
       where: {
-        id: params.tableId,
+        id: params.hostId,
         eventId: params.id
-      },
-      include: {
-        hosts: true
       }
     })
     
-    if (!table) {
-      return NextResponse.json({ error: 'Table not found or does not belong to this event' }, { status: 404 })
+    if (!host) {
+      return NextResponse.json({ error: 'Host not found or does not belong to this event' }, { status: 404 })
     }
     
-    // Update the table
-    const updatedTable = await prisma.table.update({
+    // Check if the email is being changed and if it conflicts with another host
+    if (email !== host.email) {
+      const existingHost = await prisma.host.findFirst({
+        where: {
+          email,
+          eventId: params.id,
+          id: { not: params.hostId }
+        }
+      })
+      
+      if (existingHost) {
+        return NextResponse.json({ error: 'Another host with this email already exists' }, { status: 400 })
+      }
+    }
+    
+    // Update the host
+    const updatedHost = await prisma.host.update({
       where: {
-        id: params.tableId
+        id: params.hostId
       },
       data: {
         name,
-        capacity: parseInt(capacity.toString()),
-        color: color || '#000000',
-        hosts: {
-          set: hostIds ? hostIds.map((id: string) => ({ id })) : []
-        }
+        email,
+        phone,
+        role: role || 'host',
+        tables: tableIds ? {
+          set: tableIds.map((id: string) => ({ id }))
+        } : undefined
       },
       include: {
-        hosts: true
+        tables: true
       }
     })
     
     return NextResponse.json({ 
       success: true,
-      table: updatedTable
+      host: updatedHost
     })
     
   } catch (error) {
-    console.error('Error updating table:', error)
-    return NextResponse.json({ error: 'Failed to update table' }, { status: 500 })
+    console.error('Error updating host:', error)
+    return NextResponse.json({ error: 'Failed to update host' }, { status: 500 })
   }
 }
 
-// DELETE: Delete a table
+// DELETE: Delete a host
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string, tableId: string } }
+  { params }: { params: { id: string, hostId: string } }
 ) {
   try {
     // Get the user session
@@ -274,32 +308,32 @@ export async function DELETE(
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
     
-    // Check if the table exists and belongs to this event
-    const table = await prisma.table.findFirst({
+    // Check if the host exists and belongs to this event
+    const host = await prisma.host.findFirst({
       where: {
-        id: params.tableId,
+        id: params.hostId,
         eventId: params.id
       }
     })
     
-    if (!table) {
-      return NextResponse.json({ error: 'Table not found or does not belong to this event' }, { status: 404 })
+    if (!host) {
+      return NextResponse.json({ error: 'Host not found or does not belong to this event' }, { status: 404 })
     }
     
-    // Delete the table
-    await prisma.table.delete({
+    // Delete the host
+    await prisma.host.delete({
       where: {
-        id: params.tableId
+        id: params.hostId
       }
     })
     
     return NextResponse.json({ 
       success: true,
-      message: 'Table deleted successfully'
+      message: 'Host deleted successfully'
     })
     
   } catch (error) {
-    console.error('Error deleting table:', error)
-    return NextResponse.json({ error: 'Failed to delete table' }, { status: 500 })
+    console.error('Error deleting host:', error)
+    return NextResponse.json({ error: 'Failed to delete host' }, { status: 500 })
   }
 }

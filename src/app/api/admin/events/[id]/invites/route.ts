@@ -46,7 +46,9 @@ export async function GET(
     // Fetch invites for this event
     const invites = await prisma.invite.findMany({
       where: {
-        eventId: params.id
+        event: {
+          id: params.id
+        }
       },
       orderBy: {
         createdAt: 'desc'
@@ -112,6 +114,20 @@ export async function POST(
       return NextResponse.json({ error: 'Invites are required' }, { status: 400 })
     }
     
+    // Create a batch for these invites
+    const batch = await prisma.batch.create({
+      data: {
+        name: `Batch ${new Date().toISOString()}`,
+        status: 'pending',
+        totalInvites: invites.length,
+        event: {
+          connect: {
+            id: params.id
+          }
+        }
+      }
+    })
+    
     // Create the invites
     const createdInvites = await Promise.all(
       invites.map(invite => 
@@ -121,8 +137,17 @@ export async function POST(
             email: invite.email,
             phone: invite.phone,
             type: invite.type,
-            eventId: params.id,
-            status: 'pending'
+            status: 'pending',
+            event: {
+              connect: {
+                id: params.id
+              }
+            },
+            Batch: {
+              connect: {
+                id: batch.id
+              }
+            }
           }
         })
       )
@@ -131,7 +156,8 @@ export async function POST(
     return NextResponse.json({ 
       success: true,
       count: createdInvites.length,
-      invites: createdInvites
+      invites: createdInvites,
+      batch
     })
     
   } catch (error) {
@@ -192,7 +218,9 @@ export async function DELETE(
     const invite = await prisma.invite.findFirst({
       where: {
         id: inviteId,
-        eventId: params.id
+        event: {
+          id: params.id
+        }
       }
     })
     

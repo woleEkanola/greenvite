@@ -242,7 +242,13 @@ type AdminModalProps = {
 };
 
 function AdminModal({ isOpen, onClose, event, users, onAdminsUpdated }: AdminModalProps) {
-  const [selectedAdminIds, setSelectedAdminIds] = useState<string[]>(event?.admins.map((admin) => admin.userId) || []);
+  const [selectedAdminIds, setSelectedAdminIds] = useState<string[]>(event?.admins?.map((admin) => admin.userId) || []);
+
+  useEffect(() => {
+    if (event) {
+      setSelectedAdminIds(event.admins?.map((admin) => admin.userId) || []);
+    }
+  }, [event]);
 
   const handleAdminChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { value, checked } = e.target;
@@ -289,21 +295,25 @@ function AdminModal({ isOpen, onClose, event, users, onAdminsUpdated }: AdminMod
             </div>
 
             <div className="grid grid-cols-1 gap-y-4">
-              {users.map((user) => (
-                <div key={user.id}>
-                  <label className="block text-sm font-medium text-gray-700">
-                    <input
-                      type="checkbox"
-                      name="admin"
-                      value={user.id}
-                      checked={selectedAdminIds.includes(user.id)}
-                      onChange={handleAdminChange}
-                      className="mr-2"
-                    />
-                    {user.username} ({user.name})
-                  </label>
-                </div>
-              ))}
+              {Array.isArray(users) && users.length > 0 ? (
+                users.map((user) => (
+                  <div key={user.id}>
+                    <label className="block text-sm font-medium text-gray-700">
+                      <input
+                        type="checkbox"
+                        name="admin"
+                        value={user.id}
+                        checked={selectedAdminIds.includes(user.id)}
+                        onChange={handleAdminChange}
+                        className="mr-2"
+                      />
+                      {user.name || user.username} ({user.email || 'No email'})
+                    </label>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-gray-500">No users available</p>
+              )}
             </div>
           </div>
 

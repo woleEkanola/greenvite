@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
-// GET: Fetch tables for a specific event
+// GET: Fetch souvenirs for a specific event
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -43,13 +43,26 @@ export async function GET(
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
     
-    // Fetch tables for this event
-    const tables = await prisma.table.findMany({
+    // Get query parameters
+    const searchTerm = request.nextUrl.searchParams.get('search') || ''
+    
+    // Fetch souvenirs for this event
+    const souvenirs = await prisma.souvenir.findMany({
       where: {
-        eventId: params.id
+        eventId: params.id,
+        OR: searchTerm ? [
+          { name: { contains: searchTerm, mode: 'insensitive' } },
+          { description: { contains: searchTerm, mode: 'insensitive' } }
+        ] : undefined
       },
       include: {
-        hosts: true
+        assignments: {
+          include: {
+            host: true,
+            table: true,
+            accessCode: true
+          }
+        }
       },
       orderBy: {
         name: 'asc'
@@ -58,16 +71,16 @@ export async function GET(
     
     return NextResponse.json({ 
       success: true,
-      tables
+      souvenirs
     })
     
   } catch (error) {
-    console.error('Error fetching tables:', error)
-    return NextResponse.json({ error: 'Failed to fetch tables' }, { status: 500 })
+    console.error('Error fetching souvenirs:', error)
+    return NextResponse.json({ error: 'Failed to fetch souvenirs' }, { status: 500 })
   }
 }
 
-// POST: Create a new table for a specific event
+// POST: Create a new souvenir for a specific event
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -109,43 +122,38 @@ export async function POST(
     
     // Parse the request body
     const body = await request.json()
-    const { name, capacity, color, hostIds } = body
+    const { name, description, image, quantity } = body
     
-    if (!name || !capacity) {
-      return NextResponse.json({ error: 'Name and capacity are required' }, { status: 400 })
+    if (!name) {
+      return NextResponse.json({ error: 'Name is required' }, { status: 400 })
     }
     
-    // Create the table
-    const table = await prisma.table.create({
+    // Create the souvenir
+    const souvenir = await prisma.souvenir.create({
       data: {
         name,
-        capacity: parseInt(capacity.toString()),
-        color: color || '#000000',
-        eventId: params.id,
-        hosts: hostIds && hostIds.length > 0 ? {
-          connect: hostIds.map((id: string) => ({ id }))
-        } : undefined
-      },
-      include: {
-        hosts: true
+        description,
+        image,
+        quantity: quantity || 0,
+        eventId: params.id
       }
     })
     
     return NextResponse.json({ 
       success: true,
-      table
+      souvenir
     })
     
   } catch (error) {
-    console.error('Error creating table:', error)
-    return NextResponse.json({ error: 'Failed to create table' }, { status: 500 })
+    console.error('Error creating souvenir:', error)
+    return NextResponse.json({ error: 'Failed to create souvenir' }, { status: 500 })
   }
 }
 
-// PUT: Update a table
+// PUT: Update a souvenir
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string, tableId: string } }
+  { params }: { params: { id: string } }
 ) {
   try {
     // Get the user session
@@ -184,60 +192,52 @@ export async function PUT(
     
     // Parse the request body
     const body = await request.json()
-    const { name, capacity, color, hostIds } = body
+    const { souvenirId, name, description, image, quantity } = body
     
-    if (!name || !capacity) {
-      return NextResponse.json({ error: 'Name and capacity are required' }, { status: 400 })
+    if (!souvenirId || !name) {
+      return NextResponse.json({ error: 'Souvenir ID and name are required' }, { status: 400 })
     }
     
-    // Check if the table exists and belongs to this event
-    const table = await prisma.table.findFirst({
+    // Check if the souvenir exists and belongs to this event
+    const existingSouvenir = await prisma.souvenir.findFirst({
       where: {
-        id: params.tableId,
+        id: souvenirId,
         eventId: params.id
-      },
-      include: {
-        hosts: true
       }
     })
     
-    if (!table) {
-      return NextResponse.json({ error: 'Table not found or does not belong to this event' }, { status: 404 })
+    if (!existingSouvenir) {
+      return NextResponse.json({ error: 'Souvenir not found' }, { status: 404 })
     }
     
-    // Update the table
-    const updatedTable = await prisma.table.update({
+    // Update the souvenir
+    const souvenir = await prisma.souvenir.update({
       where: {
-        id: params.tableId
+        id: souvenirId
       },
       data: {
         name,
-        capacity: parseInt(capacity.toString()),
-        color: color || '#000000',
-        hosts: {
-          set: hostIds ? hostIds.map((id: string) => ({ id })) : []
-        }
-      },
-      include: {
-        hosts: true
+        description,
+        image,
+        quantity: quantity || 0
       }
     })
     
     return NextResponse.json({ 
       success: true,
-      table: updatedTable
+      souvenir
     })
     
   } catch (error) {
-    console.error('Error updating table:', error)
-    return NextResponse.json({ error: 'Failed to update table' }, { status: 500 })
+    console.error('Error updating souvenir:', error)
+    return NextResponse.json({ error: 'Failed to update souvenir' }, { status: 500 })
   }
 }
 
-// DELETE: Delete a table
+// DELETE: Delete a souvenir
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string, tableId: string } }
+  { params }: { params: { id: string } }
 ) {
   try {
     // Get the user session
@@ -274,32 +274,46 @@ export async function DELETE(
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
     
-    // Check if the table exists and belongs to this event
-    const table = await prisma.table.findFirst({
+    // Parse the request body
+    const body = await request.json()
+    const { souvenirId } = body
+    
+    if (!souvenirId) {
+      return NextResponse.json({ error: 'Souvenir ID is required' }, { status: 400 })
+    }
+    
+    // Check if the souvenir exists and belongs to this event
+    const existingSouvenir = await prisma.souvenir.findFirst({
       where: {
-        id: params.tableId,
+        id: souvenirId,
         eventId: params.id
       }
     })
     
-    if (!table) {
-      return NextResponse.json({ error: 'Table not found or does not belong to this event' }, { status: 404 })
+    if (!existingSouvenir) {
+      return NextResponse.json({ error: 'Souvenir not found' }, { status: 404 })
     }
     
-    // Delete the table
-    await prisma.table.delete({
+    // First delete all assignments for this souvenir
+    await prisma.souvenirAssignment.deleteMany({
       where: {
-        id: params.tableId
+        souvenirId
+      }
+    })
+    
+    // Then delete the souvenir
+    await prisma.souvenir.delete({
+      where: {
+        id: souvenirId
       }
     })
     
     return NextResponse.json({ 
-      success: true,
-      message: 'Table deleted successfully'
+      success: true
     })
     
   } catch (error) {
-    console.error('Error deleting table:', error)
-    return NextResponse.json({ error: 'Failed to delete table' }, { status: 500 })
+    console.error('Error deleting souvenir:', error)
+    return NextResponse.json({ error: 'Failed to delete souvenir' }, { status: 500 })
   }
 }

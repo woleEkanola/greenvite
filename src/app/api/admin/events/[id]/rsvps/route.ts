@@ -60,14 +60,7 @@ export async function GET(
       },
       include: {
         registrationCode: true,
-        accessCodes: true,
-        table: {
-          select: {
-            id: true,
-            name: true,
-            capacity: true
-          }
-        }
+        accessCodes: true
       },
       orderBy: {
         createdAt: 'desc'
@@ -75,21 +68,27 @@ export async function GET(
     })
     
     // Calculate statistics
-    const totalRsvps = rsvps.length
-    const totalGuests = rsvps.reduce((sum, rsvp) => sum + (rsvp.hasGuest ? 1 : 0), 0)
-    const totalDrivers = rsvps.reduce((sum, rsvp) => sum + (rsvp.hasDriver ? 1 : 0), 0)
-    const totalAides = rsvps.reduce((sum, rsvp) => sum + (rsvp.hasAide ? 1 : 0), 0)
-    const totalAttendees = totalRsvps + totalGuests + totalDrivers + totalAides
+    const attending = rsvps.filter(rsvp => rsvp.registrationCode.status === 'attending').length
+    const notAttending = rsvps.filter(rsvp => rsvp.registrationCode.status === 'not_attending').length
+    const pending = rsvps.filter(rsvp => rsvp.registrationCode.status === 'pending').length
+    const totalGuests = rsvps.reduce((sum, rsvp) => {
+      // Count guests based on hasGuest, hasDriver, hasAide
+      let guestCount = 0;
+      if (rsvp.hasGuest) guestCount += 1;
+      if (rsvp.hasDriver) guestCount += 1;
+      if (rsvp.hasAide) guestCount += 1;
+      return sum + guestCount;
+    }, 0);
     
     return NextResponse.json({ 
       success: true,
       rsvps,
       stats: {
-        totalRsvps,
-        totalGuests,
-        totalDrivers,
-        totalAides,
-        totalAttendees
+        total: rsvps.length,
+        attending,
+        notAttending,
+        pending,
+        totalGuests
       }
     })
     
@@ -175,8 +174,7 @@ export async function PUT(
       },
       include: {
         registrationCode: true,
-        accessCodes: true,
-        table: true
+        accessCodes: true
       }
     })
     
