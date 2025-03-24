@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import prisma from '@/lib/prisma'
+import { prisma } from '@/lib/prisma'
 
 export async function GET(
   request: NextRequest,
@@ -15,8 +15,10 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     
+    console.log(`Fetching stats for event ID: ${params.id}`)
+    
     // Check if the user has access to this event
-    const event = await prisma.event.findUnique({
+    const event = await prisma.event.findFirst({
       where: {
         id: params.id,
         OR: [
@@ -33,8 +35,11 @@ export async function GET(
     })
     
     if (!event) {
+      console.error(`Event not found or access denied for ID: ${params.id}`)
       return NextResponse.json({ error: 'Event not found or access denied' }, { status: 404 })
     }
+    
+    console.log(`Found event: ${event.title}`)
     
     // Get counts for different resources related to this event
     const [
@@ -63,14 +68,14 @@ export async function GET(
       // Count invites for this event
       prisma.invite.count({
         where: {
-          batch: {
+          Batch: {
             eventId: params.id
           }
         }
       }),
       
       // Count RSVPs for this event
-      prisma.rSVP.count({
+      prisma.rsvp.count({
         where: {
           registrationCode: {
             eventId: params.id
@@ -83,6 +88,14 @@ export async function GET(
         where: { eventId: params.id }
       })
     ])
+    
+    console.log(`Stats for event ${params.id}:`, {
+      regCodes: regCodesCount,
+      accessCodes: accessCodesCount,
+      invites: invitesCount,
+      rsvps: rsvpsCount,
+      tables: tablesCount
+    })
     
     // Return the stats
     return NextResponse.json({

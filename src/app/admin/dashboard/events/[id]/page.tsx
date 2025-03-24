@@ -25,16 +25,19 @@ export default function EventDetailPage({ params }: { params: { id: string } }) 
         const response = await fetch(`/api/admin/events/${params.id}`)
         
         if (!response.ok) {
-          throw new Error('Failed to fetch event')
+          const errorText = await response.text()
+          console.error(`Failed to fetch event: ${response.status}`, errorText)
+          throw new Error(`Failed to fetch event: ${response.status}`)
         }
         
         const data = await response.json()
+        console.log('Event data loaded:', data)
         setEvent(data)
         
         // Fetch event stats
         await fetchEventStats(params.id)
       } catch (error) {
-        console.error('Error:', error)
+        console.error('Error loading event:', error)
         setError('Failed to load event details')
       } finally {
         setLoading(false)
@@ -46,25 +49,21 @@ export default function EventDetailPage({ params }: { params: { id: string } }) 
 
   const fetchEventStats = async (eventId: string) => {
     try {
-      // In a real implementation, you would fetch these stats from your API
-      // For now, we'll simulate some stats
+      console.log(`Fetching stats for event ID: ${eventId}`)
       const statsResponse = await fetch(`/api/admin/events/${eventId}/stats`)
       
       if (statsResponse.ok) {
         const statsData = await statsResponse.json()
+        console.log('Stats data loaded:', statsData)
         setStats(statsData)
       } else {
-        // Fallback to dummy data if API doesn't exist yet
-        setStats({
-          regCodes: Math.floor(Math.random() * 100),
-          accessCodes: Math.floor(Math.random() * 200),
-          invites: Math.floor(Math.random() * 150),
-          rsvps: Math.floor(Math.random() * 80),
-          tables: Math.floor(Math.random() * 20),
-        })
+        const errorText = await statsResponse.text()
+        console.error(`Error fetching stats: ${statsResponse.status}`, errorText)
+        setError('Failed to load event statistics')
       }
     } catch (error) {
       console.error('Error fetching stats:', error)
+      setError('Failed to load event statistics')
     }
   }
 

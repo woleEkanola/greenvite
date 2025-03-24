@@ -86,7 +86,7 @@ export async function GET(request: Request) {
       totalAccessCodes
     ] = await Promise.all([
       // Total RSVPs
-      prisma.rSVP.count({
+      prisma.rsvp.count({
         where: {
           registrationCode: {
             eventId: { in: eventIds }
@@ -238,7 +238,7 @@ export async function GET(request: Request) {
           prisma.registrationCode.count({
             where: { eventId: event.id }
           }),
-          prisma.rSVP.count({
+          prisma.rsvp.count({
             where: {
               registrationCode: {
                 eventId: event.id
