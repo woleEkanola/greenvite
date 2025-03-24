@@ -32,6 +32,8 @@ model Table {
   accessCodes AccessCode[]
   hosts       Host[]       @relation("HostToTable")
   souvenirs   SouvenirAssignment[]
+  eventId     String?
+  event       Event?       @relation(fields: [eventId], references: [id])
 }
 
 model AccessCode {
@@ -76,6 +78,8 @@ model RegistrationCode {
   createdAt DateTime  @default(now())
   invite    Invite?
   rsvp      Rsvp?
+  eventId   String?
+  event     Event?    @relation(fields: [eventId], references: [id])
 }
 
 model Invite {
@@ -112,6 +116,8 @@ model Batch {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   invites       Invite[]
+  eventId       String?
+  event         Event?   @relation(fields: [eventId], references: [id])
 }
 
 model Host {
@@ -124,6 +130,8 @@ model Host {
   updatedAt   DateTime @updatedAt
   tables      Table[]  @relation("HostToTable")
   souvenirs   SouvenirAssignment[]
+  eventId     String?
+  event       Event?   @relation(fields: [eventId], references: [id])
 }
 
 model Souvenir {
@@ -135,6 +143,8 @@ model Souvenir {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   assignments SouvenirAssignment[]
+  eventId     String?
+  event       Event?   @relation(fields: [eventId], references: [id])
 }
 
 model SouvenirAssignment {
@@ -157,20 +167,25 @@ model SouvenirAssignment {
 }
 
 model Event {
-  id          String        @id @default(cuid())
-  title       String
-  description String?       @db.Text
-  location    String?
-  startDate   DateTime
-  endDate     DateTime
-  imageUrl    String?
-  status      String        @default("draft") // draft, published, cancelled
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  slug        String?       @unique
-  ownerId     String        // Original creator of the event
-  owner       User          @relation("EventOwner", fields: [ownerId], references: [id])
-  admins      EventAdmin[]  // Many-to-many relation with User
+  id                String        @id @default(cuid())
+  title             String
+  description       String?       @db.Text
+  location          String?
+  startDate         DateTime
+  endDate           DateTime
+  imageUrl          String?
+  status            String        @default("draft") // draft, published, cancelled
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  slug              String?       @unique
+  ownerId           String        // Original creator of the event
+  owner             User          @relation("EventOwner", fields: [ownerId], references: [id])
+  admins            EventAdmin[]  // Many-to-many relation with User
+  tables            Table[]
+  registrationCodes RegistrationCode[]
+  batches           Batch[]
+  hosts             Host[]
+  souvenirs         Souvenir[]
 }
 
 model EventAdmin {

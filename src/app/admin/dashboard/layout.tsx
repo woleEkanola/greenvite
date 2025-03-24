@@ -89,66 +89,6 @@ export default function DashboardLayout({
             </li>
             <li>
               <Link
-                href="/admin/dashboard/reg-codes"
-                className={`block px-4 py-2 rounded-lg transition-colors ${
-                  isActive('/admin/dashboard/reg-codes')
-                    ? 'bg-emerald-500 text-white'
-                    : 'hover:bg-gray-100'
-                }`}
-              >
-                Registration Codes
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/admin/dashboard/access-codes"
-                className={`block px-4 py-2 rounded-lg transition-colors ${
-                  isActive('/admin/dashboard/access-codes')
-                    ? 'bg-emerald-500 text-white'
-                    : 'hover:bg-gray-100'
-                }`}
-              >
-                Access Codes
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/admin/dashboard/invites"
-                className={`block px-4 py-2 rounded-lg transition-colors ${
-                  isActive('/admin/dashboard/invites')
-                    ? 'bg-emerald-500 text-white'
-                    : 'hover:bg-gray-100'
-                }`}
-              >
-                Send Invites
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/admin/dashboard/rsvps"
-                className={`block px-4 py-2 rounded-lg transition-colors ${
-                  isActive('/admin/dashboard/rsvps')
-                    ? 'bg-emerald-500 text-white'
-                    : 'hover:bg-gray-100'
-                }`}
-              >
-                RSVP Management
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/admin/dashboard/tables"
-                className={`block px-4 py-2 rounded-lg transition-colors ${
-                  isActive('/admin/dashboard/tables')
-                    ? 'bg-emerald-500 text-white'
-                    : 'hover:bg-gray-100'
-                }`}
-              >
-                Tables
-              </Link>
-            </li>
-            <li>
-              <Link
                 href="/admin/dashboard/events"
                 className={`block px-4 py-2 rounded-lg transition-colors ${
                   isActive('/admin/dashboard/events')
@@ -157,18 +97,6 @@ export default function DashboardLayout({
                 }`}
               >
                 Events
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/admin/dashboard/sent-invites"
-                className={`block px-4 py-2 rounded-lg transition-colors ${
-                  isActive('/admin/dashboard/sent-invites')
-                    ? 'bg-emerald-500 text-white'
-                    : 'hover:bg-gray-100'
-                }`}
-              >
-                Sent Invites
               </Link>
             </li>
           </ul>

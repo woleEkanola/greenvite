@@ -157,7 +157,12 @@ export default function EventsPage() {
                 <div className="px-4 py-4 sm:px-6">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center">
-                      <p className="text-sm font-medium text-green-600 truncate">{event.title}</p>
+                      <Link 
+                        href={`/admin/dashboard/events/${event.id}`}
+                        className="text-sm font-medium text-green-600 truncate hover:text-green-800 hover:underline"
+                      >
+                        {event.title}
+                      </Link>
                       <div className={`ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadgeColor(event.status)}`}>
                         {event.status.charAt(0).toUpperCase() + event.status.slice(1)}
                       </div>
