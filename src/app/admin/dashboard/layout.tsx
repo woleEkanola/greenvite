@@ -149,6 +149,18 @@ export default function DashboardLayout({
             </li>
             <li>
               <Link
+                href="/admin/dashboard/events"
+                className={`block px-4 py-2 rounded-lg transition-colors ${
+                  isActive('/admin/dashboard/events')
+                    ? 'bg-emerald-500 text-white'
+                    : 'hover:bg-gray-100'
+                }`}
+              >
+                Events
+              </Link>
+            </li>
+            <li>
+              <Link
                 href="/admin/dashboard/sent-invites"
                 className={`block px-4 py-2 rounded-lg transition-colors ${
                   isActive('/admin/dashboard/sent-invites')

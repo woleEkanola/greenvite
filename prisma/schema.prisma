@@ -18,6 +18,8 @@ model User {
   verified  Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  ownedEvents Event[] @relation("EventOwner")
+  adminEvents EventAdmin[]
 }
 
 model Table {
@@ -152,4 +154,32 @@ model SouvenirAssignment {
   souvenir    Souvenir @relation(fields: [souvenirId], references: [id])
 
   @@unique([souvenirId, hostId, tableId, accessCodeId])
+}
+
+model Event {
+  id          String        @id @default(cuid())
+  title       String
+  description String?       @db.Text
+  location    String?
+  startDate   DateTime
+  endDate     DateTime
+  imageUrl    String?
+  status      String        @default("draft") // draft, published, cancelled
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  slug        String?       @unique
+  ownerId     String        // Original creator of the event
+  owner       User          @relation("EventOwner", fields: [ownerId], references: [id])
+  admins      EventAdmin[]  // Many-to-many relation with User
+}
+
+model EventAdmin {
+  id        String   @id @default(cuid())
+  userId    String
+  eventId   String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+  event     Event    @relation(fields: [eventId], references: [id])
+
+  @@unique([userId, eventId])
 }
