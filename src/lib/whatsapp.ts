@@ -7,6 +7,7 @@ const INSTANCE_ID = process.env.WAAPI_INSTANCE_ID;
 
 
 async function sendWhatsAppNotification(phone: string, message: string): Promise<boolean> {
+  const formattedPhone = phone.replace(/^\+/, '');
   try {
     if (!WAAPI_TOKEN || !INSTANCE_ID) {
       console.error('WhatsApp API configuration is incomplete. Token or Instance ID missing.');
@@ -14,7 +15,7 @@ async function sendWhatsAppNotification(phone: string, message: string): Promise
     }
 
     const textPayload = {
-      chatId: phone + '@c.us',
+      chatId: formattedPhone + '@c.us',
       message: message
     };
 
