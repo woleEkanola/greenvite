@@ -30,7 +30,8 @@ export default function SuperAdminPage() {
     <div className="flex h-screen bg-gray-50">
       <Sidebar 
         items={[
-          { name: 'Users', href: '/superadmin/users', icon: 'users' }
+          { name: 'Users', href: '/superadmin/users', icon: 'users' },
+          { name: 'Events', href: '/superadmin/events', icon: 'calendar' }
         ]} 
       />
       <main className="flex-1 p-8 overflow-y-auto">

@@ -1,35 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
 
-// GET /api/admin/events - Get all events for the current user
+// GET /api/superadmin/events - Get all events with owner and admin details
 export async function GET(request: NextRequest) {
   try {
-    // Get the current user session
     const session = await getServerSession(authOptions);
-    
-    if (!session || !session.user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+
+    // Check if user is authenticated and is a superadmin
+    if (!session || session.user.role !== 'SUPERADMIN') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Fetch all events where the user is either the owner or an admin
     const events = await prisma.event.findMany({
-      where: {
-        OR: [
-          { ownerId: session.user.id },
-          {
-            admins: {
-              some: {
-                userId: session.user.id
-              }
-            }
-          }
-        ]
-      },
       include: {
         owner: {
           select: {
@@ -54,7 +38,9 @@ export async function GET(request: NextRequest) {
           },
         },
       },
-      orderBy: { startDate: 'desc' },
+      orderBy: {
+        createdAt: 'desc',
+      },
     });
 
     return NextResponse.json(events);
@@ -67,26 +53,23 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/admin/events - Create a new event
+// POST /api/superadmin/events - Create a new event
 export async function POST(request: NextRequest) {
   try {
-    // Get the current user session
     const session = await getServerSession(authOptions);
-    
-    if (!session || !session.user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+
+    // Check if user is authenticated and is a superadmin
+    if (!session || session.user.role !== 'SUPERADMIN') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Parse the request body
-    const { title, description, location, startDate, endDate, imageUrl, status, slug } = await request.json();
+    const data = await request.json();
+    const { title, description, location, startDate, endDate, imageUrl, status, slug, ownerId } = data;
 
     // Validate required fields
-    if (!title || !startDate || !endDate) {
+    if (!title || !startDate || !endDate || !ownerId) {
       return NextResponse.json(
-        { error: 'Title, start date, and end date are required' },
+        { error: 'Missing required fields' },
         { status: 400 }
       );
     }
@@ -114,21 +97,21 @@ export async function POST(request: NextRequest) {
         startDate: new Date(startDate),
         endDate: new Date(endDate),
         imageUrl,
-        status: status || 'draft',
+        status,
         slug,
-        ownerId: session.user.id,
+        ownerId,
       },
     });
 
-    // Add the creator as an admin as well
+    // Add the owner as an admin as well
     await prisma.eventAdmin.create({
       data: {
-        userId: session.user.id,
+        userId: ownerId,
         eventId: event.id,
       },
     });
 
-    return NextResponse.json(event, { status: 201 });
+    return NextResponse.json(event);
   } catch (error) {
     console.error('Error creating event:', error);
     return NextResponse.json(

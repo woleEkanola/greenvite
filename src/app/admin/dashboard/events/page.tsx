@@ -4,6 +4,22 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { PlusIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { format } from 'date-fns';
+import Link from 'next/link';
+
+type User = {
+  id: string;
+  username: string;
+  name: string | null;
+  email: string | null;
+  role: string;
+};
+
+type EventAdmin = {
+  id: string;
+  userId: string;
+  eventId: string;
+  user: User;
+};
 
 type Event = {
   id: string;
@@ -14,19 +30,28 @@ type Event = {
   endDate: Date;
   imageUrl: string | null;
   status: string;
+  slug: string | null;
   createdAt: Date;
   updatedAt: Date;
+  ownerId: string;
+  owner: User;
+  admins: EventAdmin[];
 };
 
 export default function EventsPage() {
   const [events, setEvents] = useState<Event[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
+  const [selectedEventForAdmins, setSelectedEventForAdmins] = useState<Event | null>(null);
+  const [selectedAdminIds, setSelectedAdminIds] = useState<string[]>([]);
   const router = useRouter();
 
   useEffect(() => {
     fetchEvents();
+    fetchUsers();
   }, []);
 
   const fetchEvents = async () => {
@@ -45,9 +70,17 @@ export default function EventsPage() {
     }
   };
 
-  const handleCreateEvent = () => {
-    setSelectedEvent(null);
-    setIsModalOpen(true);
+  const fetchUsers = async () => {
+    try {
+      const response = await fetch('/api/admin/users');
+      if (!response.ok) {
+        throw new Error('Failed to fetch users');
+      }
+      const data = await response.json();
+      setUsers(data);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    }
   };
 
   const handleEditEvent = (event: Event) => {
@@ -89,15 +122,24 @@ export default function EventsPage() {
 
   return (
     <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Events</h1>
-        <button
-          onClick={handleCreateEvent}
-          className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-        >
-          <PlusIcon className="-ml-1 mr-2 h-5 w-5" aria-hidden="true" />
-          Create Event
-        </button>
+      <div className="px-4 sm:px-6 lg:px-8">
+        <div className="sm:flex sm:items-center">
+          <div className="sm:flex-auto">
+            <h1 className="text-xl font-semibold text-gray-900">Events</h1>
+            <p className="mt-2 text-sm text-gray-700">
+              A list of all the events you manage
+            </p>
+          </div>
+          <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
+            <Link
+              href="/admin/dashboard/events/create"
+              className="inline-flex items-center justify-center rounded-md border border-transparent bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 sm:w-auto"
+            >
+              <PlusIcon className="h-4 w-4 mr-2" />
+              Create Event
+            </Link>
+          </div>
+        </div>
       </div>
 
       {isLoading ? (
@@ -133,6 +175,17 @@ export default function EventsPage() {
                         className="inline-flex items-center p-1.5 border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                       >
                         <TrashIcon className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelectedEventForAdmins(event);
+                          setIsAdminModalOpen(true);
+                        }}
+                        className="inline-flex items-center p-1.5 border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                      >
+                        <svg className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.671.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1H6.75a2.25 2.25 0 00-2.25 2.25v2.25a2.25 2.25 0 002.25 2.25H9" />
+                        </svg>
                       </button>
                     </div>
                   </div>
@@ -171,6 +224,16 @@ export default function EventsPage() {
           onEventSaved={fetchEvents}
         />
       )}
+
+      {isAdminModalOpen && (
+        <AdminModal
+          isOpen={isAdminModalOpen}
+          onClose={() => setIsAdminModalOpen(false)}
+          event={selectedEventForAdmins}
+          users={users}
+          onAdminsUpdated={fetchEvents}
+        />
+      )}
     </div>
   );
 }
@@ -191,6 +254,9 @@ function EventModal({ isOpen, onClose, event, onEventSaved }: EventModalProps) {
     endDate: event?.endDate ? new Date(event.endDate).toISOString().slice(0, 16) : '',
     imageUrl: event?.imageUrl || '',
     status: event?.status || 'draft',
+    ownerId: event?.ownerId || '',
+    owner: event?.owner || { id: '', username: '', name: null, email: null, role: '' },
+    admins: event?.admins || [],
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -341,6 +407,20 @@ function EventModal({ isOpen, onClose, event, onEventSaved }: EventModalProps) {
               </div>
 
               <div>
+                <label htmlFor="ownerId" className="block text-sm font-medium text-gray-700">
+                  Owner ID
+                </label>
+                <input
+                  type="text"
+                  name="ownerId"
+                  id="ownerId"
+                  className="mt-1 focus:ring-green-500 focus:border-green-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+                  value={formData.ownerId}
+                  onChange={handleChange}
+                />
+              </div>
+
+              <div>
                 <label htmlFor="status" className="block text-sm font-medium text-gray-700">
                   Status
                 </label>
@@ -366,6 +446,101 @@ function EventModal({ isOpen, onClose, event, onEventSaved }: EventModalProps) {
               className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:ml-3 sm:w-auto sm:text-sm"
             >
               {isSubmitting ? 'Saving...' : 'Save'}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+type AdminModalProps = {
+  isOpen: boolean;
+  onClose: () => void;
+  event: Event | null;
+  users: User[];
+  onAdminsUpdated: () => void;
+};
+
+function AdminModal({ isOpen, onClose, event, users, onAdminsUpdated }: AdminModalProps) {
+  const [selectedAdminIds, setSelectedAdminIds] = useState<string[]>(event?.admins.map((admin) => admin.userId) || []);
+
+  const handleAdminChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { value, checked } = e.target;
+    if (checked) {
+      setSelectedAdminIds((prev) => [...prev, value]);
+    } else {
+      setSelectedAdminIds((prev) => prev.filter((id) => id !== value));
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    try {
+      const response = await fetch(`/api/admin/events/${event?.id}/admins`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ adminIds: selectedAdminIds }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update admins');
+      }
+
+      onAdminsUpdated();
+      onClose();
+    } catch (err: any) {
+      console.error(err.message);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg overflow-hidden shadow-xl transform transition-all sm:max-w-lg sm:w-full">
+        <form onSubmit={handleSubmit}>
+          <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+            <div className="mb-4">
+              <h3 className="text-lg leading-6 font-medium text-gray-900">Manage Admins for {event?.title}</h3>
+            </div>
+
+            <div className="grid grid-cols-1 gap-y-4">
+              {users.map((user) => (
+                <div key={user.id}>
+                  <label className="block text-sm font-medium text-gray-700">
+                    <input
+                      type="checkbox"
+                      name="admin"
+                      value={user.id}
+                      checked={selectedAdminIds.includes(user.id)}
+                      onChange={handleAdminChange}
+                      className="mr-2"
+                    />
+                    {user.username} ({user.name})
+                  </label>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+            <button
+              type="submit"
+              className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:ml-3 sm:w-auto sm:text-sm"
+            >
+              Save
             </button>
             <button
               type="button"

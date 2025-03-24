@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { Event } from '@prisma/client';
 
 // GET /api/admin/events/[id] - Get a specific event
 export async function GET(
@@ -22,21 +21,33 @@ export async function GET(
       );
     }
 
-    // Get the current user's ID
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email as string },
-    });
-
-    if (!user) {
-      return NextResponse.json(
-        { error: 'User not found' },
-        { status: 404 }
-      );
-    }
-
-    // Fetch the event
+    // Fetch the event with owner and admins
     const event = await prisma.event.findUnique({
       where: { id: eventId },
+      include: {
+        owner: {
+          select: {
+            id: true,
+            username: true,
+            name: true,
+            email: true,
+            role: true,
+          },
+        },
+        admins: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+                name: true,
+                email: true,
+                role: true,
+              },
+            },
+          },
+        },
+      },
     });
 
     if (!event) {
@@ -46,8 +57,11 @@ export async function GET(
       );
     }
 
-    // Check if the event belongs to the current user
-    if ((event as Event).userId !== user.id) {
+    // Check if the user is either the owner or an admin
+    const isOwner = event.ownerId === session.user.id;
+    const isAdmin = event.admins.some(admin => admin.userId === session.user.id);
+
+    if (!isOwner && !isAdmin) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 403 }
@@ -82,39 +96,35 @@ export async function PUT(
       );
     }
 
-    // Get the current user's ID
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email as string },
-    });
-
-    if (!user) {
-      return NextResponse.json(
-        { error: 'User not found' },
-        { status: 404 }
-      );
-    }
-
-    // Check if the event exists and belongs to the current user
-    const existingEvent = await prisma.event.findUnique({
-      where: { id: eventId },
+    // Check if the event exists and the user has access to it
+    const existingEvent = await prisma.event.findFirst({
+      where: {
+        id: eventId,
+        OR: [
+          { ownerId: session.user.id },
+          {
+            admins: {
+              some: {
+                userId: session.user.id
+              }
+            }
+          }
+        ]
+      },
+      include: {
+        admins: true,
+      },
     });
 
     if (!existingEvent) {
       return NextResponse.json(
-        { error: 'Event not found' },
+        { error: 'Event not found or you do not have permission to update it' },
         { status: 404 }
       );
     }
 
-    if ((existingEvent as Event).userId !== user.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 403 }
-      );
-    }
-
     // Parse the request body
-    const { title, description, location, startDate, endDate, imageUrl, status } = await request.json();
+    const { title, description, location, startDate, endDate, imageUrl, status, slug } = await request.json();
 
     // Validate required fields
     if (!title || !startDate || !endDate) {
@@ -122,6 +132,20 @@ export async function PUT(
         { error: 'Title, start date, and end date are required' },
         { status: 400 }
       );
+    }
+
+    // Check if slug is unique if provided and changed
+    if (slug && slug !== existingEvent.slug) {
+      const eventWithSlug = await prisma.event.findUnique({
+        where: { slug },
+      });
+
+      if (eventWithSlug && eventWithSlug.id !== eventId) {
+        return NextResponse.json(
+          { error: 'Slug already in use' },
+          { status: 400 }
+        );
+      }
     }
 
     // Update the event
@@ -134,7 +158,32 @@ export async function PUT(
         startDate: new Date(startDate),
         endDate: new Date(endDate),
         imageUrl,
-        status: status || 'draft',
+        status,
+        slug,
+      },
+      include: {
+        owner: {
+          select: {
+            id: true,
+            username: true,
+            name: true,
+            email: true,
+            role: true,
+          },
+        },
+        admins: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+                name: true,
+                email: true,
+                role: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -166,43 +215,32 @@ export async function DELETE(
       );
     }
 
-    // Get the current user's ID
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email as string },
-    });
-
-    if (!user) {
-      return NextResponse.json(
-        { error: 'User not found' },
-        { status: 404 }
-      );
-    }
-
-    // Check if the event exists and belongs to the current user
-    const existingEvent = await prisma.event.findUnique({
-      where: { id: eventId },
+    // Check if the event exists and the user is the owner
+    const existingEvent = await prisma.event.findFirst({
+      where: {
+        id: eventId,
+        ownerId: session.user.id,
+      },
     });
 
     if (!existingEvent) {
       return NextResponse.json(
-        { error: 'Event not found' },
+        { error: 'Event not found or you are not the owner' },
         { status: 404 }
       );
     }
 
-    if ((existingEvent as Event).userId !== user.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 403 }
-      );
-    }
+    // Delete all admin relationships first
+    await prisma.eventAdmin.deleteMany({
+      where: { eventId },
+    });
 
     // Delete the event
     await prisma.event.delete({
       where: { id: eventId },
     });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ message: 'Event deleted successfully' });
   } catch (error) {
     console.error('Error deleting event:', error);
     return NextResponse.json(
