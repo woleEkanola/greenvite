@@ -14,11 +14,23 @@ export default function SignupModal({ isOpen, onClose }: SignupModalProps) {
     name: '',
     email: '',
     phone: '',
+    password: '',
+    confirmPassword: '',
   });
+  const [passwordError, setPasswordError] = useState('');
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate passwords match
+    if (formData.password !== formData.confirmPassword) {
+      setPasswordError('Passwords do not match');
+      return;
+    }
+    
+    // Clear any previous password errors
+    setPasswordError('');
     setIsSubmitting(true);
 
     try {
@@ -46,9 +58,16 @@ export default function SignupModal({ isOpen, onClose }: SignupModalProps) {
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    
+    // Clear password error when user types in password fields
+    if (name === 'password' || name === 'confirmPassword') {
+      setPasswordError('');
+    }
+    
     setFormData(prev => ({
       ...prev,
-      [e.target.name]: e.target.value
+      [name]: value
     }));
   };
 
@@ -104,6 +123,40 @@ export default function SignupModal({ isOpen, onClose }: SignupModalProps) {
                 value={formData.phone}
                 onChange={handleChange}
               />
+            </div>
+            
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                Password
+              </label>
+              <input
+                type="password"
+                id="password"
+                name="password"
+                required
+                minLength={6}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500"
+                value={formData.password}
+                onChange={handleChange}
+              />
+            </div>
+            
+            <div>
+              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
+                Confirm Password
+              </label>
+              <input
+                type="password"
+                id="confirmPassword"
+                name="confirmPassword"
+                required
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500"
+                value={formData.confirmPassword}
+                onChange={handleChange}
+              />
+              {passwordError && (
+                <p className="mt-1 text-sm text-red-600">{passwordError}</p>
+              )}
             </div>
 
             <div className="mt-6 flex justify-end space-x-3">

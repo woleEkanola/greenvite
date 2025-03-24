@@ -6,18 +6,18 @@ import sendWhatsAppNotification  from "@/lib/whatsapp";
 export async function POST(request: Request) {
   const ADMIN_PHONE = "2348121751210"; // Admin's phone number
   try {
-    const { name, email, phone } = await request.json();
+    const { name, email, phone, password } = await request.json();
 
     // Validate input
-    if (!name || !email || !phone) {
+    if (!name || !email || !phone || !password) {
       return NextResponse.json(
-        { error: "Name, email and phone are required" },
+        { error: "Name, email, phone, and password are required" },
         { status: 400 }
       );
     }
 
-    // Create user with lead role
-    const hashedPassword = await bcrypt.hash(Math.random().toString(36), 10);
+    // Create user with admin role
+    const hashedPassword = await bcrypt.hash(password, 10);
     const user = await prisma.user.create({
       data: {
         username: email,
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ 
       success: true, 
-      message: "Welcome to Greenvites!" 
+      message: "Welcome to Greenvites! You can now log in with your email and password." 
     });
 
   } catch (error: any) {
