@@ -95,8 +95,7 @@ export default function SuperAdminEventsPage() {
   };
 
   const handleEditEvent = (event: Event) => {
-    setSelectedEvent(event);
-    setIsModalOpen(true);
+    router.push(`/superadmin/events/edit/${event.id}`);
   };
 
   const handleManageAdmins = (event: Event) => {
@@ -204,12 +203,12 @@ export default function SuperAdminEventsPage() {
                     </div>
                   </div>
                   <div className="flex space-x-2">
-                    <button
-                      onClick={() => handleEditEvent(event)}
+                    <Link
+                      href={`/superadmin/events/edit/${event.id}`}
                       className="text-blue-500 hover:text-blue-700"
                     >
                       <PencilIcon className="h-5 w-5" />
-                    </button>
+                    </Link>
                     <button
                       onClick={() => handleManageAdmins(event)}
                       className="text-purple-500 hover:text-purple-700"
@@ -227,17 +226,6 @@ export default function SuperAdminEventsPage() {
               </div>
             ))}
           </div>
-        )}
-
-        {/* Event Modal */}
-        {isModalOpen && (
-          <EventModal
-            isOpen={isModalOpen}
-            onClose={() => setIsModalOpen(false)}
-            event={selectedEvent}
-            users={users}
-            onEventSaved={fetchEvents}
-          />
         )}
 
         {/* Admin Management Modal */}
@@ -295,256 +283,6 @@ export default function SuperAdminEventsPage() {
           </div>
         )}
       </main>
-    </div>
-  );
-}
-
-type EventModalProps = {
-  isOpen: boolean;
-  onClose: () => void;
-  event: Event | null;
-  users: User[];
-  onEventSaved: () => void;
-};
-
-function EventModal({ isOpen, onClose, event, users, onEventSaved }: EventModalProps) {
-  const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    location: '',
-    startDate: '',
-    endDate: '',
-    imageUrl: '',
-    status: 'draft',
-    slug: '',
-    ownerId: '',
-  });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    if (event) {
-      setFormData({
-        title: event.title,
-        description: event.description || '',
-        location: event.location || '',
-        startDate: new Date(event.startDate).toISOString().split('T')[0],
-        endDate: new Date(event.endDate).toISOString().split('T')[0],
-        imageUrl: event.imageUrl || '',
-        status: event.status,
-        slug: event.slug || '',
-        ownerId: event.ownerId,
-      });
-    } else {
-      // Default values for new event
-      setFormData({
-        title: '',
-        description: '',
-        location: '',
-        startDate: new Date().toISOString().split('T')[0],
-        endDate: new Date(Date.now() + 86400000).toISOString().split('T')[0], // Tomorrow
-        imageUrl: '',
-        status: 'draft',
-        slug: '',
-        ownerId: users.length > 0 ? users[0].id : '',
-      });
-    }
-  }, [event, users]);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormData({
-      ...formData,
-      [name]: value,
-    });
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    setError('');
-
-    try {
-      const url = event
-        ? `/api/superadmin/events/${event.id}`
-        : '/api/superadmin/events';
-      
-      const method = event ? 'PUT' : 'POST';
-
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to save event');
-      }
-
-      onClose();
-      onEventSaved();
-    } catch (error) {
-      console.error('Error saving event:', error);
-      setError(error instanceof Error ? error.message : 'An unknown error occurred');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-lg w-full max-w-md">
-        <div className="p-6">
-          <h2 className="text-xl font-semibold mb-4">{event ? 'Edit Event' : 'Create Event'}</h2>
-          
-          {error && (
-            <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg">
-              {error}
-            </div>
-          )}
-          
-          <form onSubmit={handleSubmit}>
-            <div className="mb-4">
-              <label className="block text-gray-700 mb-2">Title *</label>
-              <input
-                type="text"
-                name="title"
-                value={formData.title}
-                onChange={handleChange}
-                required
-                className="w-full p-2 border rounded-lg"
-              />
-            </div>
-            
-            <div className="mb-4">
-              <label className="block text-gray-700 mb-2">Slug</label>
-              <input
-                type="text"
-                name="slug"
-                value={formData.slug}
-                onChange={handleChange}
-                className="w-full p-2 border rounded-lg"
-                placeholder="unique-event-url"
-              />
-              <p className="text-xs text-gray-500 mt-1">Used for URL: /event-slug</p>
-            </div>
-            
-            <div className="mb-4">
-              <label className="block text-gray-700 mb-2">Description</label>
-              <textarea
-                name="description"
-                value={formData.description}
-                onChange={handleChange}
-                rows={3}
-                className="w-full p-2 border rounded-lg"
-              />
-            </div>
-            
-            <div className="mb-4">
-              <label className="block text-gray-700 mb-2">Location</label>
-              <input
-                type="text"
-                name="location"
-                value={formData.location}
-                onChange={handleChange}
-                className="w-full p-2 border rounded-lg"
-              />
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div>
-                <label className="block text-gray-700 mb-2">Start Date *</label>
-                <input
-                  type="date"
-                  name="startDate"
-                  value={formData.startDate}
-                  onChange={handleChange}
-                  required
-                  className="w-full p-2 border rounded-lg"
-                />
-              </div>
-              <div>
-                <label className="block text-gray-700 mb-2">End Date *</label>
-                <input
-                  type="date"
-                  name="endDate"
-                  value={formData.endDate}
-                  onChange={handleChange}
-                  required
-                  className="w-full p-2 border rounded-lg"
-                />
-              </div>
-            </div>
-            
-            <div className="mb-4">
-              <label className="block text-gray-700 mb-2">Image URL</label>
-              <input
-                type="url"
-                name="imageUrl"
-                value={formData.imageUrl}
-                onChange={handleChange}
-                className="w-full p-2 border rounded-lg"
-                placeholder="https://example.com/image.jpg"
-              />
-            </div>
-            
-            <div className="mb-4">
-              <label className="block text-gray-700 mb-2">Status *</label>
-              <select
-                name="status"
-                value={formData.status}
-                onChange={handleChange}
-                required
-                className="w-full p-2 border rounded-lg"
-              >
-                <option value="draft">Draft</option>
-                <option value="published">Published</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
-            </div>
-            
-            <div className="mb-4">
-              <label className="block text-gray-700 mb-2">Owner *</label>
-              <select
-                name="ownerId"
-                value={formData.ownerId}
-                onChange={handleChange}
-                required
-                className="w-full p-2 border rounded-lg"
-              >
-                {users.map(user => (
-                  <option key={user.id} value={user.id}>
-                    {user.name || user.username} ({user.role})
-                  </option>
-                ))}
-              </select>
-            </div>
-            
-            <div className="flex justify-end space-x-2 mt-6">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
-                disabled={isSubmitting}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-green-300"
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? 'Saving...' : 'Save Event'}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
     </div>
   );
 }

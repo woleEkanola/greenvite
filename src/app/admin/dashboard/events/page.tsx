@@ -84,8 +84,7 @@ export default function EventsPage() {
   };
 
   const handleEditEvent = (event: Event) => {
-    setSelectedEvent(event);
-    setIsModalOpen(true);
+    router.push(`/admin/dashboard/events/edit/${event.id}`);
   };
 
   const handleDeleteEvent = async (id: string) => {
@@ -164,12 +163,12 @@ export default function EventsPage() {
                       </div>
                     </div>
                     <div className="flex space-x-2">
-                      <button
-                        onClick={() => handleEditEvent(event)}
-                        className="inline-flex items-center p-1.5 border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                      <Link
+                        href={`/admin/dashboard/events/edit/${event.id}`}
+                        className="inline-flex items-center p-1.5 border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                       >
                         <PencilIcon className="h-4 w-4" aria-hidden="true" />
-                      </button>
+                      </Link>
                       <button
                         onClick={() => handleDeleteEvent(event.id)}
                         className="inline-flex items-center p-1.5 border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
@@ -216,15 +215,6 @@ export default function EventsPage() {
         </div>
       )}
 
-      {isModalOpen && (
-        <EventModal
-          isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
-          event={selectedEvent}
-          onEventSaved={fetchEvents}
-        />
-      )}
-
       {isAdminModalOpen && (
         <AdminModal
           isOpen={isAdminModalOpen}
@@ -234,229 +224,6 @@ export default function EventsPage() {
           onAdminsUpdated={fetchEvents}
         />
       )}
-    </div>
-  );
-}
-
-type EventModalProps = {
-  isOpen: boolean;
-  onClose: () => void;
-  event: Event | null;
-  onEventSaved: () => void;
-};
-
-function EventModal({ isOpen, onClose, event, onEventSaved }: EventModalProps) {
-  const [formData, setFormData] = useState({
-    title: event?.title || '',
-    description: event?.description || '',
-    location: event?.location || '',
-    startDate: event?.startDate ? new Date(event.startDate).toISOString().slice(0, 16) : '',
-    endDate: event?.endDate ? new Date(event.endDate).toISOString().slice(0, 16) : '',
-    imageUrl: event?.imageUrl || '',
-    status: event?.status || 'draft',
-    ownerId: event?.ownerId || '',
-    owner: event?.owner || { id: '', username: '', name: null, email: null, role: '' },
-    admins: event?.admins || [],
-  });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState('');
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    setError('');
-
-    try {
-      const url = event ? `/api/admin/events/${event.id}` : '/api/admin/events';
-      const method = event ? 'PUT' : 'POST';
-
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to save event');
-      }
-
-      onEventSaved();
-      onClose();
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg overflow-hidden shadow-xl transform transition-all sm:max-w-lg sm:w-full">
-        <form onSubmit={handleSubmit}>
-          <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-            <div className="mb-4">
-              <h3 className="text-lg leading-6 font-medium text-gray-900">
-                {event ? 'Edit Event' : 'Create Event'}
-              </h3>
-            </div>
-
-            {error && (
-              <div className="mb-4 p-2 bg-red-100 text-red-700 rounded-md text-sm">
-                {error}
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 gap-y-4">
-              <div>
-                <label htmlFor="title" className="block text-sm font-medium text-gray-700">
-                  Title *
-                </label>
-                <input
-                  type="text"
-                  name="title"
-                  id="title"
-                  required
-                  className="mt-1 focus:ring-green-500 focus:border-green-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
-                  value={formData.title}
-                  onChange={handleChange}
-                />
-              </div>
-
-              <div>
-                <label htmlFor="description" className="block text-sm font-medium text-gray-700">
-                  Description
-                </label>
-                <textarea
-                  name="description"
-                  id="description"
-                  rows={3}
-                  className="mt-1 focus:ring-green-500 focus:border-green-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
-                  value={formData.description}
-                  onChange={handleChange}
-                />
-              </div>
-
-              <div>
-                <label htmlFor="location" className="block text-sm font-medium text-gray-700">
-                  Location
-                </label>
-                <input
-                  type="text"
-                  name="location"
-                  id="location"
-                  className="mt-1 focus:ring-green-500 focus:border-green-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
-                  value={formData.location}
-                  onChange={handleChange}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="startDate" className="block text-sm font-medium text-gray-700">
-                    Start Date & Time *
-                  </label>
-                  <input
-                    type="datetime-local"
-                    name="startDate"
-                    id="startDate"
-                    required
-                    className="mt-1 focus:ring-green-500 focus:border-green-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
-                    value={formData.startDate}
-                    onChange={handleChange}
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="endDate" className="block text-sm font-medium text-gray-700">
-                    End Date & Time *
-                  </label>
-                  <input
-                    type="datetime-local"
-                    name="endDate"
-                    id="endDate"
-                    required
-                    className="mt-1 focus:ring-green-500 focus:border-green-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
-                    value={formData.endDate}
-                    onChange={handleChange}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label htmlFor="imageUrl" className="block text-sm font-medium text-gray-700">
-                  Image URL
-                </label>
-                <input
-                  type="text"
-                  name="imageUrl"
-                  id="imageUrl"
-                  className="mt-1 focus:ring-green-500 focus:border-green-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
-                  value={formData.imageUrl}
-                  onChange={handleChange}
-                />
-              </div>
-
-              <div>
-                <label htmlFor="ownerId" className="block text-sm font-medium text-gray-700">
-                  Owner ID
-                </label>
-                <input
-                  type="text"
-                  name="ownerId"
-                  id="ownerId"
-                  className="mt-1 focus:ring-green-500 focus:border-green-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
-                  value={formData.ownerId}
-                  onChange={handleChange}
-                />
-              </div>
-
-              <div>
-                <label htmlFor="status" className="block text-sm font-medium text-gray-700">
-                  Status
-                </label>
-                <select
-                  name="status"
-                  id="status"
-                  className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm rounded-md"
-                  value={formData.status}
-                  onChange={handleChange}
-                >
-                  <option value="draft">Draft</option>
-                  <option value="published">Published</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:ml-3 sm:w-auto sm:text-sm"
-            >
-              {isSubmitting ? 'Saving...' : 'Save'}
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
-      </div>
     </div>
   );
 }

@@ -93,8 +93,12 @@ export async function POST(request: NextRequest) {
 
     // Check if slug is unique if provided
     if (slug) {
-      const existingEvent = await prisma.event.findUnique({
-        where: { slug },
+      const existingEvent = await prisma.event.findFirst({
+        where: {
+          slug: {
+            equals: slug
+          }
+        },
       });
 
       if (existingEvent) {
