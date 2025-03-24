@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Dialog } from '@headlessui/react';
 import { toast } from 'react-hot-toast';
+import { useRouter } from 'next/navigation';
 
 interface SignupModalProps {
   isOpen: boolean;
@@ -14,6 +15,7 @@ export default function SignupModal({ isOpen, onClose }: SignupModalProps) {
     email: '',
     phone: '',
   });
+  const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,6 +35,8 @@ export default function SignupModal({ isOpen, onClose }: SignupModalProps) {
       }
 
       toast.success(data.message);
+    
+      router.push('/login');
       onClose();
     } catch (error: any) {
       toast.error(error.message);
