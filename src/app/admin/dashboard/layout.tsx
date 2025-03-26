@@ -52,7 +52,7 @@ export default function DashboardLayout({
       await signOut({ redirect: false });
       
       // Redirect to login page
-      router.push('/admin');
+      router.push('/login');
     } catch (error) {
       console.error('Logout error:', error);
     } finally {

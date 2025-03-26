@@ -18,7 +18,7 @@ async function findAdminUser() {
     }
     
     // Try to find an admin user
-    const adminUser = users.find(user => user.role === 'ADMIN' || user.role === 'admin');
+    const adminUser = users.find(user => user.role === 'SUPERADMIN' || user.role === 'superadmin');
     
     if (adminUser) {
       console.log(`Found admin user: ${adminUser.username} (ID: ${adminUser.id})`);

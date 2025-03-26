@@ -8,18 +8,19 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  username  String   @unique
-  password  String
-  role      String   @default("ADMIN")
-  email     String?  @unique
-  name      String?
-  phone     String?  @unique
-  verified  Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  ownedEvents Event[] @relation("EventOwner")
-  adminEvents EventAdmin[]
+  id               String            @id @default(cuid())
+  username         String            @unique
+  password         String
+  role             String            @default("ADMIN")
+  email            String?           @unique
+  name             String?
+  phone            String?           @unique
+  verified         Boolean           @default(false)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  ownedEvents      Event[]           @relation("EventOwner")
+  adminEvents      EventAdmin[]
+  sentInvitations  AdminInvitation[] @relation("UserToAdminInvitation")
 }
 
 model Table {
@@ -181,6 +182,7 @@ model Event {
   ownerId           String        // Original creator of the event
   owner             User          @relation("EventOwner", fields: [ownerId], references: [id])
   admins            EventAdmin[]  // Many-to-many relation with User
+  adminInvitations  AdminInvitation[]
   tables            Table[]
   registrationCodes RegistrationCode[]
   batches           Batch[]
@@ -197,4 +199,23 @@ model EventAdmin {
   event     Event    @relation(fields: [eventId], references: [id])
 
   @@unique([userId, eventId])
+}
+
+model AdminInvitation {
+  id          String    @id @default(cuid())
+  email       String
+  token       String    @unique
+  status      String    @default("pending") // pending, accepted, expired
+  message     String?   @db.Text
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  acceptedAt  DateTime?
+  
+  eventId     String
+  event       Event     @relation(fields: [eventId], references: [id])
+  inviterId   String
+  inviter     User      @relation("UserToAdminInvitation", fields: [inviterId], references: [id])
+  
+  @@unique([email, eventId])
 }

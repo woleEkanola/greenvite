@@ -347,7 +347,9 @@ export default function EditEventPage({ params }: { params: { id: string } }) {
               Event Admins
             </label>
             <div className="max-h-60 overflow-y-auto border border-gray-300 rounded-md p-3">
-              {users.map((user) => (
+              {
+              users.length ? 
+         users?.map((user) => (
                 <div key={user.id} className="mb-2">
                   <label className="inline-flex items-center">
                     <input
@@ -363,7 +365,23 @@ export default function EditEventPage({ params }: { params: { id: string } }) {
                     </span>
                   </label>
                 </div>
-              ))}
+              )):(
+                <div key={users.id} className="mb-2">
+                  <label className="inline-flex items-center">
+                    <input
+                      type="checkbox"
+                      name="adminIds"
+                      value={users.id}
+                      checked={formData.adminIds.includes(users.id)}
+                      onChange={handleAdminChange}
+                      className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
+                    />
+                    <span className="ml-2">
+                      {users.username} ({users.name || users.email})
+                    </span>
+                  </label>
+                </div>
+              ) }
             </div>
           </div>
         </div>

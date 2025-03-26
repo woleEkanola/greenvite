@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { PlusIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, PencilIcon, TrashIcon, UserPlusIcon, UsersIcon } from '@heroicons/react/24/outline';
 import { format } from 'date-fns';
 import Link from 'next/link';
 
@@ -44,8 +44,10 @@ export default function EventsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [selectedEventForAdmins, setSelectedEventForAdmins] = useState<Event | null>(null);
+  const [selectedEventForInvites, setSelectedEventForInvites] = useState<Event | null>(null);
   const [selectedAdminIds, setSelectedAdminIds] = useState<string[]>([]);
   const router = useRouter();
 
@@ -186,10 +188,19 @@ export default function EventsPage() {
                           setIsAdminModalOpen(true);
                         }}
                         className="inline-flex items-center p-1.5 border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                        title="Manage existing admins"
                       >
-                        <svg className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                          <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.671.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1H6.75a2.25 2.25 0 00-2.25 2.25v2.25a2.25 2.25 0 002.25 2.25H9" />
-                        </svg>
+                        <UsersIcon className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelectedEventForInvites(event);
+                          setIsInviteModalOpen(true);
+                        }}
+                        className="inline-flex items-center p-1.5 border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                        title="Invite new admins"
+                      >
+                        <UserPlusIcon className="h-4 w-4" aria-hidden="true" />
                       </button>
                     </div>
                   </div>
@@ -220,15 +231,22 @@ export default function EventsPage() {
         </div>
       )}
 
-      {isAdminModalOpen && (
-        <AdminModal
-          isOpen={isAdminModalOpen}
-          onClose={() => setIsAdminModalOpen(false)}
-          event={selectedEventForAdmins}
-          users={users}
-          onAdminsUpdated={fetchEvents}
-        />
-      )}
+      {/* Admin Modal */}
+      <AdminModal
+        isOpen={isAdminModalOpen}
+        onClose={() => setIsAdminModalOpen(false)}
+        event={selectedEventForAdmins}
+        users={users}
+        onAdminsUpdated={fetchEvents}
+      />
+
+      {/* Invite Admin Modal */}
+      <InviteAdminModal
+        isOpen={isInviteModalOpen}
+        onClose={() => setIsInviteModalOpen(false)}
+        event={selectedEventForInvites}
+        onInviteSent={fetchEvents}
+      />
     </div>
   );
 }
@@ -328,6 +346,153 @@ function AdminModal({ isOpen, onClose, event, users, onAdminsUpdated }: AdminMod
               type="button"
               onClick={onClose}
               className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+type InviteAdminModalProps = {
+  isOpen: boolean;
+  onClose: () => void;
+  event: Event | null;
+  onInviteSent: () => void;
+};
+
+function InviteAdminModal({ isOpen, onClose, event, onInviteSent }: InviteAdminModalProps) {
+  const [emails, setEmails] = useState<string>('');
+  const [message, setMessage] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setError(null);
+    setSuccess(null);
+
+    // Split and trim emails
+    const emailList = emails
+      .split(',')
+      .map(email => email.trim())
+      .filter(email => email.length > 0);
+
+    if (emailList.length === 0) {
+      setError('Please enter at least one email address');
+      setIsSubmitting(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/admin/events/${event?.id}/invite-admins`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          emails: emailList,
+          message: message.trim() 
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to send invitations');
+      }
+
+      const data = await response.json();
+      setSuccess(`Successfully sent ${data.sent} invitation${data.sent !== 1 ? 's' : ''}`);
+      setEmails('');
+      setMessage('');
+      onInviteSent();
+      
+      // Close the modal after a delay
+      setTimeout(() => {
+        onClose();
+      }, 2000);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg overflow-hidden shadow-xl transform transition-all sm:max-w-lg sm:w-full">
+        <form onSubmit={handleSubmit}>
+          <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+            <div className="mb-4">
+              <h3 className="text-lg leading-6 font-medium text-gray-900">Invite Admins to {event?.title}</h3>
+              <p className="mt-1 text-sm text-gray-500">
+                Enter email addresses separated by commas. New users will be invited to sign up.
+              </p>
+            </div>
+
+            {error && (
+              <div className="mb-4 p-2 bg-red-50 text-red-700 rounded-md text-sm">
+                {error}
+              </div>
+            )}
+
+            {success && (
+              <div className="mb-4 p-2 bg-green-50 text-green-700 rounded-md text-sm">
+                {success}
+              </div>
+            )}
+
+            <div className="mb-4">
+              <label htmlFor="emails" className="block text-sm font-medium text-gray-700 mb-1">
+                Email Addresses
+              </label>
+              <input
+                type="text"
+                id="emails"
+                value={emails}
+                onChange={(e) => setEmails(e.target.value)}
+                placeholder="email1@example.com, email2@example.com"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                disabled={isSubmitting}
+              />
+              <p className="mt-1 text-xs text-gray-500">Separate multiple emails with commas</p>
+            </div>
+
+            <div className="mb-4">
+              <label htmlFor="message" className="block text-sm font-medium text-gray-700 mb-1">
+                Personal Message (Optional)
+              </label>
+              <textarea
+                id="message"
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder="Add a personal message to the invitation email"
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                disabled={isSubmitting}
+              />
+            </div>
+          </div>
+
+          <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+            <button
+              type="submit"
+              className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:ml-3 sm:w-auto sm:text-sm"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Sending...' : 'Send Invitations'}
+            </button>
+            <button
+              type="button"
+              className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+              onClick={onClose}
+              disabled={isSubmitting}
             >
               Cancel
             </button>
