@@ -96,25 +96,53 @@ export async function PUT(
       );
     }
 
-    // Check if the event exists and the user has access to it
-    const existingEvent = await prisma.event.findFirst({
+    // Get the current user to check if they are a superadmin
+    const currentUser = await prisma.user.findUnique({
       where: {
-        id: eventId,
-        OR: [
-          { ownerId: session.user.id },
-          {
-            admins: {
-              some: {
-                userId: session.user.id
+        id: session.user.id
+      },
+      select: {
+        id: true,
+        role: true
+      }
+    });
+
+    const isSuperAdmin = currentUser?.role === 'SUPERADMIN' || currentUser?.role === 'superadmin';
+
+    // Check if the event exists
+    let existingEvent;
+    
+    if (isSuperAdmin) {
+      // Superadmins can access any event
+      existingEvent = await prisma.event.findUnique({
+        where: {
+          id: eventId
+        },
+        include: {
+          admins: true,
+        },
+      });
+    } else {
+      // Regular users can only access events they own or are admins of
+      existingEvent = await prisma.event.findFirst({
+        where: {
+          id: eventId,
+          OR: [
+            { ownerId: session.user.id },
+            {
+              admins: {
+                some: {
+                  userId: session.user.id
+                }
               }
             }
-          }
-        ]
-      },
-      include: {
-        admins: true,
-      },
-    });
+          ]
+        },
+        include: {
+          admins: true,
+        },
+      });
+    }
 
     if (!existingEvent) {
       return NextResponse.json(
@@ -124,7 +152,7 @@ export async function PUT(
     }
 
     // Parse the request body
-    const { title, description, location, startDate, endDate, imageUrl, status, slug } = await request.json();
+    const { title, description, location, startDate, endDate, imageUrl, status, slug, ownerId } = await request.json();
 
     // Validate required fields
     if (!title || !startDate || !endDate) {
@@ -132,6 +160,34 @@ export async function PUT(
         { error: 'Title, start date, and end date are required' },
         { status: 400 }
       );
+    }
+
+    // If ownerId is provided and different from the current owner, validate the change
+    let newOwnerId = undefined;
+    if (ownerId && ownerId !== existingEvent.ownerId) {
+      // Only superadmins can change the event owner
+      if (!isSuperAdmin) {
+        return NextResponse.json(
+          { error: 'Only superadmins can change the event owner' },
+          { status: 403 }
+        );
+      }
+      
+      // Verify that the new owner exists
+      const newOwner = await prisma.user.findUnique({
+        where: {
+          id: ownerId
+        }
+      });
+
+      if (!newOwner) {
+        return NextResponse.json(
+          { error: 'The specified new owner does not exist' },
+          { status: 400 }
+        );
+      }
+
+      newOwnerId = ownerId;
     }
 
     // Check if slug is unique if provided and changed
@@ -160,6 +216,7 @@ export async function PUT(
         imageUrl,
         status,
         slug,
+        ...(newOwnerId && { ownerId: newOwnerId }),
       },
       include: {
         owner: {

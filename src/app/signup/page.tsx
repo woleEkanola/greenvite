@@ -132,8 +132,18 @@ export default function SignupPage() {
           throw new Error(acceptData.error || 'Failed to accept invitation');
         }
         
-        // Redirect to the event page
-        router.push(`/admin/dashboard/events/${invitationInfo.eventId}`);
+        // Redirect to the appropriate page based on invitation info
+        if (invitationInfo && invitationInfo.eventId) {
+          // If we have a valid eventId, go to the event page
+          router.push(`/admin/dashboard/events/${invitationInfo.eventId}`);
+        } else if (acceptData && acceptData.eventId) {
+          // If the accept response has an eventId, use that instead
+          router.push(`/admin/dashboard/events/${acceptData.eventId}`);
+        } else {
+          // Fallback if eventId is missing from both sources
+          console.log('No event ID found in invitation data, redirecting to dashboard');
+          router.push('/admin/dashboard');
+        }
       } else {
         // Regular signup - redirect to login
         router.push('/login?registered=true');

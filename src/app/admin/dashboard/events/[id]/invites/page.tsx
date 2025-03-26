@@ -150,13 +150,18 @@ export default function EventInvitesPage({ params }: { params: { id: string } })
   const [recipients, setRecipients] = useState<Recipient[]>([])
   const [emailTemplate, setEmailTemplate] = useState('')
   const [whatsappTemplate, setWhatsappTemplate] = useState('')
+  const [emailSubject, setEmailSubject] = useState('')
   const [enableEmail, setEnableEmail] = useState(true)
   const [enableWhatsApp, setEnableWhatsApp] = useState(true)
   const [sending, setSending] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [previewType, setPreviewType] = useState<'email' | 'whatsapp'>('email')
   const [previewRecipient, setPreviewRecipient] = useState<Recipient | null>(null)
+  const [showMessageSettings, setShowMessageSettings] = useState(false)
+  const [emailImage, setEmailImage] = useState<File | null>(null)
+  const [emailImagePreview, setEmailImagePreview] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const imageInputRef = useRef<HTMLInputElement>(null)
 
   // Validation schema for recipients
   const recipientSchema = z.object({
@@ -174,6 +179,82 @@ export default function EventInvitesPage({ params }: { params: { id: string } })
         if (response.ok) {
           const data = await response.json()
           setEvent(data)
+          
+          // Set default templates based on event title
+          if (data.title === "Jesse George Church Dedication") {
+            setEmailSubject('Invitation to Jesse George Church Dedication')
+            setEmailTemplate(`
+<p>Dear {{name}},</p>
+
+<p>We are pleased to invite you to the Church Dedication of Jesse Oghenekome George.</p>
+
+<p>Please use the link below to confirm your attendance:</p>
+
+<p><a href="{{link}}#{{code}}">{{link}}#{{code}}</a></p>
+
+<p>Your unique registration code is: <strong>{{code}}</strong></p>
+
+<p>We look forward to celebrating this special occasion with you.</p>
+
+<p>Warm regards,<br>
+The George Family</p>
+
+{{Image}}
+            `.trim())
+            
+            setWhatsappTemplate(`
+Hello {{name}},
+
+You are cordially invited to the Church Dedication of Jesse Oghenekome George.
+
+Please use this link to confirm your attendance:
+{{link}}#{{code}}
+
+Your unique registration code is: *{{code}}*
+
+We look forward to celebrating this special occasion with you.
+
+Warm regards,
+The George Family
+            `.trim())
+          } else {
+            // Default templates for other events
+            setEmailSubject(`Invitation to ${data.title}`)
+            setEmailTemplate(`
+<p>Dear {{name}},</p>
+
+<p>We are pleased to invite you to ${data.title}.</p>
+
+<p>Please use the link below to confirm your attendance:</p>
+
+<p><a href="{{link}}#{{code}}">{{link}}#{{code}}</a></p>
+
+<p>Your unique registration code is: <strong>{{code}}</strong></p>
+
+<p>We look forward to celebrating with you.</p>
+
+<p>Warm regards,<br>
+The Event Team</p>
+
+{{Image}}
+            `.trim())
+            
+            setWhatsappTemplate(`
+Hello {{name}},
+
+You are cordially invited to ${data.title}.
+
+Please use this link to confirm your attendance:
+{{link}}#{{code}}
+
+Your unique registration code is: *{{code}}*
+
+We look forward to celebrating with you.
+
+Warm regards,
+The Event Team
+            `.trim())
+          }
         } else {
           console.error('Failed to fetch event')
           toast.error('Failed to fetch event details')
@@ -188,6 +269,36 @@ export default function EventInvitesPage({ params }: { params: { id: string } })
 
     fetchEvent()
   }, [params.id])
+
+  // Handle email image upload
+  const handleEmailImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Check file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image size must be less than 5MB')
+      return
+    }
+
+    setEmailImage(file)
+    
+    // Create preview URL
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      setEmailImagePreview(reader.result as string)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  // Clear email image
+  const clearEmailImage = () => {
+    setEmailImage(null)
+    setEmailImagePreview(null)
+    if (imageInputRef.current) {
+      imageInputRef.current.value = ''
+    }
+  }
 
   // Add a new empty recipient
   const addRecipient = useCallback(() => {
@@ -334,57 +445,62 @@ export default function EventInvitesPage({ params }: { params: { id: string } })
         type: recipient.type
       }))
       
-      // First, create the invites
-      const createResponse = await fetch(`/api/admin/events/${params.id}/invites`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ invites: invitesToCreate })
-      })
+      // Create FormData for file upload
+      const formData = new FormData()
+      formData.append('eventId', params.id)
+      formData.append('subject', emailSubject)
+      formData.append('emailTemplate', emailTemplate)
+      formData.append('whatsappTemplate', whatsappTemplate)
+      formData.append('enableEmail', String(enableEmail))
+      formData.append('enableWhatsApp', String(enableWhatsApp))
+      formData.append('recipients', JSON.stringify(invitesToCreate))
       
-      if (!createResponse.ok) {
-        throw new Error('Failed to create invites')
+      if (emailImage) {
+        formData.append('emailImage', emailImage)
       }
       
-      const createData = await createResponse.json()
-      
-      // Then, send the invites
-      const sendResponse = await fetch(`/api/admin/events/${params.id}/sent-invites`, {
+      // Send the invites
+      const response = await fetch('/api/admin/send-invites', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          inviteIds: createData.invites.map((invite: any) => invite.id),
-          emailTemplate: enableEmail ? emailTemplate : null,
-          whatsappTemplate: enableWhatsApp ? whatsappTemplate : null
+        body: formData
+      })
+      
+      if (response.ok) {
+        Swal.fire({
+          title: 'Success!',
+          text: 'Invites have been sent successfully',
+          icon: 'success',
+          confirmButtonText: 'View Sent Invites',
+          showCancelButton: true,
+          cancelButtonText: 'Send More',
+          confirmButtonColor: '#10b981'
+        }).then((result) => {
+          if (result.isConfirmed) {
+            window.location.href = `/admin/dashboard/events/${params.id}/sent-invites`
+          } else {
+            // Reset form for sending more invites
+            setRecipients([{ name: '', email: '', phone: '', type: 'both' }])
+          }
         })
-      })
-      
-      if (!sendResponse.ok) {
-        throw new Error('Failed to send invites')
+      } else {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to send invites')
       }
-      
-      const sendData = await sendResponse.json()
-      
-      toast.success(`Successfully sent ${sendData.count} invites`)
-      
-      // Reset form
-      setRecipients([])
-      setEmailTemplate('')
-      setWhatsappTemplate('')
-      
     } catch (error) {
       console.error('Error sending invites:', error)
-      toast.error('Failed to send invites. Please try again.')
+      Swal.fire({
+        title: 'Error',
+        text: error instanceof Error ? error.message : 'Failed to send invites',
+        icon: 'error',
+        confirmButtonText: 'Try Again'
+      })
     } finally {
       setSending(false)
     }
   }
 
-  // Show preview dialog
-  const showPreviewDialog = (type: 'email' | 'whatsapp') => {
+  // Show preview of message
+  const showMessagePreview = (type: 'email' | 'whatsapp') => {
     if (recipients.length === 0) {
       toast.error('Please add at least one recipient to preview')
       return
@@ -393,6 +509,36 @@ export default function EventInvitesPage({ params }: { params: { id: string } })
     setPreviewType(type)
     setPreviewRecipient(recipients[0])
     setShowPreview(true)
+  }
+
+  // Generate preview content
+  const getPreviewContent = () => {
+    if (!previewRecipient) return ''
+    
+    const name = previewRecipient.name || 'Guest'
+    const code = 'SAMPLE123'
+    const link = event?.slug ? `https://greenvites.online/${event.slug}` : 'https://greenvites.online/event'
+    
+    if (previewType === 'email') {
+      let content = emailTemplate
+        .replace(/{{name}}/g, name)
+        .replace(/{{code}}/g, code)
+        .replace(/{{link}}/g, link)
+      
+      // If there's an image preview, replace the {{Image}} placeholder
+      if (emailImagePreview) {
+        content = content.replace('{{Image}}', `<img src="${emailImagePreview}" alt="Event Image" style="max-width: 100%; margin-top: 20px;" />`)
+      } else {
+        content = content.replace('{{Image}}', '')
+      }
+      
+      return content
+    } else {
+      return whatsappTemplate
+        .replace(/{{name}}/g, name)
+        .replace(/{{code}}/g, code)
+        .replace(/{{link}}/g, link)
+    }
   }
 
   if (loading) {
@@ -404,24 +550,30 @@ export default function EventInvitesPage({ params }: { params: { id: string } })
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold mb-2">{event?.title} - Send Invites</h1>
-        <p className="text-gray-600">
-          Create and send invitations for this event.
-        </p>
+    <div className="container mx-auto px-4 py-8">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-semibold">{loading ? 'Loading...' : `Send Invites: ${event?.title}`}</h1>
+        <div className="flex space-x-2">
+          <a 
+            href={`/admin/dashboard/events/${params.id}/sent-invites`}
+            className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
+          >
+            View Sent Invites
+          </a>
+        </div>
       </div>
-      
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="mb-6">
-          <h2 className="text-lg font-semibold mb-4">Invitation Channels</h2>
-          <div className="flex space-x-4">
+
+      <div className="space-y-8">
+        {/* Channel Selection */}
+        <div className="bg-white p-6 rounded-lg shadow-md">
+          <h2 className="text-lg font-medium mb-4">Invitation Channels</h2>
+          <div className="flex flex-wrap gap-4">
             <label className="flex items-center space-x-2">
               <input
                 type="checkbox"
                 checked={enableEmail}
-                onChange={(e) => setEnableEmail(e.target.checked)}
-                className="h-4 w-4 text-emerald-600 focus:ring-emerald-500 border-gray-300 rounded"
+                onChange={() => setEnableEmail(!enableEmail)}
+                className="form-checkbox h-5 w-5 text-emerald-500 rounded"
               />
               <span>Email</span>
             </label>
@@ -429,59 +581,147 @@ export default function EventInvitesPage({ params }: { params: { id: string } })
               <input
                 type="checkbox"
                 checked={enableWhatsApp}
-                onChange={(e) => setEnableWhatsApp(e.target.checked)}
-                className="h-4 w-4 text-emerald-600 focus:ring-emerald-500 border-gray-300 rounded"
+                onChange={() => setEnableWhatsApp(!enableWhatsApp)}
+                className="form-checkbox h-5 w-5 text-emerald-500 rounded"
               />
               <span>WhatsApp</span>
             </label>
+            
+            <button
+              type="button"
+              onClick={() => setShowMessageSettings(!showMessageSettings)}
+              className="ml-auto px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-md flex items-center"
+            >
+              {showMessageSettings ? 'Hide Message Settings' : 'Customize Message Settings'}
+              <ChevronDown className={`ml-2 h-4 w-4 transition-transform ${showMessageSettings ? 'rotate-180' : ''}`} />
+            </button>
           </div>
+          
+          {/* Message Templates */}
+          {showMessageSettings && (
+            <div className="mt-6 border-t pt-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Email Template */}
+                {enableEmail && (
+                  <div className="space-y-4">
+                    <h3 className="font-medium">Email Template</h3>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Subject
+                      </label>
+                      <input
+                        type="text"
+                        value={emailSubject}
+                        onChange={(e) => setEmailSubject(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        placeholder="Email subject"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Message
+                      </label>
+                      <RichTextEditor
+                        value={emailTemplate}
+                        onChange={setEmailTemplate}
+                      />
+                      <div className="mt-2 text-xs text-gray-500">
+                        Available variables: {'{{name}}, {{code}}, {{link}}, {{Image}}'}
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Image (optional)
+                      </label>
+                      <div className="flex items-center space-x-4">
+                        <input
+                          type="file"
+                          ref={imageInputRef}
+                          accept="image/*"
+                          onChange={handleEmailImageUpload}
+                          className="hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => imageInputRef.current?.click()}
+                          className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+                        >
+                          Choose Image
+                        </button>
+                        {emailImagePreview && (
+                          <button
+                            type="button"
+                            onClick={clearEmailImage}
+                            className="px-4 py-2 border border-red-300 text-red-500 rounded-md hover:bg-red-50"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                      {emailImagePreview && (
+                        <div className="mt-2">
+                          <div className="relative w-full h-32 bg-gray-100 rounded-md overflow-hidden">
+                            <Image
+                              src={emailImagePreview}
+                              alt="Email image preview"
+                              fill
+                              style={{ objectFit: 'contain' }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => showMessagePreview('email')}
+                        className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
+                      >
+                        Preview Email
+                      </button>
+                    </div>
+                  </div>
+                )}
+                
+                {/* WhatsApp Template */}
+                {enableWhatsApp && (
+                  <div className="space-y-4">
+                    <h3 className="font-medium">WhatsApp Template</h3>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Message
+                      </label>
+                      <textarea
+                        value={whatsappTemplate}
+                        onChange={(e) => setWhatsappTemplate(e.target.value)}
+                        rows={12}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono text-sm"
+                      />
+                      <div className="mt-2 text-xs text-gray-500">
+                        Available variables: {'{{name}}, {{code}}, {{link}}'}
+                      </div>
+                    </div>
+                    
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => showMessagePreview('whatsapp')}
+                        className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600"
+                      >
+                        Preview WhatsApp
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
-        
-        {enableEmail && (
-          <div className="mb-6">
-            <div className="flex justify-between items-center mb-2">
-              <h2 className="text-lg font-semibold">Email Template</h2>
-              <button
-                onClick={() => showPreviewDialog('email')}
-                className="text-sm text-blue-600 hover:text-blue-800"
-                disabled={!emailTemplate.trim() || recipients.length === 0}
-              >
-                Preview
-              </button>
-            </div>
-            <RichTextEditor
-              value={emailTemplate}
-              onChange={setEmailTemplate}
-              placeholder="Enter your email template here..."
-            />
-            <div className="mt-2 text-sm text-gray-500">
-              You can use placeholders like <code className="bg-gray-100 px-1 rounded">{'{{name}}'}</code> for recipient's name.
-            </div>
-          </div>
-        )}
-        
-        {enableWhatsApp && (
-          <div className="mb-6">
-            <div className="flex justify-between items-center mb-2">
-              <h2 className="text-lg font-semibold">WhatsApp Template</h2>
-              <button
-                onClick={() => showPreviewDialog('whatsapp')}
-                className="text-sm text-blue-600 hover:text-blue-800"
-                disabled={!whatsappTemplate.trim() || recipients.length === 0}
-              >
-                Preview
-              </button>
-            </div>
-            <TextAreaWithCounter
-              value={whatsappTemplate}
-              onChange={setWhatsappTemplate}
-              maxLength={1000}
-            />
-            <div className="mt-2 text-sm text-gray-500">
-              Keep your WhatsApp message concise. You can use placeholders like <code className="bg-gray-100 px-1 rounded">{'{{name}}'}</code>.
-            </div>
-          </div>
-        )}
         
         <div className="mb-6">
           <div className="flex justify-between items-center mb-4">
@@ -553,46 +793,42 @@ export default function EventInvitesPage({ params }: { params: { id: string } })
         </div>
       </div>
       
-      {/* Preview Dialog */}
-      {showPreview && previewRecipient && (
+      {/* Preview Modal */}
+      {showPreview && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+          <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-semibold">
+              <h3 className="text-lg font-medium">
                 {previewType === 'email' ? 'Email Preview' : 'WhatsApp Preview'}
               </h3>
               <button
                 onClick={() => setShowPreview(false)}
                 className="text-gray-500 hover:text-gray-700"
               >
-                <X size={24} />
+                <X className="h-5 w-5" />
               </button>
             </div>
             
-            <div className="mb-4">
-              <div className="text-sm text-gray-500 mb-1">Recipient:</div>
-              <div className="font-medium">{previewRecipient.name}</div>
-              {previewType === 'email' && (
-                <div className="text-gray-600">{previewRecipient.email}</div>
-              )}
-              {previewType === 'whatsapp' && (
-                <div className="text-gray-600">{previewRecipient.phone}</div>
-              )}
-            </div>
-            
-            <div className="border rounded-md p-4 bg-gray-50">
-              {previewType === 'email' ? (
-                <div 
-                  dangerouslySetInnerHTML={{ 
-                    __html: emailTemplate.replace(/{{name}}/g, previewRecipient.name) 
-                  }} 
-                />
-              ) : (
-                <div className="whitespace-pre-wrap">
-                  {whatsappTemplate.replace(/{{name}}/g, previewRecipient.name)}
+            {previewType === 'email' && (
+              <div className="border rounded-md p-4">
+                <div className="mb-2 pb-2 border-b">
+                  <div className="text-sm text-gray-500">Subject:</div>
+                  <div className="font-medium">{emailSubject}</div>
                 </div>
-              )}
-            </div>
+                <div 
+                  className="prose max-w-none"
+                  dangerouslySetInnerHTML={{ __html: getPreviewContent() }}
+                />
+              </div>
+            )}
+            
+            {previewType === 'whatsapp' && (
+              <div className="bg-gray-100 rounded-md p-4">
+                <div className="bg-green-50 rounded-lg p-4 border-l-4 border-green-500 font-mono whitespace-pre-wrap">
+                  {getPreviewContent()}
+                </div>
+              </div>
+            )}
             
             <div className="mt-4 flex justify-end">
               <button

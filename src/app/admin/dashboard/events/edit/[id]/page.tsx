@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
+import { TrashIcon } from '@heroicons/react/24/outline';
 
 type User = {
   id: string;
@@ -43,18 +44,40 @@ export default function EditEventPage({ params }: { params: { id: string } }) {
     status: 'draft',
     slug: '',
     adminIds: [] as string[],
+    ownerId: '',
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentAdmins, setCurrentAdmins] = useState<User[]>([]);
   const router = useRouter();
   const { id } = params;
 
   useEffect(() => {
     fetchEventData();
     fetchUsers();
+    fetchCurrentUser();
   }, [id]);
+
+  const fetchCurrentUser = async () => {
+    try {
+      const response = await fetch('/api/admin/users/me');
+      if (!response.ok) {
+        throw new Error('Failed to fetch current user');
+      }
+      const user = await response.json();
+      setCurrentUser(user);
+      setIsSuperAdmin(
+        user.role === 'SUPERADMIN' || 
+        user.role === 'superadmin'
+      );
+    } catch (error) {
+      console.error('Error fetching current user:', error);
+    }
+  };
 
   const fetchEventData = async () => {
     setIsLoading(true);
@@ -71,6 +94,16 @@ export default function EditEventPage({ params }: { params: { id: string } }) {
         return date.toISOString().slice(0, 16);
       };
 
+      // Filter out superadmins from the admins list
+      const admins = event.admins
+        .map(admin => admin.user)
+        .filter(user => 
+          user.id !== event.ownerId && 
+          user.role !== 'SUPERADMIN' && 
+          user.role !== 'superadmin'
+        );
+      setCurrentAdmins(admins);
+
       setFormData({
         title: event.title,
         description: event.description || '',
@@ -81,6 +114,7 @@ export default function EditEventPage({ params }: { params: { id: string } }) {
         status: event.status,
         slug: event.slug || '',
         adminIds: event.admins.map(admin => admin.userId),
+        ownerId: event.ownerId,
       });
     } catch (error) {
       console.error('Error fetching event:', error);
@@ -123,6 +157,17 @@ export default function EditEventPage({ params }: { params: { id: string } }) {
     }
   };
 
+  const handleRemoveAdmin = (userId: string) => {
+    // Remove admin from the list
+    setCurrentAdmins(prevAdmins => prevAdmins.filter(admin => admin.id !== userId));
+    
+    // Update adminIds in formData
+    setFormData(prev => ({
+      ...prev,
+      adminIds: prev.adminIds.filter(id => id !== userId)
+    }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -151,6 +196,7 @@ export default function EditEventPage({ params }: { params: { id: string } }) {
           ...formData,
           startDate: new Date(formData.startDate).toISOString(),
           endDate: new Date(formData.endDate).toISOString(),
+          ...(isSuperAdmin && { ownerId: formData.ownerId }),
         }),
       });
 
@@ -342,46 +388,100 @@ export default function EditEventPage({ params }: { params: { id: string } }) {
             </select>
           </div>
 
+          {isSuperAdmin && (
+            <div>
+              <label htmlFor="ownerId" className="block text-sm font-medium text-gray-700">
+                Event Owner
+              </label>
+              <select
+                id="ownerId"
+                name="ownerId"
+                value={formData.ownerId}
+                onChange={handleChange}
+                className="mt-1 focus:ring-green-500 focus:border-green-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+              >
+                <option value="">Select an owner</option>
+                {users.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.name || user.username} ({user.email})
+                  </option>
+                ))}
+              </select>
+              <p className="text-sm text-gray-500 mt-1">
+                As a superadmin, you can change the event owner.
+              </p>
+            </div>
+          )}
+
           <div className="col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Event Admins
             </label>
-            <div className="max-h-60 overflow-y-auto border border-gray-300 rounded-md p-3">
-              {
-              users.length ? 
-         users?.map((user) => (
-                <div key={user.id} className="mb-2">
-                  <label className="inline-flex items-center">
-                    <input
-                      type="checkbox"
-                      name="adminIds"
-                      value={user.id}
-                      checked={formData.adminIds.includes(user.id)}
-                      onChange={handleAdminChange}
-                      className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
-                    />
-                    <span className="ml-2">
-                      {user.username} ({user.name || user.email})
+            <div className="bg-gray-50 p-4 rounded-md mb-4">
+              <h4 className="font-medium text-gray-700 mb-2">Current Owner</h4>
+              {users.find(user => user.id === formData.ownerId) && (
+                <div className="flex items-center p-3 bg-white rounded-md border border-gray-200">
+                  <div className="flex-shrink-0 h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
+                    <span className="text-gray-500 font-medium">
+                      {(users.find(user => user.id === formData.ownerId)?.name || users.find(user => user.id === formData.ownerId)?.username || 'U').charAt(0)}
                     </span>
-                  </label>
-                </div>
-              )):(
-                <div key={users.id} className="mb-2">
-                  <label className="inline-flex items-center">
-                    <input
-                      type="checkbox"
-                      name="adminIds"
-                      value={users.id}
-                      checked={formData.adminIds.includes(users.id)}
-                      onChange={handleAdminChange}
-                      className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
-                    />
-                    <span className="ml-2">
-                      {users.username} ({users.name || users.email})
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm font-medium text-gray-900">
+                      {users.find(user => user.id === formData.ownerId)?.name || users.find(user => user.id === formData.ownerId)?.username}
+                    </p>
+                    <p className="text-xs text-gray-500">{users.find(user => user.id === formData.ownerId)?.email || 'No email'}</p>
+                  </div>
+                  <div className="ml-auto">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      Owner
                     </span>
-                  </label>
+                  </div>
                 </div>
-              ) }
+              )}
+            </div>
+
+            <div>
+              <h4 className="font-medium text-gray-700 mb-2">Additional Admins</h4>
+              {currentAdmins.length > 0 ? (
+                <ul className="divide-y divide-gray-200 border border-gray-200 rounded-md overflow-hidden max-h-60 overflow-y-auto">
+                  {currentAdmins.map((admin) => (
+                    <li key={admin.id} className="p-3 bg-white hover:bg-gray-50 flex items-center justify-between">
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0 h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center">
+                          <span className="text-gray-500 font-medium">
+                            {admin.name?.charAt(0) || admin.username?.charAt(0) || 'U'}
+                          </span>
+                        </div>
+                        <div className="ml-3">
+                          <p className="text-sm font-medium text-gray-900">
+                            {admin.name || admin.username}
+                          </p>
+                          <p className="text-xs text-gray-500">{admin.email || 'No email'}</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveAdmin(admin.id)}
+                        className="inline-flex items-center p-1 border border-red-300 rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                        title="Remove admin"
+                      >
+                        <TrashIcon className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="text-center py-6 bg-gray-50 rounded-md">
+                  <p className="text-sm text-gray-500">No additional admins for this event</p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Use the "Invite Admin" button from the events page to add new admins
+                  </p>
+                </div>
+              )}
+              <p className="text-xs text-gray-500 mt-2">
+                Note: Changes to admin access will be saved when you submit the form.
+              </p>
             </div>
           </div>
         </div>

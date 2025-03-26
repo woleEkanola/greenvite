@@ -22,21 +22,12 @@ export async function GET(
     const event = await prisma.event.findFirst({
       where: {
         id,
-        OR: [
-          { ownerId: session.user.id },
-          {
-            admins: {
-              some: {
-                userId: session.user.id
-              }
-            }
-          }
-        ]
+        ownerId: session.user.id, // Only the owner can view admins
       },
     });
 
     if (!event) {
-      return NextResponse.json({ error: 'Event not found or access denied' }, { status: 404 });
+      return NextResponse.json({ error: 'Event not found or access denied. Only the event owner can view admins.' }, { status: 403 });
     }
 
     // Get all admins for the event

@@ -3,7 +3,21 @@
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { ArrowLeft, LogOut, Menu } from 'lucide-react'
+import { 
+  ArrowLeft, 
+  LogOut, 
+  Menu, 
+  Home, 
+  Users, 
+  Calendar, 
+  Mail, 
+  Utensils, 
+  Gift, 
+  BarChart, 
+  QrCode, 
+  Ticket,
+  Send
+} from 'lucide-react'
 import { signOut, useSession } from 'next-auth/react'
 
 export default function EventDashboardLayout({
@@ -84,108 +98,105 @@ export default function EventDashboardLayout({
               className="flex items-center text-emerald-600 hover:text-emerald-800 mb-4"
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
-              <span>Back to Events</span>
+              {isSidebarOpen && <span>Back to Events</span>}
             </Link>
-            <h2 className="text-lg font-semibold text-gray-800 truncate">
-              {eventTitle}
-            </h2>
+            {isSidebarOpen && (
+              <h2 className="text-lg font-semibold text-gray-800 truncate">
+                {eventTitle}
+              </h2>
+            )}
           </div>
 
           <ul className="space-y-2">
             <li>
               <Link
                 href={`/admin/dashboard/events/${params.id}`}
-                className={`block px-4 py-2 rounded-lg transition-colors ${
+                className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
                   pathname === `/admin/dashboard/events/${params.id}`
                     ? 'bg-emerald-500 text-white'
                     : 'hover:bg-gray-100'
                 }`}
               >
-                Overview
+                <Home className="h-5 w-5 min-w-5" />
+                {isSidebarOpen && <span className="ml-3">Overview</span>}
               </Link>
             </li>
             <li>
               <Link
                 href={`/admin/dashboard/events/${params.id}/reg-codes`}
-                className={`block px-4 py-2 rounded-lg transition-colors ${
+                className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
                   isActive(`/admin/dashboard/events/${params.id}/reg-codes`)
                     ? 'bg-emerald-500 text-white'
                     : 'hover:bg-gray-100'
                 }`}
               >
-                Registration Codes
+                <QrCode className="h-5 w-5 min-w-5" />
+                {isSidebarOpen && <span className="ml-3">Registration Codes</span>}
               </Link>
             </li>
             <li>
               <Link
                 href={`/admin/dashboard/events/${params.id}/access-codes`}
-                className={`block px-4 py-2 rounded-lg transition-colors ${
+                className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
                   isActive(`/admin/dashboard/events/${params.id}/access-codes`)
                     ? 'bg-emerald-500 text-white'
                     : 'hover:bg-gray-100'
                 }`}
               >
-                Access Codes
+                <Ticket className="h-5 w-5 min-w-5" />
+                {isSidebarOpen && <span className="ml-3">Access Codes</span>}
               </Link>
             </li>
             <li>
               <Link
                 href={`/admin/dashboard/events/${params.id}/invites`}
-                className={`block px-4 py-2 rounded-lg transition-colors ${
+                className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
                   isActive(`/admin/dashboard/events/${params.id}/invites`)
                     ? 'bg-emerald-500 text-white'
                     : 'hover:bg-gray-100'
                 }`}
               >
-                Send Invites
+                <Send className="h-5 w-5 min-w-5" />
+                {isSidebarOpen && <span className="ml-3">Send Invites</span>}
               </Link>
             </li>
             <li>
               <Link
                 href={`/admin/dashboard/events/${params.id}/rsvps`}
-                className={`block px-4 py-2 rounded-lg transition-colors ${
+                className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
                   isActive(`/admin/dashboard/events/${params.id}/rsvps`)
                     ? 'bg-emerald-500 text-white'
                     : 'hover:bg-gray-100'
                 }`}
               >
-                RSVP Management
+                <Users className="h-5 w-5 min-w-5" />
+                {isSidebarOpen && <span className="ml-3">RSVP Management</span>}
               </Link>
             </li>
             <li>
               <Link
                 href={`/admin/dashboard/events/${params.id}/tables`}
-                className={`block px-4 py-2 rounded-lg transition-colors ${
+                className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
                   isActive(`/admin/dashboard/events/${params.id}/tables`)
                     ? 'bg-emerald-500 text-white'
                     : 'hover:bg-gray-100'
                 }`}
               >
-                Tables
+                <Utensils className="h-5 w-5 min-w-5" />
+                {isSidebarOpen && <span className="ml-3">Tables</span>}
               </Link>
             </li>
             <li>
               <Link
                 href={`/admin/dashboard/events/${params.id}/sent-invites`}
-                className={`block px-4 py-2 rounded-lg transition-colors ${
+                className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
                   isActive(`/admin/dashboard/events/${params.id}/sent-invites`)
                     ? 'bg-emerald-500 text-white'
                     : 'hover:bg-gray-100'
                 }`}
               >
-                Sent Invites
-              </Link>
-            </li>
-            <li>
-              <Link
-                href={`/admin/dashboard/events/${params.id}/edit`}
-                className={`block px-4 py-2 rounded-lg transition-colors ${
-                  isActive(`/admin/dashboard/events/${params.id}/edit`)
-                    ? 'bg-emerald-500 text-white'
-                    : 'hover:bg-gray-100'
-                }`}
-              >
-                Edit Event
+                <Mail className="h-5 w-5 min-w-5" />
+                {isSidebarOpen && <span className="ml-3">Sent Invites</span>}
               </Link>
             </li>
           </ul>
@@ -196,8 +207,8 @@ export default function EventDashboardLayout({
               disabled={isLoggingOut}
               className="flex items-center w-full px-4 py-2 text-left text-red-600 rounded-lg transition-colors hover:bg-red-50"
             >
-              <LogOut className="h-5 w-5 mr-2" />
-              <span>{isLoggingOut ? 'Logging out...' : 'Logout'}</span>
+              <LogOut className="h-5 w-5 min-w-5" />
+              {isSidebarOpen && <span className="ml-3">{isLoggingOut ? 'Logging out...' : 'Logout'}</span>}
             </button>
           </div>
         </nav>
@@ -205,28 +216,7 @@ export default function EventDashboardLayout({
 
       {/* Main Content */}
       <main className={`transition-all duration-300 ${isSidebarOpen ? 'ml-64' : 'ml-20'}`}>
-        {/* Header */}
-        <header className="bg-white shadow-sm">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between h-16">
-              <div className="flex">
-                <div className="flex-shrink-0 flex items-center">
-                  <h1 className="text-xl font-semibold text-gray-800">{eventTitle}</h1>
-                </div>
-              </div>
-              <div className="flex items-center">
-                <div className="ml-3 relative">
-                  <div className="flex items-center">
-                    <span className="text-sm font-medium text-gray-700 mr-2">
-                      {session?.user?.name || session?.user?.email || 'User'}
-                    </span>
-                    <Menu className="h-5 w-5 text-gray-400" />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </header>
+      
 
         {/* Page Content */}
         <div className="py-6">

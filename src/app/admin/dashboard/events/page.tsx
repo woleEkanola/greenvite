@@ -49,12 +49,27 @@ export default function EventsPage() {
   const [selectedEventForAdmins, setSelectedEventForAdmins] = useState<Event | null>(null);
   const [selectedEventForInvites, setSelectedEventForInvites] = useState<Event | null>(null);
   const [selectedAdminIds, setSelectedAdminIds] = useState<string[]>([]);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const router = useRouter();
 
   useEffect(() => {
     fetchEvents();
     fetchUsers();
+    fetchCurrentUser();
   }, []);
+
+  const fetchCurrentUser = async () => {
+    try {
+      const response = await fetch('/api/admin/users/me');
+      if (!response.ok) {
+        throw new Error('Failed to fetch current user');
+      }
+      const data = await response.json();
+      setCurrentUser(data);
+    } catch (error) {
+      console.error('Error fetching current user:', error);
+    }
+  };
 
   const fetchEvents = async () => {
     setIsLoading(true);
@@ -182,26 +197,31 @@ export default function EventsPage() {
                       >
                         <TrashIcon className="h-4 w-4" aria-hidden="true" />
                       </button>
-                      <button
-                        onClick={() => {
-                          setSelectedEventForAdmins(event);
-                          setIsAdminModalOpen(true);
-                        }}
-                        className="inline-flex items-center p-1.5 border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                        title="Manage existing admins"
-                      >
-                        <UsersIcon className="h-4 w-4" aria-hidden="true" />
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSelectedEventForInvites(event);
-                          setIsInviteModalOpen(true);
-                        }}
-                        className="inline-flex items-center p-1.5 border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                        title="Invite new admins"
-                      >
-                        <UserPlusIcon className="h-4 w-4" aria-hidden="true" />
-                      </button>
+                      {/* Only show admin management buttons to event owners */}
+                      {currentUser && currentUser.id === event.ownerId && (
+                        <>
+                          <button
+                            onClick={() => {
+                              setSelectedEventForAdmins(event);
+                              setIsAdminModalOpen(true);
+                            }}
+                            className="inline-flex items-center p-1.5 border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                            title="Manage existing admins"
+                          >
+                            <UsersIcon className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedEventForInvites(event);
+                              setIsInviteModalOpen(true);
+                            }}
+                            className="inline-flex items-center p-1.5 border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                            title="Invite new admins"
+                          >
+                            <UserPlusIcon className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                   <div className="mt-2 sm:flex sm:justify-between">
@@ -260,33 +280,49 @@ type AdminModalProps = {
 };
 
 function AdminModal({ isOpen, onClose, event, users, onAdminsUpdated }: AdminModalProps) {
-  const [selectedAdminIds, setSelectedAdminIds] = useState<string[]>(event?.admins?.map((admin) => admin.userId) || []);
+  const [currentAdmins, setCurrentAdmins] = useState<User[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   useEffect(() => {
     if (event) {
-      setSelectedAdminIds(event.admins?.map((admin) => admin.userId) || []);
+      // Filter out superadmins and the owner from the admins list
+      const admins = event.admins
+        .map(admin => admin.user)
+        .filter(user => 
+          user.id !== event.ownerId && 
+          user.role !== 'SUPERADMIN' && 
+          user.role !== 'superadmin'
+        );
+      setCurrentAdmins(admins);
     }
   }, [event]);
 
-  const handleAdminChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { value, checked } = e.target;
-    if (checked) {
-      setSelectedAdminIds((prev) => [...prev, value]);
-    } else {
-      setSelectedAdminIds((prev) => prev.filter((id) => id !== value));
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
+  const handleRemoveAdmin = async (userId: string) => {
+    if (!event) return;
+    
+    setIsLoading(true);
+    setError('');
+    setSuccess('');
+    
     try {
-      const response = await fetch(`/api/admin/events/${event?.id}/admins`, {
+      // Get current admin IDs excluding the one to be removed
+      const updatedAdminIds = event.admins
+        .map(admin => admin.userId)
+        .filter(id => id !== userId);
+      
+      // Always include the owner
+      if (!updatedAdminIds.includes(event.ownerId)) {
+        updatedAdminIds.push(event.ownerId);
+      }
+      
+      const response = await fetch(`/api/admin/events/${event.id}/admins`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ adminIds: selectedAdminIds }),
+        body: JSON.stringify({ adminIds: updatedAdminIds }),
       });
 
       if (!response.ok) {
@@ -294,10 +330,17 @@ function AdminModal({ isOpen, onClose, event, users, onAdminsUpdated }: AdminMod
         throw new Error(errorData.error || 'Failed to update admins');
       }
 
+      // Update the local state to reflect the change
+      setCurrentAdmins(prevAdmins => prevAdmins.filter(admin => admin.id !== userId));
+      setSuccess('Admin removed successfully');
+      
+      // Refresh the events list
       onAdminsUpdated();
-      onClose();
     } catch (err: any) {
-      console.error(err.message);
+      console.error('Error removing admin:', err);
+      setError(err.message || 'Failed to remove admin');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -305,52 +348,107 @@ function AdminModal({ isOpen, onClose, event, users, onAdminsUpdated }: AdminMod
 
   return (
     <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg overflow-hidden shadow-xl transform transition-all sm:max-w-lg sm:w-full">
-        <form onSubmit={handleSubmit}>
-          <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-            <div className="mb-4">
-              <h3 className="text-lg leading-6 font-medium text-gray-900">Manage Admins for {event?.title}</h3>
+      <div className="bg-white rounded-lg overflow-hidden shadow-xl transform transition-all sm:max-w-lg sm:w-full max-h-[90vh] flex flex-col">
+        <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4 flex-grow overflow-auto">
+          <div className="sm:flex sm:items-start mb-4">
+            <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 sm:mx-0 sm:h-10 sm:w-10">
+              <UsersIcon className="h-6 w-6 text-blue-600" aria-hidden="true" />
             </div>
-
-            <div className="grid grid-cols-1 gap-y-4">
-              {Array.isArray(users) && users.length > 0 ? (
-                users.map((user) => (
-                  <div key={user.id}>
-                    <label className="block text-sm font-medium text-gray-700">
-                      <input
-                        type="checkbox"
-                        name="admin"
-                        value={user.id}
-                        checked={selectedAdminIds.includes(user.id)}
-                        onChange={handleAdminChange}
-                        className="mr-2"
-                      />
-                      {user.name || user.username} ({user.email || 'No email'})
-                    </label>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-gray-500">No users available</p>
-              )}
+            <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+              <h3 className="text-lg leading-6 font-medium text-gray-900">
+                Manage Admins for {event?.title}
+              </h3>
+              <p className="text-sm text-gray-500 mt-1">
+                You can remove admins who currently have access to this event.
+              </p>
             </div>
           </div>
 
-          <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-            <button
-              type="submit"
-              className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:ml-3 sm:w-auto sm:text-sm"
-            >
-              Save
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-            >
-              Cancel
-            </button>
+          {error && (
+            <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative">
+              {error}
+            </div>
+          )}
+
+          {success && (
+            <div className="mb-4 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded relative">
+              {success}
+            </div>
+          )}
+
+          <div className="bg-gray-50 p-4 rounded-md mb-4">
+            <h4 className="font-medium text-gray-700 mb-2">Current Owner</h4>
+            <div className="flex items-center p-3 bg-white rounded-md border border-gray-200">
+              <div className="flex-shrink-0 h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
+                <span className="text-gray-500 font-medium">
+                  {event?.owner?.name?.charAt(0) || event?.owner?.username?.charAt(0) || 'U'}
+                </span>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm font-medium text-gray-900">
+                  {event?.owner?.name || event?.owner?.username}
+                </p>
+                <p className="text-xs text-gray-500">{event?.owner?.email || 'No email'}</p>
+              </div>
+              <div className="ml-auto">
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                  Owner
+                </span>
+              </div>
+            </div>
           </div>
-        </form>
+
+          <div>
+            <h4 className="font-medium text-gray-700 mb-2">Current Admins</h4>
+            {currentAdmins.length > 0 ? (
+              <ul className="divide-y divide-gray-200 border border-gray-200 rounded-md overflow-hidden">
+                {currentAdmins.map((admin) => (
+                  <li key={admin.id} className="p-4 bg-white hover:bg-gray-50 flex items-center justify-between">
+                    <div className="flex items-center">
+                      <div className="flex-shrink-0 h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
+                        <span className="text-gray-500 font-medium">
+                          {admin.name?.charAt(0) || admin.username?.charAt(0) || 'U'}
+                        </span>
+                      </div>
+                      <div className="ml-3">
+                        <p className="text-sm font-medium text-gray-900">
+                          {admin.name || admin.username}
+                        </p>
+                        <p className="text-xs text-gray-500">{admin.email || 'No email'}</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveAdmin(admin.id)}
+                      disabled={isLoading}
+                      className="inline-flex items-center p-1.5 border border-red-300 rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
+                      title="Remove admin"
+                    >
+                      <TrashIcon className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="text-center py-8 bg-gray-50 rounded-md">
+                <p className="text-sm text-gray-500">No additional admins for this event</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Use the "Invite Admin" button to add new admins
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse border-t border-gray-200">
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:w-auto sm:text-sm"
+          >
+            Close
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -375,7 +473,7 @@ function InviteAdminModal({ isOpen, onClose, event, onInviteSent }: InviteAdminM
     setIsSubmitting(true);
     setError(null);
     setSuccess(null);
-
+    
     // Split and trim emails
     const emailList = emails
       .split(',')
