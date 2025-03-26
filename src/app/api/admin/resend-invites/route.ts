@@ -54,7 +54,13 @@ export async function POST(request: Request) {
         
         <div style="text-align: center; margin: 30px 0;">
           <p>Your personal registration code is: <strong>{{code}}</strong></p>
-          <p style="margin-bottom: 15px; font-size: 16px;">Click the "Confirm Your Attendance" button below to fill out the form and secure your reservation. This will help us plan accordingly. Attendance is by invitation only, and submitting the completed form will grant you an access code for the event.</p>
+          <p style="margin-bottom: 15px; font-size: 16px;">Dr. Fred Afor George and Mrs. Ogheneovo Fred George warmly invite you to the church dedication of their son.
+
+To confirm and secure your reservation, please click the button below and complete the form. This will help us plan effectively.
+
+Please note: Attendance is strictly by invitation, and submitting the completed form will grant you an access code required for entry to the venue.
+
+We look forward to celebrating this special occasion with you</p>
           <p style="margin-bottom: 20px;"><a href="{{link}}" style="color: #4CAF50; text-decoration: underline;">{{link}}</a></p>
           <a href="{{link}}" style="display: inline-block; background-color: #4CAF50; color: white; padding: 14px 28px; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; text-decoration: none;">
             Confirm Your Attendance
@@ -64,7 +70,13 @@ export async function POST(request: Request) {
         <p style="text-align: center; margin-top: 30px; color: #7f8c8d; font-size: 14px;">We look forward to celebrating this special occasion with you.</p>
       </div>
     `;
-    const defaultWhatsappMessage = `You're invited to Jesse Oghenekome George's Church Dedication at RCCG Church, Champions Cathedral, #16-18 Airport Road, Effurun, Warri Delta, Nigeria. 10:00 AM, Sunday, April 13, 2025. Your code: {{code}}. Click the link below to complete the form and secure your reservation. This will help us plan accordingly. Attendance is by invitation only, and submitting the completed form will grant you an access code for the event. RSVP: {{link}}`;
+    const defaultWhatsappMessage = `Dr. Fred Afor George and Mrs. Ogheneovo Fred George warmly invite you to the church dedication of their son.
+
+To confirm and secure your reservation, please click the link below and complete the form. This will help us plan effectively.
+
+Please note: Attendance is strictly by invitation, and submitting the completed form will grant you an access code required for entry to the venue.
+
+We look forward to celebrating this special occasion with you {{link}}`;
     const eventLink = process.env.NEXT_PUBLIC_EVENT_URL || 'https://greenvites.online/jessegeorge';
 
     // Process each invite

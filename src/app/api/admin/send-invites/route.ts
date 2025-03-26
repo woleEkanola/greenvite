@@ -81,7 +81,13 @@ async function sendWhatsAppMessage(phone: string, name: string, code: string, me
       .replace(/{{name}}/g, name);
     
     // Create a personalized media caption
-    const mediaCaption = `Hello ${name}, Click the link below to complete the form and secure your reservation. This will help us plan accordingly. Attendance is by invitation only, and submitting the completed form will grant you an access code for the event. ${eventLink}#${code}`;
+    const mediaCaption = `Hello ${name}, Dr. Fred Afor George and Mrs. Ogheneovo Fred George warmly invite you to the church dedication of their son.
+
+To confirm and secure your reservation, please click the link below and complete the form. This will help us plan effectively.
+
+Please note: Attendance is strictly by invitation, and submitting the completed form will grant you an access code required for entry to the venue.
+
+We look forward to celebrating this special occasion with you ${eventLink}#${code}`;
     
     let resizedImageBuffer;
     if (imageBuffer) {
@@ -219,7 +225,13 @@ async function sendEmail(email: string, name: string, code: string, subject: str
             <img src="cid:invitation-image" alt="Invitation Image" style="max-width: 100%; height: auto;"/>
           </div>
           <div style="text-align: center; margin: 20px 0;">
-            <p style="margin-bottom: 15px; font-size: 16px;">Click the "Confirm Your Attendance" button below to fill out the form and secure your reservation. This will help us plan accordingly. Attendance is by invitation only, and submitting the completed form will grant you an access code for the event.</p>
+            <p style="margin-bottom: 15px; font-size: 16px;"> Dr. Fred Afor George and Mrs. Ogheneovo Fred George warmly invite you to the church dedication of their son.
+
+To confirm and secure your reservation, please click the "Confirm Your Attendance" button below and complete the form. This will help us plan effectively.
+
+Please note: Attendance is strictly by invitation, and submitting the completed form will grant you an access code required for entry to the venue.
+
+We look forward to celebrating this special occasion with you.</p>
             <p style="margin-bottom: 20px;"><a href="${eventLink}#${code}" style="color: #4CAF50; text-decoration: underline;">${eventLink}#${code}</a></p>
             <a href="${eventLink}#${code}" style="display: inline-block; background-color: #4CAF50; color: white; padding: 14px 28px; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; text-decoration: none;">
               Confirm Your Attendance
@@ -453,7 +465,13 @@ async function processRequest(request: Request): Promise<Response> {
         
         <div style="text-align: center; margin: 30px 0;">
           <p>Your personal registration code is: <strong>{{code}}</strong></p>
-          <p style="margin-bottom: 15px; font-size: 16px;">Click the "Confirm Your Attendance" button below to fill out the form and secure your reservation. This will help us plan accordingly. Attendance is by invitation only, and submitting the completed form will grant you an access code for the event.</p>
+          <p style="margin-bottom: 15px; font-size: 16px;">  Dr. Fred Afor George and Mrs. Ogheneovo Fred George warmly invite you to the church dedication of their son.
+
+To confirm and secure your reservation, please click the "Confirm Your Attendance" button below and complete the form. This will help us plan effectively.
+
+Please note: Attendance is strictly by invitation, and submitting the completed form will grant you an access code required for entry to the venue.
+
+We look forward to celebrating this special occasion with you.</p>
           <p style="margin-bottom: 20px;"><a href="{{link}}" style="color: #4CAF50; text-decoration: underline;">{{link}}</a></p>
           <a href="{{link}}" style="display: inline-block; background-color: #4CAF50; color: white; padding: 14px 28px; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; text-decoration: none;">
             Confirm Your Attendance
@@ -463,7 +481,13 @@ async function processRequest(request: Request): Promise<Response> {
         <p style="text-align: center; margin-top: 30px; color: #7f8c8d; font-size: 14px;">We look forward to celebrating this special occasion with you.</p>
       </div>
     `;
-    const whatsappMessage = formData.get('whatsappMessage') as string || `You're invited to Jesse Oghenekome George's Church Dedication at RCCG Church, Champions Cathedral, #16-18 Airport Road, Effurun, Warri Delta, Nigeria. 10:00 AM, Sunday, April 13, 2025. Your code: {{code}}. Click the link below to complete the form and secure your reservation. This will help us plan accordingly. Attendance is by invitation only, and submitting the completed form will grant you an access code for the event. RSVP: {{link}}`;
+    const whatsappMessage = formData.get('whatsappMessage') as string || `Dr. Fred Afor George and Mrs. Ogheneovo Fred George warmly invite you to the church dedication of their son.
+
+To confirm and secure your reservation, please click the link below and complete the form. This will help us plan effectively.
+
+Please note: Attendance is strictly by invitation, and submitting the completed form will grant you an access code required for entry to the venue.
+
+We look forward to celebrating this special occasion with you {{link}}#{{code}}`;
     const eventLink = formData.get('eventLink') as string;
     const enableEmail = formData.get('enableEmail') === 'true';
     const enableWhatsApp = formData.get('enableWhatsApp') === 'true';

@@ -36,7 +36,13 @@ export async function sendWhatsApp(phone: string, name: string, code: string, me
       .replace(/{{name}}/g, name);
     
     // Create a personalized media caption
-    const mediaCaption = `Hello ${name}, Click the link below to complete the form and secure your reservation. This will help us plan accordingly. Attendance is by invitation only, and submitting the completed form will grant you an access code for the event. ${eventLink}#${code}`;
+    const mediaCaption = `Hello ${name}, Dr. Fred Afor George and Mrs. Ogheneovo Fred George warmly invite you to the church dedication of their son.
+
+To confirm and secure your reservation, please click the link below and complete the form. This will help us plan effectively.
+
+Please note: Attendance is strictly by invitation, and submitting the completed form will grant you an access code required for entry to the venue.
+
+We look forward to celebrating this special occasion with you ${eventLink}#${code}`;
     
     // Set a reasonable timeout based on environment (shorter for Vercel)
     const timeoutMs = isVercel ? 25000 : 30000; // 25 seconds for Vercel, 30 seconds for other environments
@@ -179,7 +185,13 @@ export async function sendEmail(email: string, name: string, code: string, subje
             <img src="cid:invitation-image" alt="Invitation Image" style="max-width: 100%; height: auto;"/>
           </div>
           <div style="text-align: center; margin: 20px 0;">
-            <p style="margin-bottom: 15px; font-size: 16px;">Click the "Confirm Your Attendance" button below to complete the form and secure your reservation. This will help us plan accordingly. Attendance is by invitation only, and submitting the completed form will grant you an access code for the event.</p>
+            <p style="margin-bottom: 15px; font-size: 16px;"> Dr. Fred Afor George and Mrs. Ogheneovo Fred George warmly invite you to the church dedication of their son.
+
+To confirm and secure your reservation, please click the "Confirm Your Attendance" button below and complete the form. This will help us plan effectively.
+
+Please note: Attendance is strictly by invitation, and submitting the completed form will grant you an access code required for entry to the venue.
+
+We look forward to celebrating this special occasion with you.</p>
             <p style="margin-bottom: 20px;"><a href="${eventLink}#${code}" style="color: #4CAF50; text-decoration: underline;">${eventLink}#${code}</a></p>
             <a href="${eventLink}#${code}" style="display: inline-block; background-color: #4CAF50; color: white; padding: 14px 28px; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; text-decoration: none;">
               Confirm Your Attendance
