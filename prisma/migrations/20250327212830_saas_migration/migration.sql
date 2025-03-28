@@ -52,11 +52,52 @@ CREATE TABLE "EventAdmin" (
     CONSTRAINT "EventAdmin_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "AdminInvitation" (
+    "id" TEXT NOT NULL,
+    "email" TEXT NOT NULL,
+    "token" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'pending',
+    "message" TEXT,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "acceptedAt" TIMESTAMP(3),
+    "eventId" TEXT NOT NULL,
+    "inviterId" TEXT NOT NULL,
+
+    CONSTRAINT "AdminInvitation_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "MessageTemplate" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "emailSubject" TEXT NOT NULL,
+    "emailContent" TEXT NOT NULL,
+    "whatsappContent" TEXT NOT NULL,
+    "isDefault" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "eventId" TEXT NOT NULL,
+
+    CONSTRAINT "MessageTemplate_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "Event_slug_key" ON "Event"("slug");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "EventAdmin_userId_eventId_key" ON "EventAdmin"("userId", "eventId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AdminInvitation_token_key" ON "AdminInvitation"("token");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AdminInvitation_email_eventId_key" ON "AdminInvitation"("email", "eventId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "MessageTemplate_name_eventId_key" ON "MessageTemplate"("name", "eventId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "User_phone_key" ON "User"("phone");
@@ -84,3 +125,12 @@ ALTER TABLE "EventAdmin" ADD CONSTRAINT "EventAdmin_userId_fkey" FOREIGN KEY ("u
 
 -- AddForeignKey
 ALTER TABLE "EventAdmin" ADD CONSTRAINT "EventAdmin_eventId_fkey" FOREIGN KEY ("eventId") REFERENCES "Event"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AdminInvitation" ADD CONSTRAINT "AdminInvitation_eventId_fkey" FOREIGN KEY ("eventId") REFERENCES "Event"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AdminInvitation" ADD CONSTRAINT "AdminInvitation_inviterId_fkey" FOREIGN KEY ("inviterId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "MessageTemplate" ADD CONSTRAINT "MessageTemplate_eventId_fkey" FOREIGN KEY ("eventId") REFERENCES "Event"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

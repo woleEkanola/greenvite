@@ -188,6 +188,7 @@ model Event {
   batches           Batch[]
   hosts             Host[]
   souvenirs         Souvenir[]
+  messageTemplates  MessageTemplate[]
 }
 
 model EventAdmin {
@@ -218,4 +219,20 @@ model AdminInvitation {
   inviter     User      @relation("UserToAdminInvitation", fields: [inviterId], references: [id])
   
   @@unique([email, eventId])
+}
+
+model MessageTemplate {
+  id              String    @id @default(cuid())
+  name            String
+  emailSubject    String
+  emailContent    String    @db.Text
+  whatsappContent String    @db.Text
+  isDefault       Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  eventId         String
+  event           Event     @relation(fields: [eventId], references: [id])
+  
+  @@unique([name, eventId])
 }

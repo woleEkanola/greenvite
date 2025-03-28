@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeftIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, TrashIcon } from '@heroicons/react/24/outline';
 
 type User = {
   id: string;
@@ -15,6 +15,8 @@ type User = {
 
 export default function CreateEventPage() {
   const [users, setUsers] = useState<User[]>([]);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [selectedAdmins, setSelectedAdmins] = useState<User[]>([]);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -33,7 +35,21 @@ export default function CreateEventPage() {
 
   useEffect(() => {
     fetchUsers();
+    fetchCurrentUser();
   }, []);
+
+  const fetchCurrentUser = async () => {
+    try {
+      const response = await fetch('/api/admin/users/me');
+      if (!response.ok) {
+        throw new Error('Failed to fetch current user');
+      }
+      const data = await response.json();
+      setCurrentUser(data);
+    } catch (error) {
+      console.error('Error fetching current user:', error);
+    }
+  };
 
   const fetchUsers = async () => {
     try {
@@ -42,7 +58,13 @@ export default function CreateEventPage() {
         throw new Error('Failed to fetch users');
       }
       const data = await response.json();
-      setUsers(data);
+      
+      // Filter out superadmins from the list
+      const filteredUsers = data.filter((user: User) => 
+        user.role !== 'SUPERADMIN' && user.role !== 'superadmin'
+      );
+      
+      setUsers(filteredUsers);
     } catch (error) {
       console.error('Error fetching users:', error);
     }
@@ -53,19 +75,30 @@ export default function CreateEventPage() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleAdminChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { value, checked } = e.target;
-    if (checked) {
-      setFormData((prev) => ({
+  const handleAdminSelection = (user: User) => {
+    if (selectedAdmins.some(admin => admin.id === user.id)) {
+      // Remove admin if already selected
+      setSelectedAdmins(selectedAdmins.filter(admin => admin.id !== user.id));
+      setFormData(prev => ({
         ...prev,
-        adminIds: [...prev.adminIds, value],
+        adminIds: prev.adminIds.filter(id => id !== user.id)
       }));
     } else {
-      setFormData((prev) => ({
+      // Add admin if not already selected
+      setSelectedAdmins([...selectedAdmins, user]);
+      setFormData(prev => ({
         ...prev,
-        adminIds: prev.adminIds.filter((id) => id !== value),
+        adminIds: [...prev.adminIds, user.id]
       }));
     }
+  };
+
+  const handleRemoveAdmin = (userId: string) => {
+    setSelectedAdmins(selectedAdmins.filter(admin => admin.id !== userId));
+    setFormData(prev => ({
+      ...prev,
+      adminIds: prev.adminIds.filter(id => id !== userId)
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -258,29 +291,34 @@ export default function CreateEventPage() {
             </select>
           </div>
 
-          <div className="col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Event Admins
-            </label>
-            <div className="max-h-60 overflow-y-auto border border-gray-300 rounded-md p-3">
-              {users.map((user) => (
-                <div key={user.id} className="mb-2">
-                  <label className="inline-flex items-center">
-                    <input
-                      type="checkbox"
-                      name="adminIds"
-                      value={user.id}
-                      checked={formData.adminIds.includes(user.id)}
-                      onChange={handleAdminChange}
-                      className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
-                    />
-                    <span className="ml-2">
-                      {user.username} ({user.name || user.email})
+          <div className="col-span-2 space-y-4">
+            <div className="bg-gray-50 p-4 rounded-md mb-4">
+              <h4 className="font-medium text-gray-700 mb-2">Event Owner</h4>
+              {currentUser && (
+                <div className="flex items-center p-3 bg-white rounded-md border border-gray-200">
+                  <div className="flex-shrink-0 h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
+                    <span className="text-gray-500 font-medium">
+                      {currentUser.name?.charAt(0) || currentUser.username?.charAt(0) || 'U'}
                     </span>
-                  </label>
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm font-medium text-gray-900">
+                      {currentUser.name || currentUser.username}
+                    </p>
+                    <p className="text-xs text-gray-500">{currentUser.email || 'No email'}</p>
+                  </div>
+                  <div className="ml-auto">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      Owner
+                    </span>
+                  </div>
                 </div>
-              ))}
+              )}
+              <p className="text-xs text-gray-500 mt-2">
+                You will be set as the owner of this event.
+              </p>
             </div>
+
           </div>
         </div>
 

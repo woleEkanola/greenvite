@@ -128,7 +128,7 @@ We look forward to celebrating this special occasion with you ${eventLink}#${c
               'Authorization': `Bearer ${WAAPI_TOKEN}`,
               'Content-Type': 'application/json'
             },
-            timeout: 30000 // 30 second timeout
+            timeout: 30000 // 30 seconds timeout
           }
         );
         
@@ -481,17 +481,40 @@ We look forward to celebrating this special occasion with you.</p>
         <p style="text-align: center; margin-top: 30px; color: #7f8c8d; font-size: 14px;">We look forward to celebrating this special occasion with you.</p>
       </div>
     `;
-    const whatsappMessage = formData.get('whatsappMessage') as string || `Dr. Fred Afor George and Mrs. Ogheneovo Fred George warmly invite you to the church dedication of their son.
-
-To confirm and secure your reservation, please click the link below and complete the form. This will help us plan effectively.
-
-Please note: Attendance is strictly by invitation, and submitting the completed form will grant you an access code required for entry to the venue.
-
-We look forward to celebrating this special occasion with you {{link}}#{{code}}`;
-    const eventLink = formData.get('eventLink') as string;
+    const whatsappMessage = formData.get('whatsappMessage') as string || `You're invited to Jesse Oghenekome George's Church Dedication at RCCG Church, Champions Cathedral, #16-18 Airport Road, Effurun, Warri Delta, Nigeria. 10:00 AM, Sunday, April 13, 2025. Your code: {{code}}. Click the link below to complete the form and secure your reservation. This will help us plan accordingly. Attendance is by invitation only, and submitting the completed form will grant you an access code for the event. RSVP: {{link}}`;
+    let eventLink = formData.get('eventLink') as string;
+    const eventId = formData.get('eventId') as string;
     const enableEmail = formData.get('enableEmail') === 'true';
     const enableWhatsApp = formData.get('enableWhatsApp') === 'true';
     const batchName = formData.get('batchName') as string || `Batch ${new Date().toISOString().split('T')[0]}`;
+    
+    // IMPORTANT FIX: Always ensure we have an eventLink
+    if (!eventLink && eventId) {
+      console.log('[POST /api/admin/send-invites] eventLink not provided, generating one from eventId');
+      
+      try {
+        // Try to find the event to get its slug
+        const event = await prisma.event.findUnique({
+          where: { id: eventId }
+        });
+        
+        // Determine if we're in a development environment
+        const isDevelopment = process.env.NODE_ENV === 'development';
+        const baseUrl = isDevelopment ? 'http://localhost:3000' : 'https://greenvites.online';
+        
+        if (event?.slug) {
+          eventLink = `${baseUrl}/${event.slug}`;
+        } else {
+          eventLink = `${baseUrl}/event/${eventId}`;
+        }
+        
+        console.log(`[POST /api/admin/send-invites] Generated eventLink: ${eventLink}`);
+      } catch (error) {
+        console.error('[POST /api/admin/send-invites] Error generating eventLink:', error);
+        // Provide a fallback eventLink as last resort
+        eventLink = `https://greenvites.online/event/${eventId}`;
+      }
+    }
     
     // Log received form data
     console.log('[POST /api/admin/send-invites] Received form data:');
