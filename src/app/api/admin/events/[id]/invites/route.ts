@@ -108,58 +108,95 @@ export async function POST(
     
     // Parse the request body
     const body = await request.json()
-    const { invites } = body
     
-    if (!invites || !Array.isArray(invites) || invites.length === 0) {
-      return NextResponse.json({ error: 'Invites are required' }, { status: 400 })
-    }
-    
-    // Create a batch for these invites
-    const batch = await prisma.batch.create({
-      data: {
-        name: `Batch ${new Date().toISOString()}`,
-        status: 'pending',
-        totalInvites: invites.length,
-        event: {
-          connect: {
-            id: params.id
-          }
-        }
+    // Check if we're creating a single invite or multiple invites
+    if (body.invites && Array.isArray(body.invites)) {
+      // Handle batch creation of invites
+      const { invites, batchId } = body
+      
+      if (!invites || invites.length === 0) {
+        return NextResponse.json({ error: 'Invites are required' }, { status: 400 })
       }
-    })
-    
-    // Create the invites
-    const createdInvites = await Promise.all(
-      invites.map(invite => 
-        prisma.invite.create({
+      
+      // Use existing batch if provided, otherwise create a new one
+      let batch;
+      if (batchId) {
+        batch = await prisma.batch.findUnique({
+          where: { id: batchId }
+        });
+        
+        if (!batch) {
+          return NextResponse.json({ error: 'Batch not found' }, { status: 404 })
+        }
+      } else {
+        // Create a batch for these invites
+        batch = await prisma.batch.create({
           data: {
-            name: invite.name,
-            email: invite.email,
-            phone: invite.phone,
-            type: invite.type,
+            name: `Batch ${new Date().toISOString()}`,
             status: 'pending',
-            event: {
-              connect: {
-                id: params.id
-              }
-            },
-            Batch: {
-              connect: {
-                id: batch.id
-              }
-            }
+            totalInvites: invites.length,
+            eventId: params.id
           }
         })
+      }
+      
+      // Create the invites
+      const createdInvites = await Promise.all(
+        invites.map(invite => 
+          prisma.invite.create({
+            data: {
+              name: invite.name,
+              email: invite.email,
+              phone: invite.phone,
+              type: invite.type,
+              status: 'pending',
+              code: invite.code,
+              emailStatus: invite.emailStatus,
+              whatsappStatus: invite.whatsappStatus,
+              errorMessage: invite.errorMessage,
+              eventId: params.id,
+              batchId: batch.id
+            }
+          })
+        )
       )
-    )
-    
-    return NextResponse.json({ 
-      success: true,
-      count: createdInvites.length,
-      invites: createdInvites,
-      batch
-    })
-    
+      
+      return NextResponse.json({ 
+        success: true,
+        invites: createdInvites,
+        batch
+      })
+    } else {
+      // Handle single invite creation
+      const { name, email, phone, type, code, emailStatus, whatsappStatus, errorMessage, batchId } = body
+      
+      // Validate required fields
+      if (!name && !email && !phone) {
+        return NextResponse.json({ error: 'At least one of name, email, or phone is required' }, { status: 400 })
+      }
+      
+      // Create the invite
+      const invite = await prisma.invite.create({
+        data: {
+          name,
+          email,
+          phone,
+          type: type || 'both',
+          status: 'pending',
+          code,
+          emailStatus,
+          whatsappStatus,
+          errorMessage,
+          eventId: params.id,
+          batchId
+        }
+      })
+      
+      return NextResponse.json({ 
+        success: true,
+        invite
+      })
+    }
   } catch (error) {
     console.error('Error creating invites:', error)
     return NextResponse.json({ error: 'Failed to create invites' }, { status: 500 })

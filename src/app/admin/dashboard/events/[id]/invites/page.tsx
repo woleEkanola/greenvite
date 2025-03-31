@@ -3,13 +3,17 @@
 import { useState, useRef, useEffect, useMemo, useCallback, memo } from 'react'
 import Swal from 'sweetalert2'
 import * as XLSX from 'xlsx'
+import { toast } from 'react-hot-toast'
+import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { X, Check, Mail, Phone, RefreshCw, Search, ChevronDown, Plus, Edit, Trash, Save } from 'lucide-react'
-import { z } from 'zod'
+import { Edit, Trash, Plus, RefreshCw, Mail, ChevronDown, X, Upload, Phone, Save } from 'lucide-react'
 import RichTextEditor from '@/components/RichTextEditor'
+// Remove direct imports of server-only modules
+// import { sendEmail } from '@/lib/email'
+// import sendWhatsAppNotification from '@/lib/whatsapp'
 import DataTable from '@/components/DataTable'
 import { debounce } from 'lodash'
-import { toast } from 'react-hot-toast'
+import { z } from 'zod'
 
 interface Recipient {
   name: string
@@ -29,6 +33,7 @@ interface MessageTemplate {
   createdAt: string
   updatedAt: string
   eventId: string
+  imageUrl?: string
 }
 
 // Memoized RecipientItem component to prevent unnecessary re-renders
@@ -170,7 +175,7 @@ export default function EventInvitesPage({ params }: { params: { id: string } })
   const [previewType, setPreviewType] = useState<'email' | 'whatsapp'>('email')
   const [previewRecipient, setPreviewRecipient] = useState<Recipient | null>(null)
   const [showMessageSettings, setShowMessageSettings] = useState(false)
-  const [emailImage, setEmailImage] = useState<File | null>(null)
+  const [emailImageFile, setEmailImageFile] = useState<File | null>(null)
   const [emailImagePreview, setEmailImagePreview] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
@@ -186,10 +191,14 @@ export default function EventInvitesPage({ params }: { params: { id: string } })
     emailSubject: '',
     emailContent: '',
     whatsappContent: '',
-    isDefault: false
+    isDefault: false,
+    imageUrl: ''
   })
   const [loadingTemplates, setLoadingTemplates] = useState(false)
   const [savingTemplate, setSavingTemplate] = useState(false)
+
+  // Add a new state for WhatsApp image toggle
+  const [includeImageInWhatsapp, setIncludeImageInWhatsapp] = useState(false)
 
   // Validation schema for recipients
   const recipientSchema = z.object({
@@ -227,33 +236,86 @@ export default function EventInvitesPage({ params }: { params: { id: string } })
 
   // Fetch templates from the database
   const fetchTemplates = async () => {
+    setLoadingTemplates(true)
+    
     try {
-      setLoadingTemplates(true)
-      const response = await fetch(`/api/admin/events/${params.id}/templates`)
+      // Try the new endpoint first
+      let response = await fetch(`/api/admin/events/${params.id}/message-templates`)
       
       if (response.ok) {
         const data = await response.json()
         
-        // Check if we got an actual array of templates or an error response
-        if (Array.isArray(data) && data.length > 0) {
-          setTemplates(data)
+        if (data.templates && data.templates.length > 0) {
+          setTemplates(data.templates)
           
-          // If templates exist, select the default one or the first one
-          const defaultTemplate = data.find((t: MessageTemplate) => t.isDefault) || data[0]
+          // Find the default template or use the first one
+          const defaultTemplate = data.templates.find((t: MessageTemplate) => t.isDefault) || data.templates[0]
           setSelectedTemplate(defaultTemplate)
           setEmailSubject(defaultTemplate.emailSubject)
           setEmailTemplate(defaultTemplate.emailContent)
           setWhatsappTemplate(defaultTemplate.whatsappContent)
-        } else {
-          // If no templates exist or there was an issue with the database model,
-          // use in-memory templates as fallback
-          createLocalTemplates()
+          
+          // Load the image if it exists in the template
+          if (defaultTemplate.imageUrl) {
+            setEmailImagePreview(defaultTemplate.imageUrl)
+          }
+          
+          return
         }
-      } else {
-        console.error('Failed to fetch templates')
-        // Use in-memory templates as fallback
-        createLocalTemplates()
       }
+      
+      // If the new endpoint fails or returns no templates, try the old endpoint
+      response = await fetch(`/api/admin/events/${params.id}/templates`)
+      
+      if (response.ok) {
+        const data = await response.json()
+        
+        if (Array.isArray(data) && data.length > 0) {
+          // Convert old templates to new format
+          const convertedTemplates = data.map((template: any) => ({
+            ...template,
+            imageUrl: null // Add the new field
+          }))
+          
+          setTemplates(convertedTemplates)
+          
+          // Find the default template or use the first one
+          const defaultTemplate = convertedTemplates.find((t: MessageTemplate) => t.isDefault) || convertedTemplates[0]
+          setSelectedTemplate(defaultTemplate)
+          setEmailSubject(defaultTemplate.emailSubject)
+          setEmailTemplate(defaultTemplate.emailContent)
+          setWhatsappTemplate(defaultTemplate.whatsappContent)
+          
+          // Migrate the old templates to the new endpoint
+          try {
+            await Promise.all(convertedTemplates.map(async (template: MessageTemplate) => {
+              await fetch(`/api/admin/events/${params.id}/message-templates`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  name: template.name,
+                  emailSubject: template.emailSubject,
+                  emailContent: template.emailContent,
+                  whatsappContent: template.whatsappContent,
+                  isDefault: template.isDefault,
+                  imageUrl: null
+                })
+              })
+            }))
+            
+            console.log('Successfully migrated templates to new endpoint')
+          } catch (migrationError) {
+            console.error('Error migrating templates:', migrationError)
+          }
+          
+          return
+        }
+      }
+      
+      // If both endpoints fail or return no templates, create local templates
+      createLocalTemplates()
     } catch (error) {
       console.error('Error fetching templates:', error)
       // Use in-memory templates as fallback
@@ -267,51 +329,9 @@ export default function EventInvitesPage({ params }: { params: { id: string } })
   const createLocalTemplates = () => {
     if (!event) return
     
-    // Create default templates based on event title
-    let defaultEmailSubject = ''
-    let defaultEmailContent = ''
-    let defaultWhatsappContent = ''
-    
-    if (event.title === "Jesse George Church Dedication") {
-      defaultEmailSubject = 'Invitation to Jesse George Church Dedication'
-      defaultEmailContent = `
-<p>Dear {{name}},</p>
-
-<p>We are pleased to invite you to the Church Dedication of Jesse Oghenekome George.</p>
-
-<p>Please use the link below to confirm your attendance:</p>
-
-<p><a href="{{link}}#{{code}}">{{link}}#{{code}}</a></p>
-
-<p>Your unique registration code is: <strong>{{code}}</strong></p>
-
-<p>We look forward to celebrating this special occasion with you.</p>
-
-<p>Warm regards,<br>
-The George Family</p>
-
-{{Image}}
-      `.trim()
-      
-      defaultWhatsappContent = `
-Hello {{name}},
-
-You are cordially invited to the Church Dedication of Jesse Oghenekome George.
-
-Please use this link to confirm your attendance:
-{{link}}#{{code}}
-
-Your unique registration code is: *{{code}}*
-
-We look forward to celebrating this special occasion with you.
-
-Warm regards,
-The George Family
-      `.trim()
-    } else {
-      // Default templates for other events
-      defaultEmailSubject = `Invitation to ${event.title}`
-      defaultEmailContent = `
+    // Create default templates for all events
+    const defaultEmailSubject = `Invitation to ${event.title}`
+    const defaultEmailContent = `
 <p>Dear {{name}},</p>
 
 <p>We are pleased to invite you to ${event.title}.</p>
@@ -327,10 +347,10 @@ The George Family
 <p>Warm regards,<br>
 The Event Team</p>
 
-{{Image}}
-      `.trim()
-      
-      defaultWhatsappContent = `
+{{image}}
+    `.trim()
+    
+    const defaultWhatsappContent = `
 Hello {{name}},
 
 You are cordially invited to ${event.title}.
@@ -344,8 +364,7 @@ We look forward to celebrating with you.
 
 Warm regards,
 The Event Team
-      `.trim()
-    }
+    `.trim()
     
     // Create local template objects
     const defaultTemplate: MessageTemplate = {
@@ -390,7 +409,7 @@ The Event Team
 <p>Warm regards,<br>
 The Event Team</p>
 
-{{Image}}
+{{image}}
       `.trim()
       
       const defaultWhatsappContent = `
@@ -409,7 +428,7 @@ Warm regards,
 The Event Team
       `.trim()
       
-      const response = await fetch(`/api/admin/events/${params.id}/templates`, {
+      const response = await fetch(`/api/admin/events/${params.id}/message-templates`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -449,6 +468,15 @@ The Event Team
     setEmailSubject(template.emailSubject)
     setEmailTemplate(template.emailContent)
     setWhatsappTemplate(template.whatsappContent)
+    
+    // Load the image if it exists in the template
+    if (template.imageUrl) {
+      setEmailImagePreview(template.imageUrl)
+      setEmailImageFile(null) // Reset the file since we're loading from URL
+    } else {
+      setEmailImagePreview(null)
+      setEmailImageFile(null)
+    }
   }
 
   // Open template modal for creating a new template
@@ -465,7 +493,8 @@ The Event Team
       emailSubject: emailSubject,
       emailContent: emailTemplate,
       whatsappContent: whatsappTemplate,
-      isDefault: false
+      isDefault: false,
+      imageUrl: ''
     })
     setTemplateFormMode('create')
     setShowTemplateModal(true)
@@ -485,7 +514,8 @@ The Event Team
       emailSubject: template.emailSubject,
       emailContent: template.emailContent,
       whatsappContent: template.whatsappContent,
-      isDefault: template.isDefault
+      isDefault: template.isDefault,
+      imageUrl: template.imageUrl || ''
     })
     setTemplateFormMode('edit')
     setShowTemplateModal(true)
@@ -501,64 +531,59 @@ The Event Team
 
   // Save template (create or update)
   const handleSaveTemplate = async () => {
+    if (!selectedTemplate) return
+    
+    setSavingTemplate(true)
+    
     try {
-      setSavingTemplate(true)
+      // Upload the image first if there's a new one
+      let imageUrl = selectedTemplate.imageUrl || null
       
-      // Validate form
-      if (!templateForm.name || !templateForm.emailSubject || !templateForm.emailContent || !templateForm.whatsappContent) {
-        toast.error('All fields are required')
-        return
+      if (emailImageFile) {
+        const formData = new FormData()
+        formData.append('file', emailImageFile)
+        formData.append('eventId', params.id)
+        
+        const imageResponse = await fetch('/api/admin/upload', {
+          method: 'POST',
+          body: formData
+        })
+        
+        if (imageResponse.ok) {
+          const imageData = await imageResponse.json()
+          imageUrl = imageData.url
+        } else {
+          throw new Error('Failed to upload image')
+        }
       }
       
-      const url = templateFormMode === 'create' 
-        ? `/api/admin/events/${params.id}/templates` 
-        : `/api/admin/events/${params.id}/templates/${templateForm.id}`
-      
-      const method = templateFormMode === 'create' ? 'POST' : 'PUT'
-      
-      const response = await fetch(url, {
-        method,
+      // Now save the template with the image URL
+      const response = await fetch(`/api/admin/events/${params.id}/message-templates/${selectedTemplate.id}`, {
+        method: 'PUT',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify(templateForm),
+        body: JSON.stringify({
+          name: selectedTemplate.name,
+          emailSubject,
+          emailContent: emailTemplate,
+          whatsappContent: whatsappTemplate,
+          isDefault: selectedTemplate.isDefault,
+          imageUrl
+        })
       })
       
       if (response.ok) {
-        const savedTemplate = await response.json()
+        toast.success('Template saved successfully')
         
-        if (templateFormMode === 'create') {
-          setTemplates(prev => [...prev, savedTemplate])
-        } else {
-          setTemplates(prev => prev.map(t => t.id === savedTemplate.id ? savedTemplate : t))
-        }
-        
-        // If this is the default template or we're editing the currently selected template,
-        // update the current template values
-        if (savedTemplate.isDefault || (selectedTemplate && savedTemplate.id === selectedTemplate.id)) {
-          setSelectedTemplate(savedTemplate)
-          setEmailSubject(savedTemplate.emailSubject)
-          setEmailTemplate(savedTemplate.emailContent)
-          setWhatsappTemplate(savedTemplate.whatsappContent)
-        }
-        
-        setShowTemplateModal(false)
-        toast.success(`Template ${templateFormMode === 'create' ? 'created' : 'updated'} successfully`)
+        // Update the templates list
+        fetchTemplates()
       } else {
-        const error = await response.json()
-        
-        if (error.error && error.error.includes('Message templates are not available')) {
-          // If the error is because the database model doesn't exist, fall back to local templates
-          toast.info('Template management requires database updates. Using local templates for now.')
-          setShowTemplateModal(false)
-          createLocalTemplates()
-        } else {
-          toast.error(error.error || `Failed to ${templateFormMode} template`)
-        }
+        toast.error('Failed to save template')
       }
     } catch (error) {
-      console.error(`Error ${templateFormMode === 'create' ? 'creating' : 'updating'} template:`, error)
-      toast.error(`An error occurred while ${templateFormMode === 'create' ? 'creating' : 'updating'} the template`)
+      console.error('Error saving template:', error)
+      toast.error('Error saving template')
     } finally {
       setSavingTemplate(false)
     }
@@ -586,7 +611,7 @@ The Event Team
     if (!result.isConfirmed) return
     
     try {
-      const response = await fetch(`/api/admin/events/${params.id}/templates/${template.id}`, {
+      const response = await fetch(`/api/admin/events/${params.id}/message-templates/${template.id}`, {
         method: 'DELETE',
       })
       
@@ -623,30 +648,44 @@ The Event Team
     }
   }
 
-  // Handle email image upload
-  const handleEmailImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Update the handleImageUpload function to work with Vercel Blob Storage
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (!file) return
-
-    // Check file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('Image size must be less than 5MB')
-      return
-    }
-
-    setEmailImage(file)
     
-    // Create preview URL
-    const reader = new FileReader()
-    reader.onloadend = () => {
-      setEmailImagePreview(reader.result as string)
+    if (file) {
+      // Check file size (5MB limit)
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('Image size must be less than 5MB')
+        return
+      }
+      
+      // Check file type
+      if (!file.type.startsWith('image/')) {
+        toast.error('File must be an image')
+        return
+      }
+      
+      // Create a preview URL
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const result = e.target?.result as string
+        setEmailImagePreview(result)
+      }
+      reader.readAsDataURL(file)
+      
+      // Store the file for later upload
+      setEmailImageFile(file)
+      
+      // If auto-save is enabled, upload the image immediately
+      if (selectedTemplate && selectedTemplate.id !== 'local-default') {
+        handleSaveTemplate()
+      }
     }
-    reader.readAsDataURL(file)
   }
 
   // Clear email image
   const clearEmailImage = () => {
-    setEmailImage(null)
+    setEmailImageFile(null)
     setEmailImagePreview(null)
     if (imageInputRef.current) {
       imageInputRef.current.value = ''
@@ -746,109 +785,251 @@ The Event Team
 
   // Handle send invites
   const handleSendInvites = async () => {
-    // Validate templates based on enabled channels
-    if (enableEmail && !emailTemplate.trim()) {
-      toast.error('Email template is required when Email is enabled')
-      return
-    }
-    
-    if (enableWhatsApp && !whatsappTemplate.trim()) {
-      toast.error('WhatsApp template is required when WhatsApp is enabled')
-      return
-    }
-    
     // Validate recipients
     if (recipients.length === 0) {
       toast.error('Please add at least one recipient')
       return
     }
     
-    const validationErrors = validateRecipients()
-    if (validationErrors.length > 0) {
-      Swal.fire({
-        title: 'Validation Errors',
-        html: `<ul class="text-left">${validationErrors.map(err => `<li>${err}</li>`).join('')}</ul>`,
-        icon: 'error',
-        confirmButtonText: 'Fix Issues'
-      })
+    if (!enableEmail && !enableWhatsApp) {
+      toast.error('Please enable at least one sending method (Email or WhatsApp)')
       return
     }
     
     // Confirm before sending
     const result = await Swal.fire({
       title: 'Send Invites?',
-      html: `You are about to send invites to <b>${recipients.length}</b> recipients. This action cannot be undone.`,
+      text: `You are about to send ${recipients.length} invites. This action cannot be undone.`,
       icon: 'warning',
       showCancelButton: true,
-      confirmButtonColor: '#10b981',
-      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#3085d6',
+      cancelButtonColor: '#d33',
       confirmButtonText: 'Yes, send invites'
     })
-    
-    if (!result.isConfirmed) return
-    
-    try {
+
+    if (result.isConfirmed) {
       setSending(true)
       
-      // Prepare the data for API
-      const invitesToCreate = recipients.map(recipient => ({
-        name: recipient.name,
-        email: recipient.email,
-        phone: recipient.phone,
-        type: recipient.type
-      }))
-      
-      // Create FormData for file upload
-      const formData = new FormData()
-      formData.append('eventId', params.id)
-      formData.append('subject', emailSubject)
-      formData.append('emailTemplate', emailTemplate)
-      formData.append('whatsappTemplate', whatsappTemplate)
-      formData.append('enableEmail', String(enableEmail))
-      formData.append('enableWhatsApp', String(enableWhatsApp))
-      formData.append('recipients', JSON.stringify(invitesToCreate))
-      
-      if (emailImage) {
-        formData.append('emailImage', emailImage)
-      }
-      
-      // Send the invites
-      const response = await fetch('/api/admin/send-invites', {
-        method: 'POST',
-        body: formData
-      })
-      
-      if (response.ok) {
-        Swal.fire({
-          title: 'Success!',
-          text: 'Invites have been sent successfully',
-          icon: 'success',
-          confirmButtonText: 'View Sent Invites',
-          showCancelButton: true,
-          cancelButtonText: 'Send More',
-          confirmButtonColor: '#10b981'
-        }).then((result) => {
-          if (result.isConfirmed) {
-            window.location.href = `/admin/dashboard/events/${params.id}/sent-invites`
-          } else {
-            // Reset form for sending more invites
-            setRecipients([{ name: '', email: '', phone: '', type: 'both' }])
-          }
+      try {
+        // Create a batch for these invites
+        const batchResponse = await fetch(`/api/admin/events/${params.id}/batches`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            name: `Batch ${new Date().toISOString().split('T')[0]}`
+          })
         })
-      } else {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to send invites')
+        
+        if (!batchResponse.ok) {
+          throw new Error('Failed to create batch for invites')
+        }
+        
+        const batch = await batchResponse.json()
+        
+        // Process each recipient
+        const results = await Promise.all(
+          recipients.map(async (recipient) => {
+            try {
+              // Generate a registration code for this recipient
+              const codeResponse = await fetch(`/api/admin/events/${params.id}/registration-codes/generate`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  count: 1
+                })
+              })
+              
+              if (!codeResponse.ok) {
+                throw new Error('Failed to generate registration code')
+              }
+              
+              const codes = await codeResponse.json()
+              const code = codes[0]
+              
+              // Prepare the event link
+              const baseUrl = window.location.origin
+              const eventLink = `${baseUrl}/rsvp/${event?.slug || params.id}`
+              
+              // Prepare email content with the recipient's name and code
+              const emailContent = processTemplate(emailTemplate, recipient.name, code, eventLink)
+              
+              // Prepare WhatsApp content
+              let whatsappContent = processTemplate(whatsappTemplate, recipient.name, code, eventLink, false)
+              
+              // Add image to WhatsApp content if enabled and image exists
+              if (includeImageInWhatsapp && emailImagePreview) {
+                whatsappContent += '\n\n[Image will be attached]'
+              }
+              
+              // Create the invite record first
+              const inviteResponse = await fetch(`/api/admin/events/${params.id}/invites`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  name: recipient.name,
+                  email: recipient.email,
+                  phone: recipient.phone,
+                  type: recipient.type || 'both',
+                  code,
+                  status: 'pending',
+                  batchId: batch.id
+                })
+              })
+              
+              if (!inviteResponse.ok) {
+                throw new Error('Failed to create invite record')
+              }
+              
+              const invite = await inviteResponse.json()
+              
+              // Send email if recipient has an email and type includes email
+              let emailStatus = 'not_sent'
+              let emailError = null
+              
+              if (recipient.email && (recipient.type === 'email' || recipient.type === 'both')) {
+                try {
+                  const emailResponse = await fetch('/api/admin/email', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                      to: recipient.email,
+                      subject: emailSubject,
+                      html: emailContent,
+                      eventId: params.id,
+                      imageUrl: emailImagePreview
+                    })
+                  })
+                  
+                  if (!emailResponse.ok) {
+                    const errorData = await emailResponse.json()
+                    throw new Error(errorData.error || 'Failed to send email')
+                  }
+                  
+                  emailStatus = 'sent'
+                } catch (error) {
+                  console.error('Error sending email:', error)
+                  emailStatus = 'failed'
+                  emailError = error.message
+                }
+              }
+              
+              // Send WhatsApp if recipient has a phone and type includes whatsapp
+              let whatsappStatus = 'not_sent'
+              let whatsappError = null
+              
+              if (recipient.phone && (recipient.type === 'whatsapp' || recipient.type === 'both')) {
+                try {
+                  const whatsappResponse = await fetch('/api/admin/whatsapp', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                      phone: recipient.phone,
+                      message: whatsappContent,
+                      eventId: params.id,
+                      imageUrl: includeImageInWhatsapp ? emailImagePreview : null
+                    })
+                  })
+                  
+                  if (!whatsappResponse.ok) {
+                    const errorData = await whatsappResponse.json()
+                    throw new Error(errorData.error || 'Failed to send WhatsApp message')
+                  }
+                  
+                  whatsappStatus = 'sent'
+                } catch (error) {
+                  console.error('Error sending WhatsApp:', error)
+                  whatsappStatus = 'failed'
+                  whatsappError = error.message
+                }
+              }
+              
+              // Update the invite record with the status
+              await fetch(`/api/admin/events/${params.id}/invites/${invite.invite.id}`, {
+                method: 'PUT',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  emailStatus,
+                  whatsappStatus,
+                  errorMessage: emailError || whatsappError
+                })
+              })
+              
+              return {
+                recipient,
+                success: emailStatus === 'sent' || whatsappStatus === 'sent',
+                emailStatus,
+                whatsappStatus,
+                error: emailError || whatsappError
+              }
+            } catch (error) {
+              console.error('Error processing recipient:', error)
+              return {
+                recipient,
+                success: false,
+                error: error.message
+              }
+            }
+          })
+        )
+        
+        // Update the batch with the results
+        const successCount = results.filter(r => r.success).length
+        const failureCount = results.length - successCount
+        
+        await fetch(`/api/admin/events/${params.id}/batches/${batch.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            status: 'completed',
+            totalInvites: results.length,
+            sentInvites: successCount,
+            failedInvites: failureCount
+          })
+        })
+        
+        // Show the results
+        const successMessage = `Successfully sent ${successCount} out of ${results.length} invites.`
+        
+        if (failureCount > 0) {
+          Swal.fire({
+            title: 'Invites Sent with Issues',
+            html: `${successMessage}<br/>${failureCount} invites failed to send. Check the logs for details.`,
+            icon: 'warning'
+          })
+        } else {
+          Swal.fire({
+            title: 'Invites Sent Successfully',
+            text: successMessage,
+            icon: 'success'
+          })
+        }
+        
+        // Clear the recipients list
+        setRecipients([])
+      } catch (error) {
+        console.error('Error sending invites:', error)
+        Swal.fire({
+          title: 'Error',
+          text: `Failed to send invites: ${error.message}`,
+          icon: 'error'
+        })
+      } finally {
+        setSending(false)
       }
-    } catch (error) {
-      console.error('Error sending invites:', error)
-      Swal.fire({
-        title: 'Error',
-        text: error instanceof Error ? error.message : 'Failed to send invites',
-        icon: 'error',
-        confirmButtonText: 'Try Again'
-      })
-    } finally {
-      setSending(false)
     }
   }
 
@@ -878,11 +1059,11 @@ The Event Team
         .replace(/{{code}}/g, code)
         .replace(/{{link}}/g, link)
       
-      // If there's an image preview, replace the {{Image}} placeholder
+      // If there's an image preview, replace the {{image}} placeholder
       if (emailImagePreview) {
-        content = content.replace('{{Image}}', `<img src="${emailImagePreview}" alt="Event Image" style="max-width: 100%; margin-top: 20px;" />`)
+        content = content.replace('{{image}}', `<img src="${emailImagePreview}" alt="Event Image" style="max-width: 100%; margin-top: 20px;" />`)
       } else {
-        content = content.replace('{{Image}}', '')
+        content = content.replace('{{image}}', '')
       }
       
       return content
@@ -1059,7 +1240,7 @@ The Event Team
                       placeholder="Enter email content"
                     />
                     <p className="text-xs text-gray-500 mt-1">
-                      Use <code>{'{{name}}'}</code>, <code>{'{{code}}'}</code>, and <code>{'{{link}}'}</code> as placeholders. Use <code>{'{{Image}}'}</code> to place the image.
+                      Use <code>{'{{name}}'}</code>, <code>{'{{code}}'}</code>, and <code>{'{{link}}'}</code> as placeholders. Use <code>{'{{image}}'}</code> to place the image.
                     </p>
                   </div>
                   
@@ -1072,13 +1253,13 @@ The Event Team
                         type="file"
                         ref={imageInputRef}
                         accept="image/*"
-                        onChange={handleEmailImageUpload}
+                        onChange={handleImageUpload}
                         className="hidden"
                       />
                       <button
                         type="button"
                         onClick={() => imageInputRef.current?.click()}
-                        className="px-3 py-1.5 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors"
+                        className="px-3 py-1.5 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
                       >
                         Choose Image
                       </button>
@@ -1086,7 +1267,7 @@ The Event Team
                         <button
                           type="button"
                           onClick={clearEmailImage}
-                          className="px-3 py-1.5 bg-red-100 text-red-800 rounded-md hover:bg-red-200 transition-colors"
+                          className="px-3 py-1.5 bg-red-100 text-red-800 rounded-md hover:bg-red-200"
                         >
                           Remove Image
                         </button>
@@ -1103,14 +1284,14 @@ The Event Team
                       </div>
                     )}
                     <p className="text-xs text-gray-500 mt-1">
-                      Maximum size: 5MB. The image will replace the <code>{'{{Image}}'}</code> placeholder in your email.
+                      Maximum size: 5MB. The image will replace the <code>{'{{image}}'}</code> placeholder in your email.
                     </p>
                   </div>
                   
                   <button
                     type="button"
                     onClick={() => showMessagePreview('email')}
-                    className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
+                    className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
                   >
                     Preview Email
                   </button>
@@ -1136,10 +1317,23 @@ The Event Team
                     </p>
                   </div>
                   
+                  <div className="mt-4 flex items-center">
+                    <input
+                      type="checkbox"
+                      id="includeImageInWhatsapp"
+                      checked={includeImageInWhatsapp}
+                      onChange={(e) => setIncludeImageInWhatsapp(e.target.checked)}
+                      className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <label htmlFor="includeImageInWhatsapp" className="ml-2 text-sm text-gray-700">
+                      Include image in WhatsApp message (if available)
+                    </label>
+                  </div>
+                  
                   <button
                     type="button"
                     onClick={() => showMessagePreview('whatsapp')}
-                    className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors"
+                    className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600"
                   >
                     Preview WhatsApp
                   </button>
@@ -1322,7 +1516,7 @@ The Event Team
                   placeholder="Enter email content"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Use <code>{'{{name}}'}</code>, <code>{'{{code}}'}</code>, and <code>{'{{link}}'}</code> as placeholders. Use <code>{'{{Image}}'}</code> to place the image.
+                  Use <code>{'{{name}}'}</code>, <code>{'{{code}}'}</code>, and <code>{'{{link}}'}</code> as placeholders. Use <code>{'{{image}}'}</code> to place the image.
                 </p>
               </div>
               
@@ -1369,7 +1563,7 @@ The Event Team
                 type="button"
                 onClick={handleSaveTemplate}
                 disabled={savingTemplate}
-                className="px-4 py-2 bg-emerald-500 text-white rounded-md hover:bg-emerald-600 transition-colors flex items-center disabled:opacity-50"
+                className="px-4 py-2 bg-emerald-500 text-white rounded-md hover:bg-emerald-600 disabled:opacity-50"
               >
                 {savingTemplate ? (
                   <>
