@@ -54,28 +54,12 @@ export async function POST(request: Request) {
     // Parse the multipart form data
     const formData = await request.formData()
     const file = formData.get('file') as File
-    const eventId = formData.get('eventId') as string
+    const eventId = formData.get('eventId') as string | null
 
     if (!file) {
       return new NextResponse(
         JSON.stringify({ error: 'No file provided' }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
-      )
-    }
-
-    if (!eventId) {
-      return new NextResponse(
-        JSON.stringify({ error: 'Event ID is required' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
-      )
-    }
-
-    // Check if user has access to this event
-    const hasAccess = await canAccessEvent(session.user.id, eventId)
-    if (!hasAccess) {
-      return new NextResponse(
-        JSON.stringify({ error: 'Forbidden' }),
-        { status: 403, headers: { 'Content-Type': 'application/json' } }
       )
     }
 
@@ -88,16 +72,40 @@ export async function POST(request: Request) {
       )
     }
 
-    // Upload to Vercel Blob Storage
-    const { url } = await put(`greenvites-${eventId}-${Date.now()}-${file.name}`, file, {
-      access: 'public',
-      contentType: fileType
-    })
-    
-    return new NextResponse(
-      JSON.stringify({ url }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } }
-    )
+    // If eventId is provided, check access
+    if (eventId) {
+      // Check if user has access to this event
+      const hasAccess = await canAccessEvent(session.user.id, eventId)
+      if (!hasAccess) {
+        return new NextResponse(
+          JSON.stringify({ error: 'Forbidden' }),
+          { status: 403, headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+    }
+
+    // Generate a unique filename
+    const uniquePrefix = eventId ? `greenvites-${eventId}` : `greenvites-user-${session.user.id}`
+    const filename = `${uniquePrefix}-${Date.now()}-${file.name.replace(/\s+/g, '-')}`
+
+    try {
+      // Upload to Vercel Blob Storage
+      const { url } = await put(filename, file, {
+        access: 'public',
+        contentType: fileType
+      })
+      
+      return new NextResponse(
+        JSON.stringify({ url }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    } catch (uploadError) {
+      console.error('Error uploading to Vercel Blob:', uploadError)
+      return new NextResponse(
+        JSON.stringify({ error: 'Failed to upload file. Please try again.' }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
   } catch (error) {
     console.error('Error uploading file:', error)
     return new NextResponse(

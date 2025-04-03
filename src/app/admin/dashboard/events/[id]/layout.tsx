@@ -16,7 +16,9 @@ import {
   BarChart, 
   QrCode, 
   Ticket,
-  Send
+  Send,
+  MessageSquare,
+  Globe
 } from 'lucide-react'
 import { signOut, useSession } from 'next-auth/react'
 
@@ -197,6 +199,32 @@ export default function EventDashboardLayout({
               >
                 <Mail className="h-5 w-5 min-w-5" />
                 {isSidebarOpen && <span className="ml-3">Sent Invites</span>}
+              </Link>
+            </li>
+            <li>
+              <Link
+                href={`/admin/dashboard/events/${params.id}/message-templates`}
+                className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
+                  isActive(`/admin/dashboard/events/${params.id}/message-templates`)
+                    ? 'bg-emerald-500 text-white'
+                    : 'hover:bg-gray-100'
+                }`}
+              >
+                <MessageSquare className="h-5 w-5 min-w-5" />
+                {isSidebarOpen && <span className="ml-3">Message Templates</span>}
+              </Link>
+            </li>
+            <li>
+              <Link
+                href={`/admin/dashboard/events/${params.id}/event-page`}
+                className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
+                  isActive(`/admin/dashboard/events/${params.id}/event-page`)
+                    ? 'bg-emerald-500 text-white'
+                    : 'hover:bg-gray-100'
+                }`}
+              >
+                <Globe className="h-5 w-5 min-w-5" />
+                {isSidebarOpen && <span className="ml-3">Event Page</span>}
               </Link>
             </li>
           </ul>

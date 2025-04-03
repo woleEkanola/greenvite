@@ -43,11 +43,21 @@ export async function GET(
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
     
-    // Fetch invites for this event
+    // Fetch invites for this event with detailed includes
     const invites = await prisma.invite.findMany({
       where: {
-        event: {
-          id: params.id
+        batchId: {
+          in: await prisma.batch.findMany({
+            where: { eventId: params.id },
+            select: { id: true }
+          }).then(batches => batches.map(batch => batch.id))
+        }
+      },
+      include: {
+        registrationCode: {
+          include: {
+            rsvp: true
+          }
         }
       },
       orderBy: {
@@ -55,9 +65,69 @@ export async function GET(
       }
     })
     
+    // Also fetch all RSVPs for this event to handle cases where the invite might not have the correct registrationCodeId
+    const eventRsvps = await prisma.rsvp.findMany({
+      where: {
+        registrationCode: {
+          eventId: params.id
+        }
+      },
+      include: {
+        registrationCode: true
+      }
+    })
+    
+    // Create a lookup map of registration codes by code
+    const rsvpsByCode = new Map()
+    eventRsvps.forEach(rsvp => {
+      if (rsvp.registrationCode?.code) {
+        rsvpsByCode.set(rsvp.registrationCode.code, rsvp)
+      }
+    })
+    
+    // Map the invites to include RSVP status
+    const mappedInvites = invites.map(invite => {
+      // Default RSVP status
+      let rsvpStatus = "not_responded"
+      
+      // Get the invite code (either from invite.code or from the registration code)
+      const inviteCode = invite.code || invite.registrationCode?.code
+      
+      // First check if the invite has a registration code with an RSVP
+      if (invite.registrationCode?.rsvp) {
+        rsvpStatus = "attending"
+      } 
+      // Then check if the invite code matches a registration code with an RSVP
+      else if (inviteCode && rsvpsByCode.has(inviteCode)) {
+        rsvpStatus = "attending"
+      }
+      // Finally check if the registration code was used but no RSVP record exists
+      else if (invite.registrationCode?.used) {
+        rsvpStatus = "pending"
+      }
+      
+      return {
+        id: invite.id,
+        name: invite.name,
+        email: invite.email,
+        phone: invite.phone,
+        type: invite.type,
+        status: invite.status,
+        rsvpStatus,
+        code: inviteCode || '',
+        emailStatus: invite.emailStatus || 'not_sent',
+        whatsappStatus: invite.whatsappStatus || 'not_sent',
+        createdAt: invite.createdAt,
+        updatedAt: invite.updatedAt
+      }
+    })
+    
+    // For debugging
+    console.log(`Found ${mappedInvites.length} invites for event ${params.id}`)
+    
     return NextResponse.json({ 
       success: true,
-      invites
+      invites: mappedInvites
     })
     
   } catch (error) {
@@ -255,9 +325,7 @@ export async function DELETE(
     const invite = await prisma.invite.findFirst({
       where: {
         id: inviteId,
-        event: {
-          id: params.id
-        }
+        eventId: params.id
       }
     })
     

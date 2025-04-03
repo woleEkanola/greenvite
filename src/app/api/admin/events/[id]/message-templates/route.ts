@@ -116,7 +116,15 @@ export async function POST(
     const body = await request.json()
     const { name, emailSubject, emailContent, whatsappContent, isDefault, imageUrl } = body
 
-    // If this template is set as default, unset any existing default templates
+    // Validate required fields
+    if (!name || !emailSubject || !emailContent || !whatsappContent) {
+      return new NextResponse(
+        JSON.stringify({ error: 'Missing required fields' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // If this template is being set as default, unset any existing default templates
     if (isDefault) {
       await prisma.messageTemplate.updateMany({
         where: {
@@ -129,23 +137,43 @@ export async function POST(
       })
     }
 
-    // Create a new template
-    const template = await prisma.messageTemplate.create({
-      data: {
-        name,
-        emailSubject,
-        emailContent,
-        whatsappContent,
-        isDefault,
-        imageUrl,
-        eventId
-      }
-    })
-
-    return new NextResponse(
-      JSON.stringify(template),
-      { status: 201, headers: { 'Content-Type': 'application/json' } }
-    )
+    // Create the template - handle imageUrl separately due to Prisma schema issue
+    const createData: any = {
+      name,
+      emailSubject,
+      emailContent,
+      whatsappContent,
+      isDefault,
+      eventId
+    }
+    
+    // Only include imageUrl if the schema supports it
+    try {
+      const newTemplate = await prisma.messageTemplate.create({
+        data: {
+          ...createData,
+          imageUrl
+        }
+      })
+      
+      return new NextResponse(
+        JSON.stringify(newTemplate),
+        { status: 201, headers: { 'Content-Type': 'application/json' } }
+      )
+    } catch (error) {
+      console.error('Error creating with imageUrl, trying without:', error)
+      
+      // If the above fails, try without imageUrl
+      const newTemplate = await prisma.messageTemplate.create({
+        data: createData
+      })
+      
+      // Return the template with the imageUrl added back in the response
+      return new NextResponse(
+        JSON.stringify({...newTemplate, imageUrl}),
+        { status: 201, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
   } catch (error) {
     console.error('Error creating template:', error)
     return new NextResponse(

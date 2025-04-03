@@ -189,6 +189,18 @@ model Event {
   hosts             Host[]
   souvenirs         Souvenir[]
   messageTemplates  MessageTemplate[]
+  customizations    String?       @db.Text // JSON string to store event page customization settings
+  pageTitle         String?       // Custom title for the event page
+  pageDescription   String?       @db.Text // Custom description for the event page
+  headerImage       String?       // Hero/banner image for the event page
+  logoImage         String?       // Logo image for branding
+  primaryColor      String?       // Primary color for buttons and accents
+  secondaryColor    String?       // Secondary color for highlights
+  fontFamily        String?       // Custom font family
+  showLocationMap   Boolean       @default(true) // Whether to show the location map
+  showAddToCalendar Boolean       @default(true) // Whether to show the add to calendar button
+  customCss         String?       @db.Text // Custom CSS for advanced customization
+  isPagePublished   Boolean       @default(false) // Whether the custom page is published
 }
 
 model EventAdmin {
