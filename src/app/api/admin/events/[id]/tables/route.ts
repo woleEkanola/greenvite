@@ -49,16 +49,60 @@ export async function GET(
         eventId: params.id
       },
       include: {
-        hosts: true
+        hosts: true,
+        accessCodes: {
+          include: {
+            rsvp: true
+          }
+        }
       },
       orderBy: {
         name: 'asc'
       }
     })
     
+    // Calculate occupancy for each table and format the response
+    const tablesWithOccupancy = tables.map(table => {
+      const occupancy = table.accessCodes.length;
+      const vacancy = Math.max(0, table.capacity - occupancy);
+      
+      // Format access codes to include guest details
+      const guests = table.accessCodes.map(code => ({
+        id: code.id,
+        name: code.name,
+        type: code.type,
+        code: code.code,
+        isAdmitted: code.isAdmitted,
+        rsvpId: code.rsvpId,
+        rsvpName: code.rsvp?.name || 'Unknown',
+        rsvpEmail: code.rsvp?.email || '',
+        rsvpPhone: code.rsvp?.phone || ''
+      }));
+      
+      // Remove the accessCodes array from the response to reduce payload size
+      const { accessCodes, ...tableWithoutAccessCodes } = table;
+      
+      return {
+        ...tableWithoutAccessCodes,
+        occupancy,
+        vacancy,
+        isFull: vacancy <= 0,
+        guests
+      };
+    });
+
+    console.log('Tables with occupancy:', tablesWithOccupancy.map(t => ({
+      id: t.id,
+      name: t.name,
+      capacity: t.capacity,
+      occupancy: t.occupancy,
+      vacancy: t.vacancy,
+      isFull: t.isFull
+    })));
+
     return NextResponse.json({ 
       success: true,
-      tables
+      tables: tablesWithOccupancy
     })
     
   } catch (error) {

@@ -1,7 +1,7 @@
-import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
 
 // Helper function to check event access
 async function canAccessEvent(userId: string, eventId: string): Promise<boolean> {
@@ -39,114 +39,108 @@ async function canAccessEvent(userId: string, eventId: string): Promise<boolean>
   }
 }
 
-// GET /api/admin/events/[id]/message-templates
+// GET /api/admin/events/[id]/floor-plans
 export async function GET(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession(authOptions);
     if (!session || !session.user) {
       return new NextResponse(
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { 'Content-Type': 'application/json' } }
-      )
+      );
     }
 
-    const eventId = params.id
+    const eventId = params.id;
     
     // Check if user has access to this event
     if (!session.user.id) {
       return new NextResponse(
         JSON.stringify({ error: 'Invalid user session' }),
         { status: 401, headers: { 'Content-Type': 'application/json' } }
-      )
+      );
     }
     
-    const hasAccess = await canAccessEvent(session.user.id, eventId)
+    const hasAccess = await canAccessEvent(session.user.id, eventId);
     if (!hasAccess) {
       return new NextResponse(
         JSON.stringify({ error: 'Forbidden' }),
         { status: 403, headers: { 'Content-Type': 'application/json' } }
-      )
+      );
     }
 
-    // Get all templates for this event
-    const templates = await prisma.messageTemplate.findMany({
+    // Get all floor plans for this event
+    const floorPlans = await prisma.floorPlan.findMany({
       where: {
         eventId
       },
       orderBy: {
         createdAt: 'desc'
       }
-    })
-
-    // Add includeImageInWhatsApp property to each template in the response
-    const templatesWithImageFlag = templates.map(template => ({
-      ...template,
-      includeImageInWhatsApp: true // Default to true for existing templates
-    }))
+    });
 
     return new NextResponse(
-      JSON.stringify({ templates: templatesWithImageFlag }),
+      JSON.stringify({ floorPlans }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }
-    )
+    );
   } catch (error) {
-    console.error('Error fetching templates:', error)
+    console.error('Error fetching floor plans:', error);
     return new NextResponse(
       JSON.stringify({ error: 'Internal Server Error' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
-    )
+    );
   }
 }
 
-// POST /api/admin/events/[id]/message-templates
+// POST /api/admin/events/[id]/floor-plans
 export async function POST(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession(authOptions);
     if (!session || !session.user) {
       return new NextResponse(
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { 'Content-Type': 'application/json' } }
-      )
+      );
     }
 
-    const eventId = params.id
+    const eventId = params.id;
     
     // Check if user has access to this event
     if (!session.user.id) {
       return new NextResponse(
         JSON.stringify({ error: 'Invalid user session' }),
         { status: 401, headers: { 'Content-Type': 'application/json' } }
-      )
+      );
     }
     
-    const hasAccess = await canAccessEvent(session.user.id, eventId)
+    const hasAccess = await canAccessEvent(session.user.id, eventId);
     if (!hasAccess) {
       return new NextResponse(
         JSON.stringify({ error: 'Forbidden' }),
         { status: 403, headers: { 'Content-Type': 'application/json' } }
-      )
+      );
     }
 
     // Parse request body
-    const body = await request.json()
-    const { name, emailSubject, emailContent, whatsappContent, isDefault, imageUrl, includeImageInWhatsApp } = body
+    const body = await request.json();
+    const { name, description, imageUrl, layout, isDefault } = body;
 
     // Validate required fields
-    if (!name || !emailSubject || !emailContent || !whatsappContent) {
+    if (!name || !layout) {
       return new NextResponse(
-        JSON.stringify({ error: 'Missing required fields' }),
+        JSON.stringify({ error: 'Name and layout are required fields' }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
-      )
+      );
     }
 
-    // If this template is being set as default, unset any existing default templates
+    // If this floor plan is being set as default, unset any existing default floor plans
     if (isDefault) {
-      await prisma.messageTemplate.updateMany({
+      await prisma.floorPlan.updateMany({
         where: {
           eventId,
           isDefault: true
@@ -154,59 +148,30 @@ export async function POST(
         data: {
           isDefault: false
         }
-      })
+      });
     }
 
-    // Create the template - handle imageUrl separately due to Prisma schema issue
-    const createData: any = {
-      name,
-      emailSubject,
-      emailContent,
-      whatsappContent,
-      isDefault,
-      eventId
-    }
+    // Create the floor plan
+    const floorPlan = await prisma.floorPlan.create({
+      data: {
+        name,
+        description,
+        imageUrl,
+        layout,
+        isDefault: isDefault || false,
+        eventId
+      }
+    });
     
-    // Only include imageUrl if the schema supports it
-    try {
-      const newTemplate = await prisma.messageTemplate.create({
-        data: {
-          ...createData,
-          imageUrl
-        }
-      })
-      
-      // Add includeImageInWhatsApp to the response but don't store it in the database
-      return new NextResponse(
-        JSON.stringify({
-          ...newTemplate,
-          includeImageInWhatsApp: includeImageInWhatsApp !== undefined ? includeImageInWhatsApp : true
-        }),
-        { status: 201, headers: { 'Content-Type': 'application/json' } }
-      )
-    } catch (error) {
-      console.error('Error creating with imageUrl, trying without:', error)
-      
-      // If the above fails, try without imageUrl
-      const newTemplate = await prisma.messageTemplate.create({
-        data: createData
-      })
-      
-      // Return the template with the imageUrl added back in the response
-      return new NextResponse(
-        JSON.stringify({
-          ...newTemplate,
-          imageUrl,
-          includeImageInWhatsApp: includeImageInWhatsApp !== undefined ? includeImageInWhatsApp : true
-        }),
-        { status: 201, headers: { 'Content-Type': 'application/json' } }
-      )
-    }
+    return new NextResponse(
+      JSON.stringify(floorPlan),
+      { status: 201, headers: { 'Content-Type': 'application/json' } }
+    );
   } catch (error) {
-    console.error('Error creating template:', error)
+    console.error('Error creating floor plan:', error);
     return new NextResponse(
       JSON.stringify({ error: 'Internal Server Error' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
-    )
+    );
   }
 }

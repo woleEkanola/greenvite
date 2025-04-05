@@ -17,14 +17,16 @@ console.log('WhatsApp API Configuration Status:', {
  * @param phone Phone number to send to (with or without + prefix)
  * @param message Text message to send
  * @param imageUrl Optional URL of image to attach
+ * @param includeImageInWhatsApp Whether to include the image in WhatsApp message
  * @returns Promise resolving to success status
  */
 async function sendWhatsAppNotification(
   phone: string, 
   message: string, 
-  imageUrl?: string | null
+  imageUrl?: string | null,
+  includeImageInWhatsApp: boolean = true
 ): Promise<boolean> {
-  console.log(`Attempting to send WhatsApp message to ${phone}${imageUrl ? ' with image' : ''}`);
+  console.log(`Attempting to send WhatsApp message to ${phone}${imageUrl && includeImageInWhatsApp ? ' with image' : ''}`);
   
   // Format phone number by removing any leading + sign
   const formattedPhone = phone.replace(/^\+/, '');
@@ -49,8 +51,8 @@ async function sendWhatsAppNotification(
 
     let response;
     
-    // If we have an image URL, send as media message
-    if (imageUrl) {
+    // If we have an image URL and includeImageInWhatsApp is true, send as media message
+    if (imageUrl && includeImageInWhatsApp) {
       try {
         console.log(`Sending WhatsApp media message to ${formattedPhone} with image: ${imageUrl}`);
         

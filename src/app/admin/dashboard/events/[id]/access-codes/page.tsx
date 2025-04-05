@@ -22,6 +22,7 @@ interface AccessCode {
     id: string;
     name: string;
     capacity: number;
+    vacancy: number;
   } | null;
   rsvp: {
     id: string;
@@ -44,6 +45,7 @@ export default function EventAccessCodesPage({ params }: { params: { id: string 
   const [generating, setGenerating] = useState(false);
   const [sending, setSending] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [unassigning, setUnassigning] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [sentFilter, setSentFilter] = useState<'all' | 'sent' | 'not-sent'>('all');
   const [typeFilter, setTypeFilter] = useState<'all' | 'primary' | 'guest' | 'driver' | 'aide'>('all');
@@ -127,6 +129,8 @@ export default function EventAccessCodesPage({ params }: { params: { id: string 
         throw new Error('Failed to fetch tables');
       }
       const data = await response.json();
+      
+      console.log('Tables received:', data.tables);
       
       if (data.success && data.tables) {
         setTables(data.tables);
@@ -248,6 +252,61 @@ export default function EventAccessCodesPage({ params }: { params: { id: string 
     }
   };
 
+  // Unassign selected codes from their tables
+  const unassignFromTable = async () => {
+    if (selectedCodes.length === 0) {
+      toast.error('Please select at least one access code');
+      return;
+    }
+    
+    try {
+      setUnassigning(true);
+      const response = await fetch(`/api/admin/events/${params.id}/access-codes/assign-table`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          codeIds: selectedCodes,
+          tableId: null // Setting tableId to null unassigns the codes
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to unassign from table');
+      }
+      
+      const data = await response.json();
+      toast.success(data.message || 'Guests unassigned from tables successfully');
+      
+      // Update the local state
+      setAccessCodes(prevCodes => 
+        prevCodes.map(code => 
+          selectedCodes.includes(code.id) 
+            ? { ...code, tableId: null, table: null } 
+            : code
+        )
+      );
+      
+      setFilteredCodes(prevCodes => 
+        prevCodes.map(code => 
+          selectedCodes.includes(code.id) 
+            ? { ...code, tableId: null, table: null } 
+            : code
+        )
+      );
+      
+      // Reset selection
+      setSelectedCodes([]);
+    } catch (error: any) {
+      console.error('Error unassigning from table:', error);
+      toast.error(error.message || 'Failed to unassign from table');
+    } finally {
+      setUnassigning(false);
+    }
+  };
+
   // Assign selected codes to a table
   const assignToTable = async () => {
     if (selectedCodes.length === 0) {
@@ -270,6 +329,21 @@ export default function EventAccessCodesPage({ params }: { params: { id: string 
       
       if (!response.ok) {
         const errorData = await response.json();
+        
+        // Handle capacity exceeded error specifically
+        if (errorData.error && errorData.error.includes('capacity would be exceeded')) {
+          Swal.fire({
+            title: 'Table Capacity Exceeded',
+            html: `This table can only seat ${errorData.capacity} guests.<br>
+                  Current occupancy: ${errorData.currentOccupancy}<br>
+                  You're trying to add: ${errorData.attempting} more guests.`,
+            icon: 'warning',
+            confirmButtonText: 'OK',
+            confirmButtonColor: '#10b981'
+          });
+          throw new Error('Table capacity would be exceeded');
+        }
+        
         throw new Error(errorData.error || 'Failed to assign table');
       }
       
@@ -301,9 +375,11 @@ export default function EventAccessCodesPage({ params }: { params: { id: string 
       setSelectedCodes([]);
       setSelectedTable(null);
       setShowTableAssignModal(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error assigning table:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to assign table');
+      if (error.message && !error.message.includes('Table capacity would be exceeded')) {
+        toast.error(error.message || 'Failed to assign table');
+      }
     } finally {
       setAssigningTable(false);
     }
@@ -520,7 +596,7 @@ export default function EventAccessCodesPage({ params }: { params: { id: string 
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold text-gray-900">Access Codes</h1>
         
-        <div className="flex flex-col sm:flex-row gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={generateAccessCodes}
             disabled={generating}
@@ -549,6 +625,15 @@ export default function EventAccessCodesPage({ params }: { params: { id: string 
           </button>
           
           <button
+            onClick={unassignFromTable}
+            disabled={unassigning || selectedCodes.length === 0}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-amber-600 hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 disabled:bg-amber-300"
+          >
+            <Table size={16} className="mr-2" />
+            {unassigning ? 'Unassigning...' : 'Unassign from Table'}
+          </button>
+          
+          <button
             onClick={deleteAccessCodes}
             disabled={deleting || selectedCodes.length === 0}
             className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:bg-red-300"
@@ -561,9 +646,9 @@ export default function EventAccessCodesPage({ params }: { params: { id: string 
       
       {/* Filters */}
       <div className="bg-white shadow rounded-lg p-4 mb-6">
-        <div className="flex flex-col md:flex-row md:items-center gap-4">
+        <div className="flex flex-col space-y-4">
           {/* Search */}
-          <div className="relative flex-1">
+          <div className="relative w-full">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <Search className="h-5 w-5 text-gray-400" />
             </div>
@@ -579,7 +664,7 @@ export default function EventAccessCodesPage({ params }: { params: { id: string 
           {/* Filters */}
           <div className="flex flex-wrap gap-2">
             {/* Type Filter */}
-            <div className="flex-shrink-0">
+            <div className="w-full sm:w-auto">
               <select
                 className="block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm"
                 value={typeFilter}
@@ -594,7 +679,7 @@ export default function EventAccessCodesPage({ params }: { params: { id: string 
             </div>
             
             {/* Sent Filter */}
-            <div className="flex-shrink-0">
+            <div className="w-full sm:w-auto">
               <select
                 className="block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm"
                 value={sentFilter}
@@ -607,7 +692,7 @@ export default function EventAccessCodesPage({ params }: { params: { id: string 
             </div>
             
             {/* Table Assignment Filter */}
-            <div className="flex-shrink-0">
+            <div className="w-full sm:w-auto">
               <select
                 className="block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm"
                 value={tableFilter}
@@ -627,7 +712,7 @@ export default function EventAccessCodesPage({ params }: { params: { id: string 
             
             {/* Specific Table Filter */}
             {tableFilter !== 'unassigned' && tables.length > 0 && (
-              <div className="flex-shrink-0">
+              <div className="w-full sm:w-auto">
                 <select
                   className="block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm"
                   value={specificTableFilter}
@@ -644,7 +729,7 @@ export default function EventAccessCodesPage({ params }: { params: { id: string 
             )}
             
             {/* Admission Status Filter */}
-            <div className="flex-shrink-0">
+            <div className="w-full sm:w-auto">
               <select
                 className="block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm"
                 value={admissionFilter}
@@ -928,6 +1013,24 @@ export default function EventAccessCodesPage({ params }: { params: { id: string 
             </button>
             
             <button
+              onClick={unassignFromTable}
+              disabled={unassigning || selectedCodes.length === 0}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-amber-600 hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500"
+            >
+              {unassigning ? (
+                <>
+                  <Table className="animate-spin -ml-1 mr-2 h-4 w-4" />
+                  Unassigning...
+                </>
+              ) : (
+                <>
+                  <Table className="-ml-1 mr-2 h-4 w-4" />
+                  Unassign from Table
+                </>
+              )}
+            </button>
+            
+            <button
               onClick={deleteAccessCodes}
               disabled={deleting}
               className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
@@ -951,46 +1054,56 @@ export default function EventAccessCodesPage({ params }: { params: { id: string 
       {/* Table Assignment Modal */}
       <Dialog open={showTableAssignModal} onOpenChange={setShowTableAssignModal}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Assign to Table</DialogTitle>
-          </DialogHeader>
-          
-          <div className="space-y-4 mt-4">
-            <p>Assign {selectedCodes.length} selected {selectedCodes.length === 1 ? 'attendee' : 'attendees'} to a table:</p>
+          <div className="max-w-md mx-auto p-4 sm:p-6">
+            <DialogHeader>
+              <DialogTitle>Assign to Table</DialogTitle>
+            </DialogHeader>
             
-            <div className="space-y-2">
-              <label htmlFor="table-select" className="block text-sm font-medium text-gray-700">
-                Select Table
-              </label>
-              <select
-                id="table-select"
-                value={selectedTable || ''}
-                onChange={(e) => setSelectedTable(e.target.value === '' ? null : e.target.value)}
-                className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm rounded-md"
-              >
-                <option value="">-- Unassign from table --</option>
-                {tables.map((table) => (
-                  <option key={table.id} value={table.id}>
-                    {table.name} (Capacity: {table.capacity})
-                  </option>
-                ))}
-              </select>
-            </div>
-            
-            <div className="flex justify-end space-x-2 pt-4">
-              <button
-                onClick={() => setShowTableAssignModal(false)}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={assignToTable}
-                disabled={assigningTable}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 disabled:bg-emerald-300"
-              >
-                {assigningTable ? 'Assigning...' : 'Assign'}
-              </button>
+            <div className="space-y-4 mt-4">
+              <p>Assign {selectedCodes.length} selected {selectedCodes.length === 1 ? 'attendee' : 'attendees'} to a table:</p>
+              
+              <div className="space-y-2">
+                <label htmlFor="table-select" className="block text-sm font-medium text-gray-700">
+                  Select Table
+                </label>
+                <select
+                  id="table-select"
+                  value={selectedTable || ''}
+                  onChange={(e) => setSelectedTable(e.target.value === '' ? null : e.target.value)}
+                  className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm rounded-md"
+                >
+                  <option value="">-- Unassign from table --</option>
+                  {tables.map((table) => (
+                    <option 
+                      key={table.id} 
+                      value={table.id}
+                    >
+                      {table.name} (Available: {table.vacancy !== undefined ? `${table.vacancy}/${table.capacity}` : `${table.capacity}`})
+                    </option>
+                  ))}
+                </select>
+                {tables.length === 0 && (
+                  <p className="text-sm text-amber-600 mt-1">
+                    No tables available. Please create tables first.
+                  </p>
+                )}
+              </div>
+              
+              <div className="flex justify-end space-x-2 pt-4">
+                <button
+                  onClick={() => setShowTableAssignModal(false)}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={assignToTable}
+                  disabled={assigningTable}
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 disabled:bg-emerald-300"
+                >
+                  {assigningTable ? 'Assigning...' : 'Assign'}
+                </button>
+              </div>
             </div>
           </div>
         </DialogContent>

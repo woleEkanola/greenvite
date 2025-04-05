@@ -15,13 +15,32 @@ export default function DashboardLayout({
   const router = useRouter()
   const { data: session } = useSession()
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
+  const [isMobileView, setIsMobileView] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [showUserMenu, setShowUserMenu] = useState(false)
   const userMenuRef = useRef<HTMLDivElement>(null)
 
-  const isActive = (path: string) => {
-    return pathname === path || pathname.startsWith(`${path}/`)
-  }
+  // Check if we're on mobile view
+  useEffect(() => {
+    const checkIfMobile = () => {
+      setIsMobileView(window.innerWidth < 768)
+      // Auto-close sidebar on mobile
+      if (window.innerWidth < 768) {
+        setIsSidebarOpen(false)
+      } else {
+        setIsSidebarOpen(true)
+      }
+    }
+    
+    // Check on initial load
+    checkIfMobile()
+    
+    // Add event listener for window resize
+    window.addEventListener('resize', checkIfMobile)
+    
+    // Cleanup
+    return () => window.removeEventListener('resize', checkIfMobile)
+  }, [])
 
   // Check if we're on an event detail page that has its own sidebar
   const isEventDetailPage = /\/admin\/dashboard\/events\/[^\/]+(?:\/.*)?$/.test(pathname);
@@ -39,6 +58,10 @@ export default function DashboardLayout({
       document.removeEventListener('mousedown', handleClickOutside)
     }
   }, [userMenuRef])
+
+  const isActive = (path: string) => {
+    return pathname === path || pathname.startsWith(`${path}/`)
+  }
 
   const handleLogout = async () => {
     setIsLoggingOut(true)
@@ -65,10 +88,18 @@ export default function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-gray-100">
+      {/* Mobile Overlay - show when sidebar is open on mobile */}
+      {isMobileView && isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-10"
+          onClick={() => setIsSidebarOpen(false)}
+        ></div>
+      )}
+      
       {/* Sidebar - Hide for event detail pages */}
       {!isEventDetailPage && (
         <aside className={`fixed top-0 left-0 h-full bg-white shadow-lg transition-all duration-300 z-20
-                        ${isSidebarOpen ? 'w-64' : 'w-20'}`}>
+                        ${isSidebarOpen ? 'w-64' : 'w-0 md:w-20'}`}>
           <div className="p-4 border-b">
             <button
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -120,12 +151,22 @@ export default function DashboardLayout({
       )}
 
       {/* Main Content - Adjust margin based on whether sidebar is shown */}
-      <main className={`transition-all duration-300 ${!isEventDetailPage ? (isSidebarOpen ? 'ml-64' : 'ml-20') : 'ml-0'}`}>
+      <main className={`transition-all duration-300 ${!isEventDetailPage ? (isSidebarOpen ? 'md:ml-64' : 'md:ml-20') : 'ml-0'}`}>
         {/* Header */}
         <header className="bg-white shadow-sm">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between h-16">
-              <div className="flex">
+              <div className="flex items-center">
+                {/* Mobile menu button */}
+                {!isEventDetailPage && isMobileView && (
+                  <button
+                    onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                    className="mr-2 p-2 rounded-md text-gray-500 hover:text-gray-600 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-500"
+                  >
+                    <span className="sr-only">Open sidebar</span>
+                    <Menu className="h-6 w-6" aria-hidden="true" />
+                  </button>
+                )}
                 <div className="flex-shrink-0 flex items-center">
                   <h1 className="text-xl font-semibold text-gray-800">Admin Dashboard</h1>
                 </div>
@@ -143,7 +184,7 @@ export default function DashboardLayout({
                           <User className="h-5 w-5" />
                         </div>
                         {session?.user?.name && (
-                          <span className="ml-2 text-gray-700">{session.user.name}</span>
+                          <span className="ml-2 text-gray-700 hidden md:inline">{session.user.name}</span>
                         )}
                         <ChevronDown className="ml-1 h-4 w-4 text-gray-500" />
                       </div>
@@ -169,7 +210,7 @@ export default function DashboardLayout({
           </div>
         </header>
         
-        <div className="p-8">
+        <div className="p-4 md:p-8">
           {children}
         </div>
       </main>

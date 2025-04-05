@@ -16,14 +16,15 @@ export async function POST(request: Request) {
 
     // Parse request body
     const body = await request.json()
-    const { phone, message, imageUrl, eventId } = body
+    const { phone, message, imageUrl, eventId, includeImageInWhatsApp } = body
 
     // Log the received parameters for debugging
     console.log('WhatsApp API received parameters:', { 
       phone, 
       messageLength: message?.length, 
       hasImage: !!imageUrl,
-      eventId 
+      eventId,
+      includeImageInWhatsApp
     })
 
     // Validate required fields
@@ -41,7 +42,12 @@ export async function POST(request: Request) {
     const formattedPhone = phone.startsWith('+') ? phone : `+${phone}`;
     
     // Send WhatsApp message with optional image
-    const result = await sendWhatsAppNotification(formattedPhone, message, imageUrl)
+    const result = await sendWhatsAppNotification(
+      formattedPhone, 
+      message, 
+      imageUrl, 
+      includeImageInWhatsApp !== undefined ? includeImageInWhatsApp : true
+    )
 
     // Log the result for debugging
     console.log('WhatsApp sending result:', result)

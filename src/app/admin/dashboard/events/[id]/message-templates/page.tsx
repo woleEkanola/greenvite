@@ -28,12 +28,36 @@ export default function MessageTemplatesPage() {
     emailContent: '',
     whatsappContent: '',
     isDefault: false,
-    imageUrl: ''
+    imageUrl: '',
+    includeImageInWhatsApp: true
   })
 
   useEffect(() => {
     fetchTemplates()
   }, [])
+
+  useEffect(() => {
+    // Try to load draft from localStorage when component mounts
+    const savedDraft = localStorage.getItem(`template_draft_${params.id}`);
+    if (savedDraft) {
+      try {
+        const parsedDraft = JSON.parse(savedDraft);
+        setTemplateForm(parsedDraft);
+        if (parsedDraft.imageUrl) {
+          setPreviewImage(parsedDraft.imageUrl);
+        }
+      } catch (e) {
+        console.error('Error parsing saved draft:', e);
+      }
+    }
+    
+    // Save draft to localStorage whenever form changes
+    const saveDraftTimeout = setTimeout(() => {
+      localStorage.setItem(`template_draft_${params.id}`, JSON.stringify(templateForm));
+    }, 1000);
+    
+    return () => clearTimeout(saveDraftTimeout);
+  }, [templateForm, params.id]);
 
   const fetchTemplates = async () => {
     try {
@@ -63,7 +87,8 @@ export default function MessageTemplatesPage() {
       emailContent: '',
       whatsappContent: '',
       isDefault: false,
-      imageUrl: ''
+      imageUrl: '',
+      includeImageInWhatsApp: true
     })
     setPreviewImage('')
     setTemplateFormMode('create')
@@ -71,6 +96,7 @@ export default function MessageTemplatesPage() {
   }
 
   const handleEditTemplate = (template: MessageTemplate) => {
+    console.log('Editing template:', template);
     setTemplateForm({
       id: template.id,
       name: template.name,
@@ -78,7 +104,8 @@ export default function MessageTemplatesPage() {
       emailContent: template.emailContent || '',
       whatsappContent: template.whatsappContent || '',
       isDefault: template.isDefault,
-      imageUrl: template.imageUrl || ''
+      imageUrl: template.imageUrl || '',
+      includeImageInWhatsApp: template.includeImageInWhatsApp !== false // default to true if not set
     })
     setPreviewImage(template.imageUrl || '')
     setTemplateFormMode('edit')
@@ -367,104 +394,132 @@ export default function MessageTemplatesPage() {
       
       {/* Create/Edit Modal */}
       <Modal isOpen={showModal} onClose={() => setShowModal(false)}>
-        <div className="w-full max-w-3xl max-h-[80vh] overflow-y-auto">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold">
-              {templateFormMode === 'create' ? 'Create New Template' : 'Edit Template'}
-            </h2>
-          </div>
+        <div className="w-[70%] max-w-5xl mx-auto p-4 max-h-[80vh] overflow-y-auto">
+          <h2 className="text-xl font-semibold mb-4 sticky top-0 bg-white py-2 z-10">
+            {templateFormMode === 'create' ? 'Create New Template' : 'Edit Template'}
+          </h2>
           
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Template Name *
+              <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
+                Template Name
               </label>
               <input
                 type="text"
+                id="name"
                 value={templateForm.name}
                 onChange={(e) => handleTemplateFormChange('name', e.target.value)}
-                className="w-full p-2 border rounded focus:ring-emerald-500 focus:border-emerald-500"
-                placeholder="Enter template name"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-emerald-500 focus:border-emerald-500"
+                placeholder="e.g., Primary Invitation"
               />
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email Subject *
+              <label htmlFor="emailSubject" className="block text-sm font-medium text-gray-700 mb-1">
+                Email Subject
               </label>
               <input
                 type="text"
-                value={templateForm.emailSubject || ''}
+                id="emailSubject"
+                value={templateForm.emailSubject}
                 onChange={(e) => handleTemplateFormChange('emailSubject', e.target.value)}
-                className="w-full p-2 border rounded focus:ring-emerald-500 focus:border-emerald-500"
-                placeholder="Enter email subject"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-emerald-500 focus:border-emerald-500"
+                placeholder="e.g., Your Invitation to Our Event"
               />
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email Content *
+              <label htmlFor="emailContent" className="block text-sm font-medium text-gray-700 mb-1">
+                Email Content
               </label>
-              <RichTextEditor
-                value={templateForm.emailContent || ''}
-                onChange={(value) => handleTemplateFormChange('emailContent', value)}
-                placeholder="Enter email content"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Use <code>{'{{name}}'}</code>, <code>{'{{code}}'}</code>, and <code>{'{{link}}'}</code> as placeholders. Use <code>{'{{image}}'}</code> to place the image.
+              <div className="border border-gray-300 rounded-md max-h-[40vh] overflow-y-auto">
+                <RichTextEditor
+                  value={templateForm.emailContent}
+                  onChange={(value) => handleTemplateFormChange('emailContent', value)}
+                  placeholder="Enter the email content here. Use {{name}} for recipient name, {{link}} for the event link, and {{code}} for the registration code. Use {{image}} to place the invitation image."
+                />
+              </div>
+              <p className="mt-1 text-sm text-gray-500">
+                Use <code>{'{{name}}'}</code> for recipient name, <code>{'{{link}}'}</code> for the event link, and <code>{'{{code}}'}</code> for the registration code.
+                Use <code>{'{{image}}'}</code> to place the invitation image.
               </p>
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                WhatsApp Content *
+              <label htmlFor="whatsappContent" className="block text-sm font-medium text-gray-700 mb-1">
+                WhatsApp Message
               </label>
               <textarea
-                value={templateForm.whatsappContent || ''}
+                id="whatsappContent"
+                value={templateForm.whatsappContent}
                 onChange={(e) => handleTemplateFormChange('whatsappContent', e.target.value)}
-                className="w-full p-2 border rounded focus:ring-emerald-500 focus:border-emerald-500"
-                placeholder="Enter WhatsApp message"
-                rows={8}
+                rows={5}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 max-h-[20vh] overflow-y-auto"
+                placeholder="Enter the WhatsApp message here. Use {{name}} for recipient name, {{link}} for the event link, and {{code}} for the registration code."
               />
-              <p className="text-xs text-gray-500 mt-1">
-                Use <code>{'{{name}}'}</code>, <code>{'{{code}}'}</code>, and <code>{'{{link}}'}</code> as placeholders.
-                Use * for bold text, e.g., *bold*.
+              <p className="mt-1 text-sm text-gray-500">
+                Use <code>{'{{name}}'}</code> for recipient name, <code>{'{{link}}'}</code> for the event link, and <code>{'{{code}}'}</code> for the registration code.
               </p>
             </div>
             
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Image (Optional)
-              </label>
+            {/* Image Upload Section */}
+            <div className="mt-6">
+              <h3 className="text-md font-medium mb-2">Invitation Image</h3>
               <div className="flex items-center space-x-4">
-                <label className="flex items-center px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 cursor-pointer">
-                  <Image size={16} className="mr-2" />
-                  <span>{uploadingImage ? 'Uploading...' : 'Upload Image'}</span>
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Upload an image to include in the invitation
+                  </label>
                   <input
                     type="file"
                     accept="image/*"
                     onChange={handleImageUpload}
-                    className="hidden"
-                    disabled={uploadingImage}
+                    className="block w-full text-sm text-gray-500
+                      file:mr-4 file:py-2 file:px-4
+                      file:rounded-md file:border-0
+                      file:text-sm file:font-semibold
+                      file:bg-emerald-50 file:text-emerald-700
+                      hover:file:bg-emerald-100"
                   />
-                </label>
-                {previewImage && (
+                </div>
+                
+                {uploadingImage && (
+                  <div className="flex items-center">
+                    <RefreshCw className="h-5 w-5 text-emerald-500 animate-spin mr-2" />
+                    <span className="text-sm text-gray-500">Uploading...</span>
+                  </div>
+                )}
+              </div>
+              
+              {previewImage && (
+                <div className="mt-3 relative">
+                  <img
+                    src={previewImage}
+                    alt="Template preview"
+                    className="h-40 object-contain border rounded-md"
+                  />
                   <button
                     type="button"
                     onClick={removeImage}
-                    className="text-red-600 hover:text-red-800"
+                    className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
                   >
-                    Remove
+                    <X className="h-4 w-4" />
                   </button>
-                )}
-              </div>
+                </div>
+              )}
+              
               {previewImage && (
-                <div className="mt-2 relative">
-                  <img
-                    src={previewImage}
-                    alt="Preview"
-                    className="h-40 object-cover rounded-md"
+                <div className="mt-3 flex items-center">
+                  <input
+                    type="checkbox"
+                    id="includeImageInWhatsApp"
+                    checked={templateForm.includeImageInWhatsApp}
+                    onChange={(e) => handleTemplateFormChange('includeImageInWhatsApp', e.target.checked)}
+                    className="h-4 w-4 text-emerald-600 focus:ring-emerald-500 border-gray-300 rounded"
                   />
+                  <label htmlFor="includeImageInWhatsApp" className="ml-2 block text-sm text-gray-700">
+                    Include image in WhatsApp message (if available)
+                  </label>
                 </div>
               )}
             </div>
@@ -483,7 +538,7 @@ export default function MessageTemplatesPage() {
             </div>
           </div>
           
-          <div className="mt-6 flex justify-end space-x-3">
+          <div className="mt-6 flex justify-end space-x-3 sticky bottom-0 bg-white py-3 z-10">
             <button
               type="button"
               onClick={() => setShowModal(false)}

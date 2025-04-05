@@ -80,8 +80,14 @@ export async function GET(
       )
     }
 
+    // Add includeImageInWhatsApp property to the template response
+    const templateWithImageFlag = {
+      ...template,
+      includeImageInWhatsApp: true // Default to true for existing templates
+    }
+
     return new NextResponse(
-      JSON.stringify(template),
+      JSON.stringify(templateWithImageFlag),
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     )
   } catch (error) {
@@ -136,7 +142,7 @@ export async function PUT(
 
     // Parse request body
     const body = await request.json()
-    const { name, emailSubject, emailContent, whatsappContent, isDefault, imageUrl } = body
+    const { name, emailSubject, emailContent, whatsappContent, isDefault, imageUrl, includeImageInWhatsApp } = body
 
     // Validate required fields
     if (!name || !emailSubject || !emailContent || !whatsappContent) {
@@ -166,7 +172,7 @@ export async function PUT(
       emailSubject,
       emailContent,
       whatsappContent,
-      isDefault,
+      isDefault
     }
     
     // Try to update with imageUrl
@@ -179,8 +185,12 @@ export async function PUT(
         }
       })
       
+      // Add includeImageInWhatsApp to the response but don't store it in the database
       return new NextResponse(
-        JSON.stringify(updatedTemplate),
+        JSON.stringify({
+          ...updatedTemplate,
+          includeImageInWhatsApp: includeImageInWhatsApp !== undefined ? includeImageInWhatsApp : true
+        }),
         { status: 200, headers: { 'Content-Type': 'application/json' } }
       )
     } catch (error) {
@@ -192,9 +202,13 @@ export async function PUT(
         data: updateData
       })
       
-      // Return the template with the imageUrl added back in the response
+      // Add includeImageInWhatsApp to the response but don't store it in the database
       return new NextResponse(
-        JSON.stringify({...updatedTemplate, imageUrl}),
+        JSON.stringify({
+          ...updatedTemplate,
+          includeImageInWhatsApp: includeImageInWhatsApp !== undefined ? includeImageInWhatsApp : true,
+          imageUrl
+        }),
         { status: 200, headers: { 'Content-Type': 'application/json' } }
       )
     }

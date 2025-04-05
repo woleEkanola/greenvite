@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { PlusCircle, Edit, Trash2, Users, X } from 'lucide-react'
+import { PlusCircle, Edit, Trash2, Users, X, Table2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Swal from 'sweetalert2'
+import BulkTableCreator from '@/components/admin/BulkTableCreator'
 
 interface Table {
   id: string
@@ -12,6 +13,20 @@ interface Table {
   capacity: number
   color: string
   hosts: Host[]
+  occupancy?: number
+  vacancy?: number
+  guests?: Guest[]
+}
+
+interface Guest {
+  id: string
+  name: string
+  type: string
+  code: string
+  isAdmitted: boolean
+  rsvpName: string
+  rsvpEmail: string
+  rsvpPhone: string
 }
 
 interface Host {
@@ -42,43 +57,54 @@ export default function EventTablesPage({ params }: { params: { id: string } }) 
   const [isHostModalOpen, setIsHostModalOpen] = useState(false)
   const [currentTableForHosts, setCurrentTableForHosts] = useState<Table | null>(null)
 
-  // Fetch event, tables and hosts
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true)
-        
-        // Fetch event details
-        const eventResponse = await fetch(`/api/admin/events/${params.id}`)
-        if (!eventResponse.ok) {
-          throw new Error('Failed to fetch event')
-        }
-        const eventData = await eventResponse.json()
-        setEvent(eventData)
-        
-        // Fetch tables for this event
-        const tablesResponse = await fetch(`/api/admin/events/${params.id}/tables`)
-        if (!tablesResponse.ok) {
-          throw new Error('Failed to fetch tables')
-        }
-        const tablesData = await tablesResponse.json()
-        setTables(tablesData.tables || [])
-        
-        // Fetch hosts for this event
-        const hostsResponse = await fetch(`/api/admin/events/${params.id}/hosts`)
-        if (!hostsResponse.ok) {
-          throw new Error('Failed to fetch hosts')
-        }
-        const hostsData = await hostsResponse.json()
-        setHosts(hostsData.hosts || [])
-      } catch (error) {
-        console.error('Error fetching data:', error)
-        toast.error('Failed to load data')
-      } finally {
-        setLoading(false)
-      }
-    }
+  // Bulk creation modal state
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false)
 
+  // Table occupants modal state
+  const [isTableOccupantsModalOpen, setIsTableOccupantsModalOpen] = useState(false)
+  const [currentTableForOccupants, setCurrentTableForOccupants] = useState<Table | null>(null)
+
+  // State for tracking selected guests in the occupants modal
+  const [selectedGuests, setSelectedGuests] = useState<string[]>([]);
+  const [unassigningGuests, setUnassigningGuests] = useState(false);
+
+  // Fetch event, tables and hosts
+  const fetchData = async () => {
+    try {
+      setLoading(true)
+      
+      // Fetch event details
+      const eventResponse = await fetch(`/api/admin/events/${params.id}`)
+      if (!eventResponse.ok) {
+        throw new Error('Failed to fetch event')
+      }
+      const eventData = await eventResponse.json()
+      setEvent(eventData)
+      
+      // Fetch tables for this event
+      const tablesResponse = await fetch(`/api/admin/events/${params.id}/tables`)
+      if (!tablesResponse.ok) {
+        throw new Error('Failed to fetch tables')
+      }
+      const tablesData = await tablesResponse.json()
+      setTables(tablesData.tables || [])
+      
+      // Fetch hosts for this event
+      const hostsResponse = await fetch(`/api/admin/events/${params.id}/hosts`)
+      if (!hostsResponse.ok) {
+        throw new Error('Failed to fetch hosts')
+      }
+      const hostsData = await hostsResponse.json()
+      setHosts(hostsData.hosts || [])
+    } catch (error) {
+      console.error('Error fetching data:', error)
+      toast.error('Failed to load data')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
     fetchData()
   }, [params.id])
 
@@ -224,6 +250,67 @@ export default function EventTablesPage({ params }: { params: { id: string } }) 
     }
   }
 
+  // View table occupants
+  const handleViewTableOccupants = (table: Table) => {
+    setCurrentTableForOccupants(table)
+    setIsTableOccupantsModalOpen(true)
+  }
+
+  // Toggle guest selection in the occupants modal
+  const toggleGuestSelection = (guestId: string) => {
+    setSelectedGuests(prev => 
+      prev.includes(guestId)
+        ? prev.filter(id => id !== guestId)
+        : [...prev, guestId]
+    );
+  };
+
+  // Unassign selected guests from table
+  const unassignGuestsFromTable = async () => {
+    if (selectedGuests.length === 0) {
+      toast.error('Please select at least one guest to unassign');
+      return;
+    }
+
+    try {
+      setUnassigningGuests(true);
+      
+      const response = await fetch(`/api/admin/events/${params.id}/access-codes/assign-table`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          codeIds: selectedGuests,
+          tableId: null // Setting tableId to null unassigns the codes
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to unassign guests');
+      }
+      
+      toast.success(`${selectedGuests.length} guest(s) unassigned successfully`);
+      
+      // Refresh tables to update the data
+      await fetchData();
+      
+      // Clear selection
+      setSelectedGuests([]);
+      
+      // Close the modal if all guests were unassigned
+      if (currentTableForOccupants && selectedGuests.length === currentTableForOccupants.guests?.length) {
+        setIsTableOccupantsModalOpen(false);
+      }
+    } catch (error: any) {
+      console.error('Error unassigning guests:', error);
+      toast.error(error.message || 'Failed to unassign guests');
+    } finally {
+      setUnassigningGuests(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -234,24 +321,33 @@ export default function EventTablesPage({ params }: { params: { id: string } }) 
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-2">Tables</h1>
-      <p className="text-gray-600 mb-8">
-        Manage tables for {event?.title || 'this event'}.
-      </p>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+        <h1 className="text-2xl font-bold">Tables</h1>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setIsBulkModalOpen(true)}
+            className="bg-emerald-500 text-white px-3 py-2 rounded-md hover:bg-emerald-600 transition-colors flex items-center"
+          >
+            <Table2 className="h-5 w-5 mr-1" />
+            <span>Bulk Create</span>
+          </button>
+          <button
+            onClick={() => {
+              resetForm()
+              setIsModalOpen(true)
+              setIsEditMode(false)
+            }}
+            className="bg-emerald-500 text-white px-3 py-2 rounded-md hover:bg-emerald-600 transition-colors flex items-center"
+          >
+            <PlusCircle className="h-5 w-5 mr-1" />
+            <span>Add Table</span>
+          </button>
+        </div>
+      </div>
       
       {/* Tables list */}
       <div className="mb-6 flex justify-between items-center">
         <h2 className="text-xl font-semibold">Tables ({tables.length})</h2>
-        <button
-          onClick={() => {
-            resetForm()
-            setIsModalOpen(true)
-          }}
-          className="bg-emerald-500 text-white px-4 py-2 rounded-md flex items-center gap-2 hover:bg-emerald-600 transition-colors"
-        >
-          <PlusCircle size={18} />
-          <span>Add Table</span>
-        </button>
       </div>
       
       {tables.length === 0 ? (
@@ -261,7 +357,7 @@ export default function EventTablesPage({ params }: { params: { id: string } }) 
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {tables.map(table => (
             <div 
               key={table.id} 
@@ -293,9 +389,17 @@ export default function EventTablesPage({ params }: { params: { id: string } }) 
                     >
                       <Users size={18} />
                     </button>
+                    <button 
+                      onClick={() => handleViewTableOccupants(table)}
+                      className="text-gray-500 hover:text-green-500 transition-colors"
+                      title="View occupants"
+                    >
+                      <Users size={18} />
+                    </button>
                   </div>
                 </div>
                 <p className="text-sm text-gray-600">Capacity: {table.capacity} seats</p>
+                <p className="text-sm text-gray-600">Occupancy: {table.occupancy || 0} / {table.capacity}</p>
                 <div className="mt-3">
                   <p className="text-sm font-medium text-gray-700 mb-1">Hosts:</p>
                   {table.hosts.length > 0 ? (
@@ -318,8 +422,8 @@ export default function EventTablesPage({ params }: { params: { id: string } }) 
       
       {/* Table form modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold">
                 {isEditMode ? 'Edit Table' : 'Add New Table'}
@@ -424,8 +528,8 @@ export default function EventTablesPage({ params }: { params: { id: string } }) 
       
       {/* Host assignment modal */}
       {isHostModalOpen && currentTableForHosts && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold">
                 Manage Hosts for {currentTableForHosts.name}
@@ -483,6 +587,97 @@ export default function EventTablesPage({ params }: { params: { id: string } }) 
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Table occupants modal */}
+      {isTableOccupantsModalOpen && currentTableForOccupants && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">
+                Occupants of {currentTableForOccupants.name}
+              </h2>
+              <button 
+                onClick={() => {
+                  setIsTableOccupantsModalOpen(false);
+                  setSelectedGuests([]);
+                }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="mb-4">
+              <p className="text-sm text-gray-600">
+                Occupancy: {currentTableForOccupants.occupancy || 0} / {currentTableForOccupants.capacity}
+              </p>
+            </div>
+            
+            {currentTableForOccupants.guests && currentTableForOccupants.guests.length > 0 ? (
+              <div className="max-h-80 overflow-y-auto border rounded p-3 mb-4">
+                {currentTableForOccupants.guests.map(guest => (
+                  <div key={guest.id} className="flex items-center mb-3 p-2 hover:bg-gray-50 rounded">
+                    <input
+                      type="checkbox"
+                      id={`guest-${guest.id}`}
+                      checked={selectedGuests.includes(guest.id)}
+                      onChange={() => toggleGuestSelection(guest.id)}
+                      className="mr-3"
+                    />
+                    <div className="flex-1">
+                      <div className="font-medium">{guest.name}</div>
+                      <div className="text-sm text-gray-600">{guest.rsvpEmail}</div>
+                      <div className="text-xs text-gray-500 capitalize">{guest.type}</div>
+                    </div>
+                    <div className="text-sm text-gray-600">{guest.isAdmitted ? 'Admitted' : 'Not Admitted'}</div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-6 mb-4">
+                <p className="text-gray-500">No occupants for this table.</p>
+              </div>
+            )}
+            
+            <div className="flex justify-end gap-2">
+              {currentTableForOccupants.guests && currentTableForOccupants.guests.length > 0 && (
+                <button
+                  type="button"
+                  onClick={unassignGuestsFromTable}
+                  disabled={selectedGuests.length === 0 || unassigningGuests}
+                  className="bg-amber-500 text-white px-4 py-2 rounded-md hover:bg-amber-600 transition-colors disabled:bg-amber-300"
+                >
+                  {unassigningGuests ? 'Unassigning...' : `Unassign Selected (${selectedGuests.length})`}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsTableOccupantsModalOpen(false);
+                  setSelectedGuests([]);
+                }}
+                className="bg-gray-300 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-400 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk table creation modal */}
+      {isBulkModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <BulkTableCreator
+            eventId={params.id}
+            onTablesCreated={() => {
+              // Refresh tables list
+              fetchData()
+            }}
+            onClose={() => setIsBulkModalOpen(false)}
+          />
         </div>
       )}
     </div>

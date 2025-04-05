@@ -9,4 +9,5 @@ export interface MessageTemplate {
   updatedAt: string;
   eventId: string;
   imageUrl?: string;
+  includeImageInWhatsApp?: boolean;
 }

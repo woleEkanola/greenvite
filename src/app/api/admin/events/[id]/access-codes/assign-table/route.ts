@@ -55,20 +55,6 @@ export async function POST(
       return NextResponse.json({ error: 'Table ID is required (can be null to unassign)' }, { status: 400 })
     }
     
-    // If tableId is not null, verify the table exists and belongs to this event
-    if (tableId !== null) {
-      const table = await prisma.table.findFirst({
-        where: {
-          id: tableId,
-          eventId: params.id
-        }
-      })
-      
-      if (!table) {
-        return NextResponse.json({ error: 'Table not found or does not belong to this event' }, { status: 404 })
-      }
-    }
-    
     // Verify all access codes belong to this event
     const accessCodes = await prisma.accessCode.findMany({
       where: {
@@ -89,6 +75,42 @@ export async function POST(
         found: accessCodes.length,
         requested: codeIds.length
       }, { status: 400 })
+    }
+    
+    // If tableId is not null, verify the table exists and belongs to this event
+    // and check capacity constraints
+    if (tableId !== null) {
+      const table = await prisma.table.findFirst({
+        where: {
+          id: tableId,
+          eventId: params.id
+        },
+        include: {
+          accessCodes: true
+        }
+      })
+      
+      if (!table) {
+        return NextResponse.json({ error: 'Table not found or does not belong to this event' }, { status: 404 })
+      }
+
+      // Check if adding these codes would exceed the table capacity
+      // First, count how many of the selected codes are already assigned to this table
+      // (we don't want to count them twice when checking capacity)
+      const alreadyAssignedCount = accessCodes.filter(code => code.tableId === tableId).length;
+      
+      // Calculate how many new assignments we're making
+      const newAssignmentsCount = codeIds.length - alreadyAssignedCount;
+      
+      // Check if this would exceed the table capacity
+      if (table.accessCodes.length + newAssignmentsCount > table.capacity) {
+        return NextResponse.json({ 
+          error: 'Cannot assign these guests. Table capacity would be exceeded.',
+          currentOccupancy: table.accessCodes.length,
+          capacity: table.capacity,
+          attempting: newAssignmentsCount
+        }, { status: 400 })
+      }
     }
     
     // Update the access codes with the new table assignment

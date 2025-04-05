@@ -18,7 +18,8 @@ import {
   Ticket,
   Send,
   MessageSquare,
-  Globe
+  Globe,
+  Map
 } from 'lucide-react'
 import { signOut, useSession } from 'next-auth/react'
 
@@ -229,6 +230,19 @@ export default function EventDashboardLayout({
                 >
                   <Globe className="h-5 w-5 min-w-5" />
                   {isSidebarOpen && <span className="ml-3">Event Page</span>}
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href={`/admin/dashboard/events/${params.id}/floor-plans`}
+                  className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
+                    isActive(`/admin/dashboard/events/${params.id}/floor-plans`)
+                      ? 'bg-emerald-500 text-white'
+                      : 'hover:bg-gray-100'
+                  }`}
+                >
+                  <Map className="h-5 w-5 min-w-5" />
+                  {isSidebarOpen && <span className="ml-3">Floor Plans</span>}
                 </Link>
               </li>
             </ul>
