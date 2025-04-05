@@ -147,14 +147,7 @@ export async function sendEmail({ to, subject, html, attachments = [], imageUrl 
         console.log(`421 error: Service not available, closing transmission channel. Retrying...`);
       } else if (sendError.response && sendError.response.status === 504) {
         console.log(`Email to ${to} received a 504 error, treating as successful`);
-        await prisma.invite.create({
-          data: {
-            email: to,
-            type: 'email',
-            status: '504-error',
-            errorMessage: '504 Gateway Timeout'
-          }
-        });
+        console.log(`Skipping invite record creation for 504 error. This will be handled by the calling function.`);
         return { success: true, warning: '504_GATEWAY_TIMEOUT' };
       }
       

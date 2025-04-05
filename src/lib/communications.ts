@@ -187,7 +187,7 @@ export async function sendEmail(email: string, name: string, code: string, subje
           <div style="text-align: center; margin: 20px 0;">
             <p style="margin-bottom: 15px; font-size: 16px;"> Dr. Fred Afor George and Mrs. Ogheneovo Fred George warmly invite you to the church dedication of their son.
 
-To confirm and secure your reservation, please click the "Confirm Your Attendance" button below and complete the form. This will help us plan effectively.
+To confirm and secure your reservation, please click the link below and complete the form. This will help us plan effectively.
 
 Please note: Attendance is strictly by invitation, and submitting the completed form will grant you an access code required for entry to the venue.
 
@@ -294,7 +294,10 @@ We look forward to celebrating this special occasion with you.</p>
             type: 'email',
             status: '504-error',
             errorMessage: '504 Gateway Timeout',
-            code
+            code,
+            sent: true,
+            sentAt: new Date(),
+            batchId: '00000000-0000-0000-0000-000000000000' // Use a placeholder batch ID
           }
         });
         return true;
