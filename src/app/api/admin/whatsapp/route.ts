@@ -16,21 +16,45 @@ export async function POST(request: Request) {
 
     // Parse request body
     const body = await request.json()
-    const { to, message } = body
+    const { phone, message, imageUrl, eventId } = body
+
+    // Log the received parameters for debugging
+    console.log('WhatsApp API received parameters:', { 
+      phone, 
+      messageLength: message?.length, 
+      hasImage: !!imageUrl,
+      eventId 
+    })
 
     // Validate required fields
-    if (!to || !message) {
+    if (!phone || !message) {
       return new NextResponse(
         JSON.stringify({ 
           success: false, 
-          error: 'Missing required fields: to, message' 
+          error: 'Missing required fields: phone, message' 
         }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       )
     }
 
-    // Send WhatsApp message
-    const result = await sendWhatsAppNotification(to, message)
+    // Format phone number if needed
+    const formattedPhone = phone.startsWith('+') ? phone : `+${phone}`;
+    
+    // Send WhatsApp message with optional image
+    const result = await sendWhatsAppNotification(formattedPhone, message, imageUrl)
+
+    // Log the result for debugging
+    console.log('WhatsApp sending result:', result)
+
+    if (!result) {
+      return new NextResponse(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Failed to send WhatsApp message' 
+        }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
 
     return new NextResponse(
       JSON.stringify({ success: true, result }),

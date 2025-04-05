@@ -16,7 +16,16 @@ export async function POST(request: Request) {
 
     // Parse request body
     const body = await request.json()
-    const { to, subject, html } = body
+    const { to, subject, html, attachments, imageUrl } = body
+
+    // Log received parameters for debugging
+    console.log('Email API received parameters:', { 
+      to, 
+      subject, 
+      htmlLength: html?.length,
+      hasAttachments: !!attachments && attachments.length > 0,
+      hasImage: !!imageUrl
+    });
 
     // Validate required fields
     if (!to || !subject || !html) {
@@ -29,11 +38,35 @@ export async function POST(request: Request) {
       )
     }
 
-    // Send email
-    const result = await sendEmail({ to, subject, html })
+    // Send email with optional attachments and image
+    const emailResult = await sendEmail({ 
+      to, 
+      subject, 
+      html, 
+      attachments,
+      imageUrl
+    })
 
+    // Check for success or handle errors
+    if (!emailResult.success) {
+      console.error('Email sending failed:', emailResult.error);
+      return new NextResponse(
+        JSON.stringify({ 
+          success: false, 
+          error: emailResult.error,
+          details: emailResult.details
+        }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Return success response
     return new NextResponse(
-      JSON.stringify({ success: true, result }),
+      JSON.stringify({ 
+        success: true, 
+        messageId: emailResult.messageId,
+        warning: emailResult.warning
+      }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     )
   } catch (error) {
