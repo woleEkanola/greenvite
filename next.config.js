@@ -13,16 +13,20 @@ const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: ['@prisma/client'],
   },
-  // Configure allowed image domains
+  // Configure allowed image domains and patterns
   images: {
+    domains: [
+      'pfirenjlvylwekls.public.blob.vercel-storage.com',
+      'public.blob.vercel-storage.com',
+    ],
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'pfirenjlvylwekls.public.blob.vercel-storage.com',
+        hostname: '*.public.blob.vercel-storage.com',
       },
       {
         protocol: 'https',
-        hostname: '**.vercel-storage.com',
+        hostname: '*.vercel-storage.com',
       },
     ],
   },

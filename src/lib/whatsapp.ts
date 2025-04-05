@@ -1,5 +1,4 @@
 import axios from "axios";
-import sharp from "sharp";
 
 // WhatsApp API configuration
 const WAAPI_TOKEN = process.env.WAAPI_TOKEN;
