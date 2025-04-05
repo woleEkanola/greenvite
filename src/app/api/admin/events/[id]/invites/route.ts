@@ -212,7 +212,16 @@ export async function POST(
       
       // Create the invites
       const createdInvites = await Promise.all(
-        invites.map(invite => 
+        invites.map((invite: { 
+          name: string; 
+          email?: string; 
+          phone?: string; 
+          type: string; 
+          code?: string; 
+          emailStatus?: string; 
+          whatsappStatus?: string; 
+          errorMessage?: string;
+        }) => 
           prisma.invite.create({
             data: {
               name: invite.name,
@@ -224,7 +233,6 @@ export async function POST(
               emailStatus: invite.emailStatus,
               whatsappStatus: invite.whatsappStatus,
               errorMessage: invite.errorMessage,
-              eventId: params.id,
               batchId: batch.id
             }
           })
@@ -257,7 +265,6 @@ export async function POST(
           emailStatus,
           whatsappStatus,
           errorMessage,
-          eventId: params.id,
           batchId
         }
       })
@@ -325,7 +332,9 @@ export async function DELETE(
     const invite = await prisma.invite.findFirst({
       where: {
         id: inviteId,
-        eventId: params.id
+        Batch: {
+          eventId: params.id
+        }
       }
     })
     

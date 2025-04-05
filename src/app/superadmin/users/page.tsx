@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
@@ -25,7 +25,11 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { toast } from '@/components/ui/use-toast';
+import { useToast } from '@/components/ui/use-toast';
+import { ToastProvider, ToastViewport } from '@/components/ui/toast';
+
+// Force dynamic rendering for this page
+export const dynamic = 'force-dynamic';
 
 interface User {
   id: string;
@@ -36,7 +40,8 @@ interface User {
   createdAt: string;
 }
 
-export default function UsersPage() {
+// Client component wrapper for the users page
+function UsersContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
@@ -44,6 +49,7 @@ export default function UsersPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [userToDelete, setUserToDelete] = useState<string | null>(null);
+  const { toast } = useToast();
   
   // New user form state
   const [newUser, setNewUser] = useState({
@@ -178,188 +184,200 @@ export default function UsersPage() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-gray-100">
       <Sidebar 
         items={[
           { name: 'Users', href: '/superadmin/users', icon: 'users' }
-        ]} 
+        ]}
       />
-      <main className="flex-1 p-8 overflow-y-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-semibold">User Management</h1>
+      <ToastProvider>
+        <main className="flex-1 p-6 overflow-auto">
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-2xl font-semibold">User Management</h1>
 
-          <Button className="bg-green-600 hover:bg-green-700" onClick={() => setIsDialogOpen(true)}>
-                Add New User
-              </Button>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <Button className="bg-green-600 hover:bg-green-700" onClick={() => setIsDialogOpen(true)}>
+              Add New User
+            </Button>
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
          
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Create New User</DialogTitle>
-                <DialogDescription>
-                  Add a new admin or superadmin user to the system.
-                </DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleCreateUser}>
-                <div className="grid gap-4 py-4">
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="username" className="text-right">
-                      Username
-                    </Label>
-                    <Input
-                      id="username"
-                      name="username"
-                      value={newUser.username}
-                      onChange={handleInputChange}
-                      className="col-span-3"
-                      required
-                    />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="password" className="text-right">
-                      Password
-                    </Label>
-                    <Input
-                      id="password"
-                      name="password"
-                      type="password"
-                      value={newUser.password}
-                      onChange={handleInputChange}
-                      className="col-span-3"
-                      required
-                    />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="email" className="text-right">
-                      Email
-                    </Label>
-                    <Input
-                      id="email"
-                      name="email"
-                      type="email"
-                      value={newUser.email}
-                      onChange={handleInputChange}
-                      className="col-span-3"
-                    />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="name" className="text-right">
-                      Name
-                    </Label>
-                    <Input
-                      id="name"
-                      name="name"
-                      value={newUser.name}
-                      onChange={handleInputChange}
-                      className="col-span-3"
-                    />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="role" className="text-right">
-                      Role
-                    </Label>
-                    <Select
-                      value={newUser.role}
-                      onValueChange={handleRoleChange}
-                    >
-                      <SelectTrigger className="col-span-3">
-                        <SelectValue placeholder="Select role" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="ADMIN">Admin</SelectItem>
-                        <SelectItem value="SUPERADMIN">Super Admin</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button type="submit">Create User</Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </div>
-
-        {users.length === 0 ? (
-          <div className="text-center py-10">
-            <p className="text-gray-500">No users found</p>
-          </div>
-        ) : (
-          <div className="bg-white shadow rounded-lg overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Username</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {users.map((user) => (
-                  <TableRow key={user.id}>
-                    <TableCell className="font-medium">{user.username}</TableCell>
-                    <TableCell>{user.name || '-'}</TableCell>
-                    <TableCell>{user.email || '-'}</TableCell>
-                    <TableCell>
-                      <span className={`px-2 py-1 rounded-full text-xs ${
-                        user.role === 'SUPERADMIN' 
-                          ? 'bg-purple-100 text-purple-800' 
-                          : 'bg-blue-100 text-blue-800'
-                      }`}>
-                        {user.role}
-                      </span>
-                    </TableCell>
-                    <TableCell>{new Date(user.createdAt).toLocaleDateString()}</TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => setUserToDelete(user.id)}
-                        disabled={user.id === session?.user?.id}
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Create New User</DialogTitle>
+                  <DialogDescription>
+                    Add a new admin or superadmin user to the system.
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleCreateUser}>
+                  <div className="grid gap-4 py-4">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="username" className="text-right">
+                        Username
+                      </Label>
+                      <Input
+                        id="username"
+                        name="username"
+                        value={newUser.username}
+                        onChange={handleInputChange}
+                        className="col-span-3"
+                        required
+                      />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="password" className="text-right">
+                        Password
+                      </Label>
+                      <Input
+                        id="password"
+                        name="password"
+                        type="password"
+                        value={newUser.password}
+                        onChange={handleInputChange}
+                        className="col-span-3"
+                        required
+                      />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="email" className="text-right">
+                        Email
+                      </Label>
+                      <Input
+                        id="email"
+                        name="email"
+                        type="email"
+                        value={newUser.email}
+                        onChange={handleInputChange}
+                        className="col-span-3"
+                      />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="name" className="text-right">
+                        Name
+                      </Label>
+                      <Input
+                        id="name"
+                        name="name"
+                        value={newUser.name}
+                        onChange={handleInputChange}
+                        className="col-span-3"
+                      />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="role" className="text-right">
+                        Role
+                      </Label>
+                      <Select
+                        value={newUser.role}
+                        onValueChange={handleRoleChange}
                       >
-                        Delete
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                        <SelectTrigger className="col-span-3">
+                          <SelectValue placeholder="Select role" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ADMIN">Admin</SelectItem>
+                          <SelectItem value="SUPERADMIN">Super Admin</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button type="submit">Create User</Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
           </div>
-        )}
 
-        {/* Delete Confirmation Dialog */}
-        {userToDelete && (
-          <Dialog open={!!userToDelete} onOpenChange={() => setUserToDelete(null)}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Confirm Deletion</DialogTitle>
-                <DialogDescription>
-                  Are you sure you want to delete this user? This action cannot be undone.
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => setUserToDelete(null)}
-                  disabled={isDeleting}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="destructive"
-                  onClick={() => userToDelete && handleDeleteUser(userToDelete)}
-                  disabled={isDeleting}
-                >
-                  {isDeleting ? 'Deleting...' : 'Delete'}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        )}
-      </main>
+          {users.length === 0 ? (
+            <div className="text-center py-10">
+              <p className="text-gray-500">No users found</p>
+            </div>
+          ) : (
+            <div className="bg-white shadow rounded-lg overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Username</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {users.map((user) => (
+                    <TableRow key={user.id}>
+                      <TableCell className="font-medium">{user.username}</TableCell>
+                      <TableCell>{user.name || '-'}</TableCell>
+                      <TableCell>{user.email || '-'}</TableCell>
+                      <TableCell>
+                        <span className={`px-2 py-1 rounded-full text-xs ${
+                          user.role === 'SUPERADMIN' 
+                            ? 'bg-purple-100 text-purple-800' 
+                            : 'bg-blue-100 text-blue-800'
+                        }`}>
+                          {user.role}
+                        </span>
+                      </TableCell>
+                      <TableCell>{new Date(user.createdAt).toLocaleDateString()}</TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => setUserToDelete(user.id)}
+                          disabled={user.id === session?.user?.id}
+                        >
+                          Delete
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+
+          {/* Delete Confirmation Dialog */}
+          {userToDelete && (
+            <Dialog open={!!userToDelete} onOpenChange={() => setUserToDelete(null)}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Confirm Deletion</DialogTitle>
+                  <DialogDescription>
+                    Are you sure you want to delete this user? This action cannot be undone.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => setUserToDelete(null)}
+                    disabled={isDeleting}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={() => userToDelete && handleDeleteUser(userToDelete)}
+                    disabled={isDeleting}
+                  >
+                    {isDeleting ? 'Deleting...' : 'Delete'}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
+        </main>
+        <ToastViewport />
+      </ToastProvider>
     </div>
+  );
+}
+
+// Main page component with Suspense boundary
+export default function UsersPage() {
+  return (
+    <Suspense fallback={<div className="flex h-screen items-center justify-center">Loading...</div>}>
+      <UsersContent />
+    </Suspense>
   );
 }

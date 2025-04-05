@@ -80,6 +80,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check if user ID is available
+    if (!session.user.id) {
+      return NextResponse.json(
+        { error: 'Invalid user session' },
+        { status: 401 }
+      );
+    }
+
     // Parse the request body
     const { title, description, location, startDate, endDate, imageUrl, status, slug } = await request.json();
 

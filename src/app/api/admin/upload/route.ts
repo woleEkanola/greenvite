@@ -75,6 +75,13 @@ export async function POST(request: Request) {
     // If eventId is provided, check access
     if (eventId) {
       // Check if user has access to this event
+      if (!session.user.id) {
+        return new NextResponse(
+          JSON.stringify({ error: 'Invalid user session' }),
+          { status: 401, headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+      
       const hasAccess = await canAccessEvent(session.user.id, eventId)
       if (!hasAccess) {
         return new NextResponse(

@@ -1,13 +1,18 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { StoryAnimation } from '../login/page';
+import StoryAnimation from '@/components/StoryAnimation';
 import { signIn } from 'next-auth/react';
+import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 
-export default function SignupPage() {
+// Force dynamic rendering for this page
+export const dynamic = 'force-dynamic';
+
+// Client component wrapper for the signup page
+function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
@@ -156,136 +161,153 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <StoryAnimation />
-      <motion.div 
-        initial={{ opacity: 0, y: -50 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="bg-white/90 backdrop-blur-lg rounded-lg shadow-xl p-8 w-full max-w-md my-8"
-      >
-        <h2 className="text-3xl font-bold text-center mb-4 text-gray-800">Create Account</h2>
-        
-        {invitationInfo && (
-          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
-            <p className="text-green-700 font-medium">
-              You've been invited to manage an event:
-            </p>
-            <p className="font-bold text-gray-800 mt-1">{invitationInfo.eventTitle}</p>
-            <p className="text-sm text-gray-600 mt-1">
-              Complete your registration to accept this invitation.
-            </p>
-          </div>
-        )}
-        
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-              Full Name
-            </label>
-            <input
-              id="name"
-              name="name"
-              type="text"
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Enter your full name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              disabled={isLoading}
-            />
-          </div>
-          
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-              Email Address
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Enter your email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              disabled={isLoading || !!searchParams.get('email')}
-            />
-          </div>
-          
-          <div>
-            <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
-              Phone Number
-            </label>
-            <input
-              id="phone"
-              name="phone"
-              type="tel"
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Enter your phone number"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              disabled={isLoading}
-            />
-          </div>
-          
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-              Password
-            </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Create a password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              disabled={isLoading}
-            />
-          </div>
-          
-          <div>
-            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
-              Confirm Password
-            </label>
-            <input
-              id="confirmPassword"
-              name="confirmPassword"
-              type="password"
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Confirm your password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              disabled={isLoading}
-            />
-          </div>
-          
-          {error && (
-            <div className="text-red-500 text-sm text-center">{error}</div>
-          )}
-          
-          <div>
-            <button
-              type="submit"
-              className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-              disabled={isLoading || isCheckingToken}
-            >
-              {isLoading ? 'Creating Account...' : 'Sign Up'}
-            </button>
-          </div>
-          
-          <div className="text-center text-sm text-gray-600 mt-4">
-            Already have an account?{' '}
-            <Link href="/login" className="text-blue-600 hover:underline">
-              Sign in
-            </Link>
-          </div>
-        </form>
-      </motion.div>
+    <div className="flex min-h-screen bg-gray-50">
+      <ToastProvider>
+        <div className="w-full md:w-1/2 flex flex-col justify-center p-8">
+          <StoryAnimation />
+          <motion.div 
+            initial={{ opacity: 0, y: -50 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="bg-white/90 backdrop-blur-lg rounded-lg shadow-xl p-8 w-full max-w-md my-8"
+          >
+            <h2 className="text-3xl font-bold text-center mb-4 text-gray-800">Create Account</h2>
+            
+            {invitationInfo && (
+              <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+                <p className="text-green-700 font-medium">
+                  You've been invited to manage an event:
+                </p>
+                <p className="font-bold text-gray-800 mt-1">{invitationInfo.eventTitle}</p>
+                <p className="text-sm text-gray-600 mt-1">
+                  Complete your registration to accept this invitation.
+                </p>
+              </div>
+            )}
+            
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
+                  Full Name
+                </label>
+                <input
+                  id="name"
+                  name="name"
+                  type="text"
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter your full name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  disabled={isLoading}
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                  Email Address
+                </label>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter your email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={isLoading || !!searchParams.get('email')}
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
+                  Phone Number
+                </label>
+                <input
+                  id="phone"
+                  name="phone"
+                  type="tel"
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter your phone number"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  disabled={isLoading}
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+                  Password
+                </label>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Create a password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={isLoading}
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                  Confirm Password
+                </label>
+                <input
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  type="password"
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Confirm your password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  disabled={isLoading}
+                />
+              </div>
+              
+              {error && (
+                <div className="text-red-500 text-sm text-center">{error}</div>
+              )}
+              
+              <div>
+                <button
+                  type="submit"
+                  className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                  disabled={isLoading || isCheckingToken}
+                >
+                  {isLoading ? 'Creating Account...' : 'Sign Up'}
+                </button>
+              </div>
+              
+              <div className="text-center text-sm text-gray-600 mt-4">
+                Already have an account?{' '}
+                <Link href="/login" className="text-blue-600 hover:underline">
+                  Sign in
+                </Link>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+        <ToastViewport />
+      </ToastProvider>
+      <div className="hidden md:block md:w-1/2 bg-blue-600 relative">
+        <StoryAnimation />
+      </div>
     </div>
+  );
+}
+
+// Main page component with Suspense boundary
+export default function SignupPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
+      <SignupForm />
+    </Suspense>
   );
 }

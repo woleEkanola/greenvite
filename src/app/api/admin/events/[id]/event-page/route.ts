@@ -47,6 +47,10 @@ export async function GET(
     }
 
     // Check if user has access to this event
+    if (!session.user.id) {
+      return NextResponse.json({ error: 'Invalid user session' }, { status: 401 })
+    }
+    
     const hasAccess = await canAccessEvent(session.user.id, params.id)
     if (!hasAccess) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
@@ -132,6 +136,10 @@ export async function PUT(
     }
 
     // Check if user has access to this event
+    if (!session.user.id) {
+      return NextResponse.json({ error: 'Invalid user session' }, { status: 401 })
+    }
+    
     const hasAccess = await canAccessEvent(session.user.id, params.id)
     if (!hasAccess) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })

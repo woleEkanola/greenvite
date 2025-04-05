@@ -71,6 +71,13 @@ export async function POST(
     const eventId = params.id
     
     // Check if user has access to this event
+    if (!session.user.id) {
+      return new NextResponse(
+        JSON.stringify({ error: 'Invalid user session' }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+    
     const hasAccess = await canAccessEvent(session.user.id, eventId)
     if (!hasAccess) {
       return new NextResponse(
@@ -131,6 +138,7 @@ export async function POST(
         // Generate a registration code for this recipient
         const code = await prisma.registrationCode.create({
           data: {
+            code: Math.random().toString(36).substring(2, 10).toUpperCase(),
             eventId,
             status: 'available'
           }
@@ -162,8 +170,7 @@ export async function POST(
             type: recipient.type || 'both',
             code: code.code,
             status: 'pending',
-            batchId: batch.id,
-            eventId
+            batchId: batch.id
           }
         })
 

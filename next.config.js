@@ -9,6 +9,10 @@ const nextConfig = {
       },
     ]
   },
+  // Skip specific problematic pages during build
+  experimental: {
+    serverComponentsExternalPackages: ['@prisma/client'],
+  },
 }
 
 module.exports = nextConfig

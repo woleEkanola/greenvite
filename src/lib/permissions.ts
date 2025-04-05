@@ -17,14 +17,6 @@ export async function canAccessEvent(userId: string, eventId: string, requiredRo
         admins: {
           where: { userId },
           select: { userId: true }
-        },
-        organization: {
-          include: {
-            members: {
-              where: { userId },
-              select: { userId: true, role: true }
-            }
-          }
         }
       }
     });
@@ -43,15 +35,6 @@ export async function canAccessEvent(userId: string, eventId: string, requiredRo
       return requiredRole ? requiredRole === 'admin' : true;
     }
 
-    // Check if the user is a member of the organization with appropriate permissions
-    if (event.organization && event.organization.members.length > 0) {
-      const member = event.organization.members[0];
-      // Assuming roles like 'ADMIN', 'OWNER', etc. grant access
-      if (member.role === 'ADMIN' || member.role === 'OWNER' || member.role === 'SUPERADMIN') {
-        return requiredRole ? requiredRole.toUpperCase() === member.role : true;
-      }
-    }
-
     return false;
   } catch (error) {
     console.error('Error checking event access:', error);
@@ -60,42 +43,17 @@ export async function canAccessEvent(userId: string, eventId: string, requiredRo
 }
 
 /**
+ * This function is not implemented as the Organization model is not in the Prisma schema
+ * 
  * Check if a user has access to an organization
  * @param userId The ID of the user
  * @param organizationId The ID of the organization
  * @returns A boolean indicating if the user has access to the organization
  */
 export async function canAccessOrganization(userId: string, organizationId: string): Promise<boolean> {
-  try {
-    // Check if the organization exists
-    const organization = await prisma.organization.findUnique({
-      where: { id: organizationId },
-      include: {
-        members: {
-          where: { userId },
-          select: { userId: true, role: true }
-        }
-      }
-    });
-
-    if (!organization) {
-      return false;
-    }
-
-    // Check if the user is a member of the organization with appropriate permissions
-    if (organization.members.length > 0) {
-      const member = organization.members[0];
-      // Assuming roles like 'ADMIN', 'OWNER', etc. grant access
-      if (member.role === 'ADMIN' || member.role === 'OWNER' || member.role === 'SUPERADMIN') {
-        return true;
-      }
-    }
-
-    return false;
-  } catch (error) {
-    console.error('Error checking organization access:', error);
-    return false;
-  }
+  // This function is not implemented as the Organization model doesn't exist
+  console.warn('canAccessOrganization is not implemented');
+  return false;
 }
 
 /**

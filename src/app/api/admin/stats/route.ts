@@ -136,7 +136,7 @@ export async function GET(request: Request) {
       // Total invites
       prisma.invite.count({
         where: {
-          batch: {
+          Batch: {
             eventId: { in: eventIds }
           }
         }
@@ -145,7 +145,7 @@ export async function GET(request: Request) {
       // Email invites
       prisma.invite.count({
         where: {
-          batch: {
+          Batch: {
             eventId: { in: eventIds }
           },
           type: 'email'
@@ -155,7 +155,7 @@ export async function GET(request: Request) {
       // SMS invites
       prisma.invite.count({
         where: {
-          batch: {
+          Batch: {
             eventId: { in: eventIds }
           },
           type: 'sms'
@@ -165,7 +165,7 @@ export async function GET(request: Request) {
       // Both invites
       prisma.invite.count({
         where: {
-          batch: {
+          Batch: {
             eventId: { in: eventIds }
           },
           type: 'both'
@@ -175,7 +175,7 @@ export async function GET(request: Request) {
       // Successful invites
       prisma.invite.count({
         where: {
-          batch: {
+          Batch: {
             eventId: { in: eventIds }
           },
           status: 'sent'
@@ -185,7 +185,7 @@ export async function GET(request: Request) {
       // Failed invites
       prisma.invite.count({
         where: {
-          batch: {
+          Batch: {
             eventId: { in: eventIds }
           },
           status: 'failed'
@@ -195,7 +195,7 @@ export async function GET(request: Request) {
       // Pending invites
       prisma.invite.count({
         where: {
-          batch: {
+          Batch: {
             eventId: { in: eventIds }
           },
           status: 'pending'
@@ -205,7 +205,7 @@ export async function GET(request: Request) {
       // Canceled invites
       prisma.invite.count({
         where: {
-          batch: {
+          Batch: {
             eventId: { in: eventIds }
           },
           status: 'canceled'
@@ -250,7 +250,7 @@ export async function GET(request: Request) {
           }),
           prisma.invite.count({
             where: {
-              batch: {
+              Batch: {
                 eventId: event.id
               }
             }

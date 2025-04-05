@@ -22,13 +22,10 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const event = await prisma.event.findUnique({
       where: { id: eventId },
       include: {
-        organization: {
+        owner: true,
+        admins: {
           include: {
-            users: {
-              where: {
-                userId: session.user.id
-              }
-            }
+            user: true
           }
         }
       }
@@ -38,11 +35,11 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
     }
 
-    // Check if user is authorized (admin or belongs to the organization)
-    const isAdmin = session.user.role === 'ADMIN' || session.user.role === 'SUPERADMIN';
-    const isOrgMember = event.organization.users.length > 0;
+    // Check if user is authorized (owner or admin of the event)
+    const isOwner = event.ownerId === session.user.id;
+    const isAdmin = event.admins.some(admin => admin.userId === session.user.id);
 
-    if (!isAdmin && !isOrgMember) {
+    if (!isOwner && !isAdmin) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 

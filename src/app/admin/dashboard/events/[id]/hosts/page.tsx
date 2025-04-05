@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { PlusCircle, Edit, Trash2, Tables, X, Search } from 'lucide-react'
+import { PlusCircle, Edit, Trash2, Table, X, Search } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Swal from 'sweetalert2'
 
@@ -369,7 +369,7 @@ export default function EventHostsPage({ params }: { params: { id: string } }) {
                         className="text-purple-600 hover:text-purple-900"
                         title="Manage tables"
                       >
-                        <Tables size={18} />
+                        <Table size={18} />
                       </button>
                       <button 
                         onClick={() => handleDeleteHost(host.id)}

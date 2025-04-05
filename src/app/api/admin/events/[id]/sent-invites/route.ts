@@ -43,16 +43,19 @@ export async function GET(
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
     
-    // Fetch sent invites for this event
-    const sentInvites = await prisma.sentInvite.findMany({
+    // Fetch sent invites for this event (using the Invite model with status='sent')
+    const sentInvites = await prisma.invite.findMany({
       where: {
-        eventId: params.id
+        Batch: {
+          eventId: params.id
+        },
+        status: 'sent'
       },
       include: {
-        invite: true
+        Batch: true
       },
       orderBy: {
-        sentAt: 'desc'
+        updatedAt: 'desc'
       }
     })
     
@@ -125,7 +128,9 @@ export async function POST(
         id: {
           in: inviteIds
         },
-        eventId: params.id
+        Batch: {
+          eventId: params.id
+        }
       }
     })
     
@@ -139,26 +144,13 @@ export async function POST(
     const now = new Date()
     const sentInvites = await Promise.all(
       invites.map(invite => 
-        prisma.sentInvite.create({
-          data: {
-            inviteId: invite.id,
-            eventId: params.id,
-            sentAt: now,
-            sentBy: session.user.id,
-            emailTemplate: emailTemplate || null,
-            whatsappTemplate: whatsappTemplate || null,
-            status: 'sent'
-          }
-        })
-      )
-    )
-    
-    // Update the status of the invites
-    await Promise.all(
-      invites.map(invite => 
         prisma.invite.update({
           where: { id: invite.id },
-          data: { status: 'sent' }
+          data: {
+            status: 'sent',
+            updatedAt: now,
+            errorMessage: null
+          }
         })
       )
     )
@@ -218,38 +210,40 @@ export async function DELETE(
     
     // Parse the request body
     const body = await request.json()
-    const { sentInviteId } = body
+    const { inviteId } = body
     
-    if (!sentInviteId) {
-      return NextResponse.json({ error: 'Sent Invite ID is required' }, { status: 400 })
+    if (!inviteId) {
+      return NextResponse.json({ error: 'Invite ID is required' }, { status: 400 })
     }
     
-    // Check if the sent invite exists and belongs to this event
-    const sentInvite = await prisma.sentInvite.findFirst({
+    // Check if the invite exists and belongs to this event
+    const invite = await prisma.invite.findFirst({
       where: {
-        id: sentInviteId,
-        eventId: params.id
+        id: inviteId,
+        Batch: {
+          eventId: params.id
+        }
       }
     })
     
-    if (!sentInvite) {
-      return NextResponse.json({ error: 'Sent invite not found or does not belong to this event' }, { status: 404 })
+    if (!invite) {
+      return NextResponse.json({ error: 'Invite not found or does not belong to this event' }, { status: 404 })
     }
     
-    // Delete the sent invite
-    await prisma.sentInvite.delete({
+    // Delete the invite
+    await prisma.invite.delete({
       where: {
-        id: sentInviteId
+        id: inviteId
       }
     })
     
     return NextResponse.json({ 
       success: true,
-      message: 'Sent invite deleted successfully'
+      message: 'Invite deleted successfully'
     })
     
   } catch (error) {
-    console.error('Error deleting sent invite:', error)
-    return NextResponse.json({ error: 'Failed to delete sent invite' }, { status: 500 })
+    console.error('Error deleting invite:', error)
+    return NextResponse.json({ error: 'Failed to delete invite' }, { status: 500 })
   }
 }

@@ -71,6 +71,13 @@ export async function POST(
     const eventId = params.id
     
     // Check if user has access to this event
+    if (!session.user.id) {
+      return new NextResponse(
+        JSON.stringify({ error: 'Invalid user session' }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+    
     const hasAccess = await canAccessEvent(session.user.id, eventId)
     if (!hasAccess) {
       return new NextResponse(
@@ -145,8 +152,7 @@ export async function POST(
       where: {
         id: {
           in: inviteIds
-        },
-        eventId
+        }
       }
     })
 
@@ -155,16 +161,16 @@ export async function POST(
         // Prepare email content with the recipient's name and code
         const processedEmailContent = processTemplate(
           template.emailContent, 
-          invite.name, 
-          invite.code, 
+          invite.name || 'Guest', 
+          invite.code || '', 
           eventLink
         )
 
         // Prepare WhatsApp content
         let processedWhatsappContent = processTemplate(
           template.whatsappContent, 
-          invite.name, 
-          invite.code, 
+          invite.name || 'Guest', 
+          invite.code || '', 
           eventLink, 
           false
         )
@@ -238,14 +244,16 @@ export async function POST(
           }
         }
 
-        // Create a reminder record
-        await prisma.reminder.create({
+        // Update the invite with reminder information
+        await prisma.invite.update({
+          where: {
+            id: invite.id
+          },
           data: {
-            inviteId: invite.id,
-            batchId: batch.id,
             emailStatus,
             whatsappStatus,
-            errorMessage: emailError || whatsappError || null
+            errorMessage: emailError || whatsappError || null,
+            batchId: batch.id
           }
         })
 

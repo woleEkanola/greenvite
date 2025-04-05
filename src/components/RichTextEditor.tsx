@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, forwardRef } from 'react'
 import dynamic from 'next/dynamic'
 import 'react-quill/dist/quill.snow.css'
 
@@ -140,19 +140,20 @@ const RichTextEditor = ({
   return (
     <div className="rich-text-editor">
       {mounted && (
-        <ReactQuill
-          ref={editorRef}
-          theme="snow"
-          value={value}
-          onChange={handleChange}
-          onFocus={handleFocus}
-          onBlur={handleBlur}
-          modules={modules}
-          formats={formats}
-          placeholder={placeholder}
-          style={{ height: height, marginBottom: '40px' }}
-          readOnly={disabled}
-        />
+        <div ref={editorRef}>
+          <ReactQuill
+            theme="snow"
+            value={value}
+            onChange={handleChange}
+            onFocus={handleFocus}
+            onBlur={handleBlur}
+            modules={modules}
+            formats={formats}
+            placeholder={placeholder}
+            style={{ height: height, marginBottom: '40px' }}
+            readOnly={disabled}
+          />
+        </div>
       )}
       <div className="text-xs text-gray-500 pt-[50px]">
         <strong>Available template variables:</strong> <code>{'{{name}}'}</code> - Recipient&apos;s name

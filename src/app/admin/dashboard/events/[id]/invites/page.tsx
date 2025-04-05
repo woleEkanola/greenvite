@@ -138,19 +138,28 @@ RecipientItem.displayName = 'RecipientItem';
 const TextAreaWithCounter = memo(({ 
   value, 
   onChange, 
-  maxLength 
+  maxLength,
+  placeholder,
+  rows = 4
 }: { 
   value: string, 
   onChange: (value: string) => void, 
-  maxLength: number 
+  maxLength: number,
+  placeholder?: string,
+  rows?: number
 }) => {
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    onChange(e.target.value);
+  }, [onChange]);
+  
   return (
     <div className="relative">
       <textarea
         value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full p-3 border rounded-md"
-        rows={4}
+        onChange={handleChange}
+        className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+        placeholder={placeholder}
+        rows={rows}
         maxLength={maxLength}
       />
       <div className="absolute bottom-2 right-2 text-xs text-gray-500">
@@ -161,6 +170,21 @@ const TextAreaWithCounter = memo(({
 });
 
 TextAreaWithCounter.displayName = 'TextAreaWithCounter';
+
+// Process template function to replace placeholders
+const processTemplate = (template: string, name: string, code: string, link: string, isHtml = true) => {
+  let processed = template
+    .replace(/{{name}}/g, name)
+    .replace(/{{code}}/g, code)
+    .replace(/{{link}}/g, link);
+  
+  // For WhatsApp, convert *text* to bold formatting
+  if (!isHtml) {
+    return processed;
+  }
+  
+  return processed;
+};
 
 export default function EventInvitesPage({ params }: { params: { id: string } }) {
   const [event, setEvent] = useState<any>(null)
@@ -840,6 +864,9 @@ The Event Team
         
         const batch = await batchResponse.json()
         
+        // Track errors
+        const sendErrors: string[] = []
+        
         // Process each recipient
         const results = await Promise.all(
           recipients.map(async (recipient) => {
@@ -867,8 +894,8 @@ The Event Team
               const eventLink = `${baseUrl}/rsvp/${event?.slug || params.id}`
               
               // Prepare email content with the recipient's name and code
-              const emailContent = processTemplate(emailTemplate, recipient.name, code, eventLink)
-              
+              const emailContent = processTemplate(emailTemplate, recipient.name, code, eventLink)    
+
               // Prepare WhatsApp content
               let whatsappContent = processTemplate(whatsappTemplate, recipient.name, code, eventLink, false)
               
@@ -922,14 +949,14 @@ The Event Team
                   
                   if (!emailResponse.ok) {
                     const errorData = await emailResponse.json()
-                    throw new Error(errorData.error || 'Failed to send email')
+                    throw new Error(errorData.message || 'Failed to send email')
                   }
-                  
+
                   emailStatus = 'sent'
                 } catch (error) {
                   console.error('Error sending email:', error)
                   emailStatus = 'failed'
-                  emailError = error.message
+                  emailError = error instanceof Error ? error.message : 'Unknown error occurred'
                 }
               }
               
@@ -958,25 +985,40 @@ The Event Team
                   }
                   
                   whatsappStatus = 'sent'
-                } catch (error) {
+                } catch (error: any) {
                   console.error('Error sending WhatsApp:', error)
                   whatsappStatus = 'failed'
-                  whatsappError = error.message
+                  whatsappError = error instanceof Error ? error.message : 'Unknown error occurred'
                 }
               }
               
               // Update the invite record with the status
-              await fetch(`/api/admin/events/${params.id}/invites/${invite.invite.id}`, {
-                method: 'PUT',
-                headers: {
-                  'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                  emailStatus,
-                  whatsappStatus,
-                  errorMessage: emailError || whatsappError
+              try {
+                const updateResponse = await fetch(`/api/admin/events/${params.id}/invites/${invite.invite.id}`, {
+                  method: 'PUT',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    recipient: {
+                      ...recipient,
+                      code,
+                    },
+                    emailStatus,
+                    emailError,
+                    whatsappStatus,
+                    whatsappError,
+                  }),
                 })
-              })
+                
+                if (!updateResponse.ok) {
+                  const errorData = await updateResponse.json()
+                  throw new Error(errorData.message || 'Failed to update recipient status')
+                }
+              } catch (error) {
+                console.error('Error updating recipient:', error)
+                sendErrors.push(error instanceof Error ? error.message : 'Unknown error occurred')
+              }
               
               return {
                 recipient,
@@ -985,12 +1027,12 @@ The Event Team
                 whatsappStatus,
                 error: emailError || whatsappError
               }
-            } catch (error) {
+            } catch (error: any) {
               console.error('Error processing recipient:', error)
               return {
                 recipient,
                 success: false,
-                error: error.message
+                error: error instanceof Error ? error.message : 'Unknown error occurred'
               }
             }
           })
@@ -1036,7 +1078,7 @@ The Event Team
         console.error('Error sending invites:', error)
         Swal.fire({
           title: 'Error',
-          text: `Failed to send invites: ${error.message}`,
+          text: `Failed to send invites: ${error instanceof Error ? error.message : 'Unknown error occurred'}`,
           icon: 'error'
         })
       } finally {
@@ -1335,7 +1377,7 @@ The Event Team
                       id="includeImageInWhatsapp"
                       checked={includeImageInWhatsapp}
                       onChange={(e) => setIncludeImageInWhatsapp(e.target.checked)}
-                      className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      className="h-4 w-4 text-blue-600 border-gray-300 rounded"
                     />
                     <label htmlFor="includeImageInWhatsapp" className="ml-2 text-sm text-gray-700">
                       Include image in WhatsApp message (if available)
