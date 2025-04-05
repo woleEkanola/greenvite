@@ -38,6 +38,18 @@ CREATE TABLE "Event" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "slug" TEXT,
     "ownerId" TEXT NOT NULL,
+    "customizations" TEXT,
+    "pageTitle" TEXT,
+    "pageDescription" TEXT,
+    "headerImage" TEXT,
+    "logoImage" TEXT,
+    "primaryColor" TEXT,
+    "secondaryColor" TEXT,
+    "fontFamily" TEXT,
+    "showLocationMap" BOOLEAN NOT NULL DEFAULT true,
+    "showAddToCalendar" BOOLEAN NOT NULL DEFAULT true,
+    "customCss" TEXT,
+    "isPagePublished" BOOLEAN NOT NULL DEFAULT false,
 
     CONSTRAINT "Event_pkey" PRIMARY KEY ("id")
 );
@@ -77,6 +89,7 @@ CREATE TABLE "MessageTemplate" (
     "emailContent" TEXT NOT NULL,
     "whatsappContent" TEXT NOT NULL,
     "isDefault" BOOLEAN NOT NULL DEFAULT false,
+    "imageUrl" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "eventId" TEXT NOT NULL,
