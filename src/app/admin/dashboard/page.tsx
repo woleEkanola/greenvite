@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts'
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, Calendar, Users, Mail, CheckSquare, Table, ArrowRight } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import {
@@ -15,7 +15,21 @@ import {
   CardFooter,
 } from '@/components/ui/card'
 
+interface EventStats {
+  id: string
+  title: string
+  slug: string
+  status: string
+  stats: {
+    regCodes: number
+    rsvps: number
+    tables: number
+    invites: number
+  }
+}
+
 interface DashboardStats {
+  events: EventStats[]
   totalRsvp: number
   availableRegistrations: number
   pendingRegistrations: number
@@ -30,11 +44,14 @@ interface DashboardStats {
   failedInvites: number
   pendingInvites: number
   canceledInvites: number
+  totalTables: number
+  totalAccessCodes: number
 }
 
 export default function Dashboard() {
   const { data: session, status } = useSession()
   const [stats, setStats] = useState<DashboardStats>({
+    events: [],
     totalRsvp: 0,
     availableRegistrations: 0,
     pendingRegistrations: 0,
@@ -48,7 +65,9 @@ export default function Dashboard() {
     successfulInvites: 0,
     failedInvites: 0,
     pendingInvites: 0,
-    canceledInvites: 0
+    canceledInvites: 0,
+    totalTables: 0,
+    totalAccessCodes: 0
   })
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -144,6 +163,80 @@ export default function Dashboard() {
         </button>
       </div>
       
+      {/* Event Summary */}
+      <div className="mb-8">
+        <h2 className="text-xl font-light text-gray-700 mb-4">Your Events</h2>
+        {stats.events.length === 0 ? (
+          <div className="bg-white rounded-lg shadow-md p-6 text-center">
+            <p className="text-gray-500 mb-4">You don't have any events yet.</p>
+            <Link 
+              href="/admin/dashboard/events/create"
+              className="inline-flex items-center px-4 py-2 bg-emerald-500 text-white rounded-md hover:bg-emerald-600 transition-colors"
+            >
+              Create Your First Event
+            </Link>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {stats.events.map((event) => (
+              <Link 
+                key={event.id} 
+                href={`/admin/dashboard/events/${event.id}`}
+                className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
+              >
+                <div className="flex justify-between items-start mb-3">
+                  <h3 className="text-lg font-medium text-gray-800 truncate" title={event.title}>
+                    {event.title}
+                  </h3>
+                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                    event.status === 'published' 
+                      ? 'bg-green-100 text-green-800' 
+                      : event.status === 'draft'
+                      ? 'bg-yellow-100 text-yellow-800'
+                      : 'bg-red-100 text-red-800'
+                  }`}>
+                    {event.status.charAt(0).toUpperCase() + event.status.slice(1)}
+                  </span>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  <div className="flex items-center">
+                    <Mail className="h-4 w-4 text-emerald-500 mr-2" />
+                    <span className="text-sm text-gray-600">{event.stats.regCodes} Codes</span>
+                  </div>
+                  <div className="flex items-center">
+                    <CheckSquare className="h-4 w-4 text-emerald-500 mr-2" />
+                    <span className="text-sm text-gray-600">{event.stats.rsvps} RSVPs</span>
+                  </div>
+                  <div className="flex items-center">
+                    <Table className="h-4 w-4 text-emerald-500 mr-2" />
+                    <span className="text-sm text-gray-600">{event.stats.tables} Tables</span>
+                  </div>
+                  <div className="flex items-center">
+                    <Mail className="h-4 w-4 text-emerald-500 mr-2" />
+                    <span className="text-sm text-gray-600">{event.stats.invites} Invites</span>
+                  </div>
+                </div>
+                
+                <div className="flex justify-end items-center text-emerald-600 text-sm font-medium">
+                  Manage Event <ArrowRight className="h-4 w-4 ml-1" />
+                </div>
+              </Link>
+            ))}
+            
+            <Link 
+              href="/admin/dashboard/events/create"
+              className="bg-gray-50 rounded-lg shadow-md p-6 flex flex-col items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors border-2 border-dashed border-gray-200"
+            >
+              <Calendar className="h-10 w-10 mb-3" />
+              <span className="text-lg font-medium">Create New Event</span>
+            </Link>
+          </div>
+        )}
+      </div>
+      
+      <h2 className="text-xl font-light text-gray-700 mb-4">Aggregate Statistics</h2>
+      
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* RSVP Stats */}
         <div className="bg-white rounded-lg shadow-md p-6">
@@ -173,7 +266,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-
       <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Registration Status Chart */}
         <div className="bg-white rounded-lg shadow-md p-6">
@@ -202,7 +294,7 @@ export default function Dashboard() {
               </ResponsiveContainer>
             </div>
           ) : (
-            <div className="h-64 flex items-center justify-center text-gray-400">
+            <div className="flex items-center justify-center h-64 text-gray-400">
               No data available
             </div>
           )}
@@ -235,7 +327,7 @@ export default function Dashboard() {
               </ResponsiveContainer>
             </div>
           ) : (
-            <div className="h-64 flex items-center justify-center text-gray-400">
+            <div className="flex items-center justify-center h-64 text-gray-400">
               No data available
             </div>
           )}
@@ -268,10 +360,40 @@ export default function Dashboard() {
               </ResponsiveContainer>
             </div>
           ) : (
-            <div className="h-64 flex items-center justify-center text-gray-400">
+            <div className="flex items-center justify-center h-64 text-gray-400">
               No data available
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Additional Stats */}
+      <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h2 className="text-lg font-light text-gray-600 mb-2">Total Tables</h2>
+          <p className="text-3xl font-light text-emerald-500">{stats.totalTables}</p>
+        </div>
+        
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h2 className="text-lg font-light text-gray-600 mb-2">Access Codes</h2>
+          <p className="text-3xl font-light text-emerald-500">{stats.totalAccessCodes}</p>
+        </div>
+        
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h2 className="text-lg font-light text-gray-600 mb-2">Events</h2>
+          <p className="text-3xl font-light text-emerald-500">{stats.events.length}</p>
+        </div>
+        
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h2 className="text-lg font-light text-gray-600 mb-2">Conversion Rate</h2>
+          <p className="text-3xl font-light text-emerald-500">
+            {stats.totalRegistrationCodes > 0 
+              ? `${((stats.totalRsvp / stats.totalRegistrationCodes) * 100).toFixed(1)}%` 
+              : '0%'}
+          </p>
+          <div className="mt-2 text-sm text-gray-500">
+            RSVPs / Registration Codes
+          </div>
         </div>
       </div>
     </div>

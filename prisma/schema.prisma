@@ -8,14 +8,19 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  username  String   @unique
-  password  String
-  role      String   @default("admin")
-  email     String?  @unique
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id               String            @id @default(cuid())
+  username         String            @unique
+  password         String
+  role             String            @default("ADMIN")
+  email            String?           @unique
+  name             String?
+  phone            String?           @unique
+  verified         Boolean           @default(false)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  ownedEvents      Event[]           @relation("EventOwner")
+  adminEvents      EventAdmin[]
+  sentInvitations  AdminInvitation[] @relation("UserToAdminInvitation")
 }
 
 model Table {
@@ -28,6 +33,8 @@ model Table {
   accessCodes AccessCode[]
   hosts       Host[]       @relation("HostToTable")
   souvenirs   SouvenirAssignment[]
+  eventId     String?
+  event       Event?       @relation(fields: [eventId], references: [id])
 }
 
 model AccessCode {
@@ -72,6 +79,8 @@ model RegistrationCode {
   createdAt DateTime  @default(now())
   invite    Invite?
   rsvp      Rsvp?
+  eventId   String?
+  event     Event?    @relation(fields: [eventId], references: [id])
 }
 
 model Invite {
@@ -108,6 +117,8 @@ model Batch {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   invites       Invite[]
+  eventId       String?
+  event         Event?   @relation(fields: [eventId], references: [id])
 }
 
 model Host {
@@ -120,6 +131,8 @@ model Host {
   updatedAt   DateTime @updatedAt
   tables      Table[]  @relation("HostToTable")
   souvenirs   SouvenirAssignment[]
+  eventId     String?
+  event       Event?   @relation(fields: [eventId], references: [id])
 }
 
 model Souvenir {
@@ -131,6 +144,8 @@ model Souvenir {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   assignments SouvenirAssignment[]
+  eventId     String?
+  event       Event?   @relation(fields: [eventId], references: [id])
 }
 
 model SouvenirAssignment {
@@ -150,4 +165,87 @@ model SouvenirAssignment {
   souvenir    Souvenir @relation(fields: [souvenirId], references: [id])
 
   @@unique([souvenirId, hostId, tableId, accessCodeId])
+}
+
+model Event {
+  id                String        @id @default(cuid())
+  title             String
+  description       String?       @db.Text
+  location          String?
+  startDate         DateTime
+  endDate           DateTime
+  imageUrl          String?
+  status            String        @default("draft") // draft, published, cancelled
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  slug              String?       @unique
+  ownerId           String        // Original creator of the event
+  owner             User          @relation("EventOwner", fields: [ownerId], references: [id])
+  admins            EventAdmin[]  // Many-to-many relation with User
+  adminInvitations  AdminInvitation[]
+  tables            Table[]
+  registrationCodes RegistrationCode[]
+  batches           Batch[]
+  hosts             Host[]
+  souvenirs         Souvenir[]
+  messageTemplates  MessageTemplate[]
+  customizations    String?       @db.Text // JSON string to store event page customization settings
+  pageTitle         String?       // Custom title for the event page
+  pageDescription   String?       @db.Text // Custom description for the event page
+  headerImage       String?       // Hero/banner image for the event page
+  logoImage         String?       // Logo image for branding
+  primaryColor      String?       // Primary color for buttons and accents
+  secondaryColor    String?       // Secondary color for highlights
+  fontFamily        String?       // Custom font family
+  showLocationMap   Boolean       @default(true) // Whether to show the location map
+  showAddToCalendar Boolean       @default(true) // Whether to show the add to calendar button
+  customCss         String?       @db.Text // Custom CSS for advanced customization
+  isPagePublished   Boolean       @default(false) // Whether the custom page is published
+}
+
+model EventAdmin {
+  id        String   @id @default(cuid())
+  userId    String
+  eventId   String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+  event     Event    @relation(fields: [eventId], references: [id])
+
+  @@unique([userId, eventId])
+}
+
+model AdminInvitation {
+  id          String    @id @default(cuid())
+  email       String
+  token       String    @unique
+  status      String    @default("pending") // pending, accepted, expired
+  message     String?   @db.Text
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  acceptedAt  DateTime?
+  
+  eventId     String
+  event       Event     @relation(fields: [eventId], references: [id])
+  inviterId   String
+  inviter     User      @relation("UserToAdminInvitation", fields: [inviterId], references: [id])
+  
+  @@unique([email, eventId])
+}
+
+model MessageTemplate {
+  id              String    @id @default(cuid())
+  name            String
+  emailSubject    String
+  emailContent    String    @db.Text
+  whatsappContent String    @db.Text
+  isDefault       Boolean   @default(false)
+  imageUrl        String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  eventId         String
+  event           Event     @relation(fields: [eventId], references: [id])
+  
+  @@unique([name, eventId])
 }

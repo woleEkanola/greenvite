@@ -23,6 +23,9 @@ export default function DashboardLayout({
     return pathname === path || pathname.startsWith(`${path}/`)
   }
 
+  // Check if we're on an event detail page that has its own sidebar
+  const isEventDetailPage = /\/admin\/dashboard\/events\/[^\/]+(?:\/.*)?$/.test(pathname);
+
   // Handle click outside to close user menu
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -52,7 +55,7 @@ export default function DashboardLayout({
       await signOut({ redirect: false });
       
       // Redirect to login page
-      router.push('/admin');
+      router.push('/login');
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
@@ -62,120 +65,62 @@ export default function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* Sidebar */}
-      <aside className={`fixed top-0 left-0 h-full bg-white shadow-lg transition-all duration-300 z-20
-                      ${isSidebarOpen ? 'w-64' : 'w-20'}`}>
-        <div className="p-4 border-b">
-          <button
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="p-2 rounded-lg hover:bg-gray-100"
-          >
-            {isSidebarOpen ? '←' : '→'}
-          </button>
-        </div>
-        <nav className="p-4">
-          <ul className="space-y-2">
-            <li>
-              <Link
-                href="/admin/dashboard"
-                className={`block px-4 py-2 rounded-lg transition-colors ${
-                  isActive('/admin/dashboard') && !pathname.includes('/admin/dashboard/')
-                    ? 'bg-emerald-500 text-white'
-                    : 'hover:bg-gray-100'
-                }`}
-              >
-                Overview
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/admin/dashboard/reg-codes"
-                className={`block px-4 py-2 rounded-lg transition-colors ${
-                  isActive('/admin/dashboard/reg-codes')
-                    ? 'bg-emerald-500 text-white'
-                    : 'hover:bg-gray-100'
-                }`}
-              >
-                Registration Codes
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/admin/dashboard/access-codes"
-                className={`block px-4 py-2 rounded-lg transition-colors ${
-                  isActive('/admin/dashboard/access-codes')
-                    ? 'bg-emerald-500 text-white'
-                    : 'hover:bg-gray-100'
-                }`}
-              >
-                Access Codes
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/admin/dashboard/invites"
-                className={`block px-4 py-2 rounded-lg transition-colors ${
-                  isActive('/admin/dashboard/invites')
-                    ? 'bg-emerald-500 text-white'
-                    : 'hover:bg-gray-100'
-                }`}
-              >
-                Send Invites
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/admin/dashboard/rsvps"
-                className={`block px-4 py-2 rounded-lg transition-colors ${
-                  isActive('/admin/dashboard/rsvps')
-                    ? 'bg-emerald-500 text-white'
-                    : 'hover:bg-gray-100'
-                }`}
-              >
-                RSVP Management
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/admin/dashboard/tables"
-                className={`block px-4 py-2 rounded-lg transition-colors ${
-                  isActive('/admin/dashboard/tables')
-                    ? 'bg-emerald-500 text-white'
-                    : 'hover:bg-gray-100'
-                }`}
-              >
-                Tables
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/admin/dashboard/sent-invites"
-                className={`block px-4 py-2 rounded-lg transition-colors ${
-                  isActive('/admin/dashboard/sent-invites')
-                    ? 'bg-emerald-500 text-white'
-                    : 'hover:bg-gray-100'
-                }`}
-              >
-                Sent Invites
-              </Link>
-            </li>
-          </ul>
-
-          <div className="mt-8 pt-6 border-t border-gray-200">
+      {/* Sidebar - Hide for event detail pages */}
+      {!isEventDetailPage && (
+        <aside className={`fixed top-0 left-0 h-full bg-white shadow-lg transition-all duration-300 z-20
+                        ${isSidebarOpen ? 'w-64' : 'w-20'}`}>
+          <div className="p-4 border-b">
             <button
-              onClick={handleLogout}
-              disabled={isLoggingOut}
-              className="flex items-center w-full px-4 py-2 text-left text-red-600 rounded-lg transition-colors hover:bg-red-50"
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              className="p-2 rounded-lg hover:bg-gray-100"
             >
-              <LogOut className="h-5 w-5 mr-2" />
-              <span>{isLoggingOut ? 'Logging out...' : 'Logout'}</span>
+              {isSidebarOpen ? '←' : '→'}
             </button>
           </div>
-        </nav>
-      </aside>
+          <nav className="p-4">
+            <ul className="space-y-2">
+              <li>
+                <Link
+                  href="/admin/dashboard"
+                  className={`block px-4 py-2 rounded-lg transition-colors ${
+                    isActive('/admin/dashboard') && !pathname.includes('/admin/dashboard/')
+                      ? 'bg-emerald-500 text-white'
+                      : 'hover:bg-gray-100'
+                  }`}
+                >
+                  Overview
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/admin/dashboard/events"
+                  className={`block px-4 py-2 rounded-lg transition-colors ${
+                    isActive('/admin/dashboard/events')
+                      ? 'bg-emerald-500 text-white'
+                      : 'hover:bg-gray-100'
+                  }`}
+                >
+                  Events
+                </Link>
+              </li>
+            </ul>
 
-      {/* Main Content */}
-      <main className={`transition-all duration-300 ${isSidebarOpen ? 'ml-64' : 'ml-20'}`}>
+            <div className="mt-8 pt-6 border-t border-gray-200">
+              <button
+                onClick={handleLogout}
+                disabled={isLoggingOut}
+                className="flex items-center w-full px-4 py-2 text-left text-red-600 rounded-lg transition-colors hover:bg-red-50"
+              >
+                <LogOut className="h-5 w-5 mr-2" />
+                <span>{isLoggingOut ? 'Logging out...' : 'Logout'}</span>
+              </button>
+            </div>
+          </nav>
+        </aside>
+      )}
+
+      {/* Main Content - Adjust margin based on whether sidebar is shown */}
+      <main className={`transition-all duration-300 ${!isEventDetailPage ? (isSidebarOpen ? 'ml-64' : 'ml-20') : 'ml-0'}`}>
         {/* Header */}
         <header className="bg-white shadow-sm">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

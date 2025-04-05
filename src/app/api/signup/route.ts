@@ -1,83 +1,86 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
-import axios from "axios";
-
-// WhatsApp API configuration
-const WAAPI_TOKEN = process.env.WAAPI_TOKEN;
-const WAAPI_BASE_URL = process.env.WAAPI_BASE_URL || 'https://waapi.app/api/v1';
-const INSTANCE_ID = process.env.WAAPI_INSTANCE_ID;
-const ADMIN_PHONE = "2348121751210"; // Admin's phone number
-
-async function sendWhatsAppNotification(phone: string, message: string): Promise<boolean> {
-  try {
-    if (!WAAPI_TOKEN || !INSTANCE_ID) {
-      console.error('WhatsApp API configuration is incomplete. Token or Instance ID missing.');
-      return false;
-    }
-
-    const textPayload = {
-      chatId: phone + '@c.us',
-      message: message
-    };
-
-    const response = await axios.post(
-      `${WAAPI_BASE_URL}/instances/${INSTANCE_ID}/client/action/send-message`,
-      textPayload,
-      {
-        headers: {
-          'Authorization': `Bearer ${WAAPI_TOKEN}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 5000
-      }
-    );
-
-    if (response.data?.data?.status === 'success') {
-      console.log(`WhatsApp notification sent successfully to ${phone}`);
-      return true;
-    } else {
-      console.error(`Failed to send WhatsApp notification: ${response.data?.data?.message || 'Unknown error'}`);
-      return false;
-    }
-  } catch (error: any) {
-    console.error('Error sending WhatsApp notification:', error.message);
-    console.error('Error details:', error.response?.data || 'No response data');
-    return false;
-  }
-}
+import sendWhatsAppNotification from "@/lib/whatsapp";
+import { sendEmail } from "@/lib/email";
 
 export async function POST(request: Request) {
+  const ADMIN_PHONE = "2348121751210"; // Admin's phone number
   try {
-    const { name, email, phone } = await request.json();
+    const { name, email, phone, password } = await request.json();
 
     // Validate input
-    if (!name || !email || !phone) {
+    if (!name || !email || !phone || !password) {
       return NextResponse.json(
-        { error: "Name, email and phone are required" },
+        { error: "Name, email, phone, and password are required" },
         { status: 400 }
       );
     }
 
-    // Create user with lead role
-    const hashedPassword = await bcrypt.hash(Math.random().toString(36), 10);
+    // Create user with admin role
+    const hashedPassword = await bcrypt.hash(password, 10);
     const user = await prisma.user.create({
       data: {
         username: email,
         password: hashedPassword,
-        role: "lead",
+        role: "ADMIN",
         email,
         name,
+        phone: phone || null, 
+        verified: false,
       },
     });
 
-    // Send WhatsApp notification to admin
+    // Create verification URL
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const verificationUrl = `${baseUrl}/verify/${user.id}`;
+
+    // Send verification email
+    const emailHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #2e7d32;">Welcome to Greenvites!</h2>
+        <p>Hello ${name},</p>
+        <p>Thank you for signing up with Greenvites. Please verify your account by clicking the button below:</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${verificationUrl}" style="background-color: #2e7d32; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">Verify My Account</a>
+        </div>
+        <p>If the button doesn't work, you can also copy and paste the following link into your browser:</p>
+        <p style="word-break: break-all; color: #2e7d32;">${verificationUrl}</p>
+        <p>If you didn't create this account, please ignore this email.</p>
+        <p>Best regards,<br>The Greenvites Team</p>
+      </div>
+    `;
+
+    try {
+      await sendEmail({
+        to: email,
+        subject: "Verify Your Greenvites Account",
+        html: emailHtml,
+      });
+      console.log("Verification email sent successfully");
+    } catch (emailError) {
+      console.error("Failed to send verification email:", emailError);
+    }
+
+    // Send verification WhatsApp message
+    const whatsappMessage = `🌿 *Welcome to Greenvites!* 🌿\n\nHi ${name},\n\nThank you for signing up. Please verify your account by clicking the link below:\n\n${verificationUrl}\n\nIf you didn't create this account, please ignore this message.\n\nBest regards,\nThe Greenvites Team`;
+    
+    try {
+      await sendWhatsAppNotification(phone, whatsappMessage);
+      console.log("Verification WhatsApp message sent successfully");
+    } catch (whatsappError) {
+      console.error("Failed to send verification WhatsApp message:", whatsappError);
+    }
+
+    // Send admin notification
     const adminMessage = `🌟 New Greenvite Signup!\n\nName: ${name}\nEmail: ${email}\nPhone: ${phone}\n\nPlease reach out to the lead soon.`;
     await sendWhatsAppNotification(ADMIN_PHONE, adminMessage);
 
     return NextResponse.json({ 
       success: true, 
-      message: "Your account is being setup. A Greenvite representative will contact you shortly." 
+      message: "Welcome to Greenvites! We've sent verification links to your email and WhatsApp. Please verify your account to continue.",
+      verificationUrl: verificationUrl,
+      userId: user.id
     });
 
   } catch (error: any) {

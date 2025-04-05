@@ -18,16 +18,16 @@ export async function GET(request: Request) {
       )
     }
 
-    // Check if the current user is a superadmin
+    // Check if the current user is an admin or superadmin
     const currentUser = await prisma.user.findUnique({
       where: {
         username: session.user?.name as string
       }
     })
 
-    if (!currentUser || currentUser.role !== 'superadmin') {
+    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'ADMIN' && currentUser.role !== 'superadmin')) {
       return NextResponse.json(
-        { error: 'Forbidden - Requires superadmin privileges' },
+        { error: 'Forbidden - Requires admin privileges' },
         { status: 403 }
       )
     }
@@ -39,7 +39,7 @@ export async function GET(request: Request) {
       }
     })
 
-    return NextResponse.json({ users })
+    return NextResponse.json(users)
   } catch (error) {
     console.error('Error fetching admin users:', error)
     return NextResponse.json(

@@ -7,7 +7,7 @@ export default withAuth({
     authorized: ({ token }) => !!token,
   },
   pages: {
-    signIn: '/admin',
+    signIn: '/login',
   },
 })
 

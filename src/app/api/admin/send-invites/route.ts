@@ -128,7 +128,7 @@ We look forward to celebrating this special occasion with you ${eventLink}#${c
               'Authorization': `Bearer ${WAAPI_TOKEN}`,
               'Content-Type': 'application/json'
             },
-            timeout: 30000 // 30 second timeout
+            timeout: 30000 // 30 seconds timeout
           }
         );
         
@@ -446,59 +446,64 @@ async function processRequest(request: Request): Promise<Response> {
     // Process form data
     const formData = await request.formData();
     const recipientsJson = formData.get('recipients') as string;
-    const subject = formData.get('subject') as string || 'Invitation to Jesse Oghenekome George\'s Church Dedication';
-    const message = formData.get('message') as string || `
+    const subject = formData.get('subject') as string || 'Event Invitation';
+    const emailTemplate = formData.get('emailTemplate') as string || `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 5px;">
-        <h2 style="color: #2c3e50; text-align: center;">You are invited to the church dedication of</h2>
-        <h1 style="color: #16a085; text-align: center; margin-bottom: 30px;">Jesse Oghenekome George</h1>
-        <p style="text-align: center; font-size: 18px;">at RCCG Church, Champions Cathedral </p>
-        
-        <div style="margin: 30px 0; background-color: #f9f9f9; padding: 15px; border-radius: 5px;">
-          <h3 style="color: #2c3e50; text-align: center; margin-top: 0;">LOCATIONS</h3>
-          <p style="text-align: center; font-weight: bold;">Church Dedication</p>
-          <p style="text-align: center;">RCCG Church, Champions Cathedral</p>
-          <p style="text-align: center;">#16-18 Airport Road, Effurun, Warri Delta</p>
-          <p style="text-align: center;">Nigeria</p>
-          <p style="text-align: center; font-size: 20px; margin: 20px 0;">10:00 AM</p>
-          <p style="text-align: center; font-size: 18px;">Sunday, April 13, 2025</p>
-        </div>
+        <h2 style="color: #2c3e50; text-align: center;">You are invited to an event</h2>
         
         <div style="text-align: center; margin: 30px 0;">
           <p>Your personal registration code is: <strong>{{code}}</strong></p>
-          <p style="margin-bottom: 15px; font-size: 16px;">  Dr. Fred Afor George and Mrs. Ogheneovo Fred George warmly invite you to the church dedication of their son.
-
-To confirm and secure your reservation, please click the "Confirm Your Attendance" button below and complete the form. This will help us plan effectively.
-
-Please note: Attendance is strictly by invitation, and submitting the completed form will grant you an access code required for entry to the venue.
-
-We look forward to celebrating this special occasion with you.</p>
+          <p style="margin-bottom: 15px; font-size: 16px;">Click the link below to confirm your attendance. This will help us plan accordingly.</p>
           <p style="margin-bottom: 20px;"><a href="{{link}}" style="color: #4CAF50; text-decoration: underline;">{{link}}</a></p>
           <a href="{{link}}" style="display: inline-block; background-color: #4CAF50; color: white; padding: 14px 28px; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; text-decoration: none;">
             Confirm Your Attendance
           </a>
         </div>
         
-        <p style="text-align: center; margin-top: 30px; color: #7f8c8d; font-size: 14px;">We look forward to celebrating this special occasion with you.</p>
+        <p style="text-align: center; margin-top: 30px; color: #7f8c8d; font-size: 14px;">We look forward to celebrating with you.</p>
       </div>
     `;
-    const whatsappMessage = formData.get('whatsappMessage') as string || `Dr. Fred Afor George and Mrs. Ogheneovo Fred George warmly invite you to the church dedication of their son.
-
-To confirm and secure your reservation, please click the link below and complete the form. This will help us plan effectively.
-
-Please note: Attendance is strictly by invitation, and submitting the completed form will grant you an access code required for entry to the venue.
-
-We look forward to celebrating this special occasion with you {{link}}#{{code}}`;
-    const eventLink = formData.get('eventLink') as string;
+    const whatsappTemplate = formData.get('whatsappTemplate') as string || `You are invited to an event. Your code: {{code}}. Please confirm your attendance at: {{link}}`;
+    let eventLink = formData.get('eventLink') as string;
+    const eventId = formData.get('eventId') as string;
     const enableEmail = formData.get('enableEmail') === 'true';
     const enableWhatsApp = formData.get('enableWhatsApp') === 'true';
     const batchName = formData.get('batchName') as string || `Batch ${new Date().toISOString().split('T')[0]}`;
+    
+    // IMPORTANT FIX: Always ensure we have an eventLink
+    if (!eventLink && eventId) {
+      console.log('[POST /api/admin/send-invites] eventLink not provided, generating one from eventId');
+      
+      try {
+        // Try to find the event to get its slug
+        const event = await prisma.event.findUnique({
+          where: { id: eventId }
+        });
+        
+        // Determine if we're in a development environment
+        const isDevelopment = process.env.NODE_ENV === 'development';
+        const baseUrl = isDevelopment ? 'http://localhost:3000' : 'https://greenvites.online';
+        
+        if (event?.slug) {
+          eventLink = `${baseUrl}/${event.slug}`;
+        } else {
+          eventLink = `${baseUrl}/event/${eventId}`;
+        }
+        
+        console.log(`[POST /api/admin/send-invites] Generated eventLink: ${eventLink}`);
+      } catch (error) {
+        console.error('[POST /api/admin/send-invites] Error generating eventLink:', error);
+        // Provide a fallback eventLink as last resort
+        eventLink = `https://greenvites.online/event/${eventId}`;
+      }
+    }
     
     // Log received form data
     console.log('[POST /api/admin/send-invites] Received form data:');
     console.log('- recipientsJson:', recipientsJson ? 'present' : 'missing');
     console.log('- subject:', subject || 'missing');
-    console.log('- message:', message ? 'present' : 'missing');
-    console.log('- whatsappMessage:', whatsappMessage ? 'present' : 'missing');
+    console.log('- emailTemplate:', emailTemplate ? 'present' : 'missing');
+    console.log('- whatsappTemplate:', whatsappTemplate ? 'present' : 'missing');
     console.log('- eventLink:', eventLink || 'missing');
     console.log('- enableEmail:', enableEmail);
     console.log('- enableWhatsApp:', enableWhatsApp);
@@ -508,7 +513,7 @@ We look forward to celebrating this special occasion with you {{link}}#{{code}
     const missingFields = [];
     if (!recipientsJson) missingFields.push('recipients');
     if (!subject) missingFields.push('subject');
-    if (!message) missingFields.push('message');
+    if (!emailTemplate) missingFields.push('emailTemplate');
     if (!eventLink) missingFields.push('eventLink');
     
     if (missingFields.length > 0) {
@@ -585,9 +590,9 @@ We look forward to celebrating this special occasion with you {{link}}#{{code}
       try {
         const fs = require('fs');
         const path = require('path');
-        const defaultImagePath = path.join(process.cwd(), 'public', 'jessegeorge.jpg');
+        const defaultImagePath = path.join(process.cwd(), 'public', 'default.jpg');
         emailImageBuffer = fs.readFileSync(defaultImagePath);
-        console.log('Using default image: jessegeorge.jpg');
+        console.log('Using default image: default.jpg');
       } catch (error) {
         console.error('Error loading default image:', error);
       }
@@ -636,7 +641,7 @@ We look forward to celebrating this special occasion with you {{link}}#{{code}
 
         if ((type === 'email' || type === 'both') && email && enableEmail) {
           try {
-            const emailSuccess = await sendEmail(email, name, codeValue, subject, message, eventLink, emailImageBuffer);
+            const emailSuccess = await sendEmail(email, name, codeValue, subject, emailTemplate, eventLink, emailImageBuffer);
             emailStatus = emailSuccess ? 'sent' : 'failed';
             if (emailSuccess) {
               successfulChannels.push('email');
@@ -652,7 +657,7 @@ We look forward to celebrating this special occasion with you {{link}}#{{code}
 
         if ((type === 'whatsapp' || type === 'both') && phone && enableWhatsApp) {
           try {
-            const whatsappSuccess = await sendWhatsApp(phone, name, codeValue, whatsappMessage, eventLink, emailImageBuffer);
+            const whatsappSuccess = await sendWhatsApp(phone, name, codeValue, whatsappTemplate, eventLink, emailImageBuffer);
             whatsappStatus = whatsappSuccess ? 'sent' : 'failed';
             whatsappProvider = process.env.WHATSAPP_PROVIDER || 'whatsapp_api';
             if (whatsappSuccess) {

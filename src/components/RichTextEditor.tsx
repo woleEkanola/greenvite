@@ -1,9 +1,8 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import 'react-quill/dist/quill.snow.css'
-import { debounce } from 'lodash'
 
 // Dynamically import ReactQuill to avoid SSR issues
 const ReactQuill = dynamic(() => import('react-quill'), { 
@@ -32,19 +31,39 @@ const RichTextEditor = ({
 }: RichTextEditorProps) => {
   // State to track if the component is mounted (for SSR)
   const [mounted, setMounted] = useState(false)
-  // Local state to avoid re-renders during typing
-  const [localValue, setLocalValue] = useState(value)
-
+  // Track if we're currently editing to prevent unnecessary updates
+  const [isEditing, setIsEditing] = useState(false)
+  // Reference to the editor instance
+  const editorRef = useRef<any>(null)
+  
   // Set mounted to true when component mounts
   useEffect(() => {
     setMounted(true)
+    
+    // Cleanup function
+    return () => {
+      setMounted(false)
+    }
   }, [])
-
-  // Update local value when prop value changes
+  
+  // Handle external value changes only when not actively editing
   useEffect(() => {
-    setLocalValue(value)
-  }, [value])
-
+    if (mounted && !isEditing) {
+      // Preserve template variables in the value
+      const preservedValue = preserveTemplateVariables(value)
+      
+      // Update the editor content if it differs from current value
+      if (editorRef.current && editorRef.current.getEditor) {
+        const editor = editorRef.current.getEditor()
+        const currentContent = editor.root.innerHTML
+        
+        if (currentContent !== preservedValue) {
+          editor.clipboard.dangerouslyPasteHTML(preservedValue)
+        }
+      }
+    }
+  }, [value, mounted, isEditing])
+  
   // Define the toolbar options - simplified for better performance
   const modules = {
     toolbar: simpleMode 
@@ -60,6 +79,9 @@ const RichTextEditor = ({
           ['link'],
           ['clean']
         ],
+    clipboard: {
+      matchVisual: false // Disable the default clipboard matching to improve stability
+    }
   }
 
   // Define the formats we want to support - reduced for better performance
@@ -71,39 +93,60 @@ const RichTextEditor = ({
         'list', 'bullet',
         'link'
       ]
-
-  // Debounce the onChange to prevent excessive updates
-  const debouncedOnChange = useCallback(
-    debounce((content: string) => {
-      // Process content to preserve template variables
-      let processedContent = content
-      
-      // Check for and preserve template variables like {{name}}, {{code}}, {{link}}
-      const templateVars = ['{{name}}', '{{code}}', '{{link}}', '{{image}}']
-      templateVars.forEach(variable => {
-        // Create a regex that matches the variable even if it's wrapped in HTML tags
-        const regex = new RegExp(`(<[^>]*>)?${variable.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(<[^>]*>)?`, 'g')
-        processedContent = processedContent.replace(regex, variable)
-      })
-      
-      onChange(processedContent)
-    }, 300),
-    [onChange]
-  )
-
-  // Handle local updates immediately for responsive UI
+  
+  // Function to preserve template variables in content
+  const preserveTemplateVariables = (content: string): string => {
+    if (!content) return content
+    
+    const templateVars = ['{{name}}', '{{code}}', '{{link}}', '{{image}}']
+    let preservedContent = content
+    
+    templateVars.forEach(variable => {
+      // Case-insensitive replacement to standardize variables
+      const regex = new RegExp(`{{\\s*${variable.slice(2, -2)}\\s*}}`, 'gi')
+      preservedContent = preservedContent.replace(regex, variable)
+    })
+    
+    return preservedContent
+  }
+  
+  // Handle editor changes
   const handleChange = (content: string) => {
-    setLocalValue(content)
-    debouncedOnChange(content)
+    // Start editing state
+    setIsEditing(true)
+    
+    // Process content to preserve template variables
+    const processedContent = preserveTemplateVariables(content)
+    
+    // Call the onChange prop with processed content
+    onChange(processedContent)
+    
+    // End editing state after a short delay
+    setTimeout(() => {
+      setIsEditing(false)
+    }, 500)
+  }
+  
+  // Handle editor focus
+  const handleFocus = () => {
+    setIsEditing(true)
+  }
+  
+  // Handle editor blur
+  const handleBlur = () => {
+    setIsEditing(false)
   }
 
   return (
     <div className="rich-text-editor">
       {mounted && (
         <ReactQuill
+          ref={editorRef}
           theme="snow"
-          value={localValue}
+          value={value}
           onChange={handleChange}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
           modules={modules}
           formats={formats}
           placeholder={placeholder}
