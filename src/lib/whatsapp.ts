@@ -54,13 +54,26 @@ async function sendWhatsAppNotification(
       try {
         console.log(`Sending WhatsApp media message to ${formattedPhone} with image: ${imageUrl}`);
         
+        // Fetch the image and convert it to base64
+        let imageBase64;
+        try {
+          const imageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+          const buffer = Buffer.from(imageResponse.data, 'binary');
+          imageBase64 = buffer.toString('base64');
+          console.log(`Successfully converted image to base64 (${imageBase64.length} chars)`);
+        } catch (fetchError: unknown) {
+          console.error('Error fetching image:', fetchError instanceof Error ? fetchError.message : String(fetchError));
+          throw new Error('Failed to fetch image for WhatsApp');
+        }
+        
         const mediaPayload = {
           chatId: formattedPhone + '@c.us',
-          caption: message,
-          url: imageUrl
+          mediaBase64: imageBase64,
+          mediaName: 'invitation.jpg',
+          mediaCaption: message
         };
         
-        console.log('Media payload:', JSON.stringify(mediaPayload));
+        console.log('Media payload prepared with base64 image');
         
         response = await axios.post(
           `${baseEndpoint}/send-media`,
@@ -77,7 +90,7 @@ async function sendWhatsAppNotification(
         // If media sending fails, fall back to text-only message
         const textPayload = {
           chatId: formattedPhone + '@c.us',
-          message: `${message}\n\n(Note: Image could not be sent)`
+          message: message
         };
         
         response = await axios.post(
