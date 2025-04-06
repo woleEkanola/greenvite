@@ -12,6 +12,17 @@ console.log('WhatsApp API Configuration Status:', {
   instanceIdConfigured: !!INSTANCE_ID
 });
 
+// Check if the token is in the correct format (might be a common issue)
+if (WAAPI_TOKEN) {
+  if (WAAPI_TOKEN.startsWith('"') || WAAPI_TOKEN.endsWith('"')) {
+    console.warn('WARNING: WhatsApp API token contains quote characters. This may cause authentication issues.');
+  }
+  
+  if (WAAPI_TOKEN.includes(' ')) {
+    console.warn('WARNING: WhatsApp API token contains spaces. This may cause authentication issues.');
+  }
+}
+
 /**
  * Send a WhatsApp message with optional image attachment
  * @param phone Phone number to send to (with or without + prefix)
@@ -45,10 +56,12 @@ async function sendWhatsAppNotification(
     
     // Common headers for all requests
     const headers = {
-      'Authorization': `Bearer ${WAAPI_TOKEN}`,
+      'Authorization': `Bearer ${WAAPI_TOKEN?.trim()}`,
       'Content-Type': 'application/json'
     };
 
+    console.log('Using authorization header:', `Bearer ${WAAPI_TOKEN?.substring(0, 5)}...`);
+    
     let response;
     
     // If we have an image URL and includeImageInWhatsApp is true, send as media message
@@ -59,8 +72,35 @@ async function sendWhatsAppNotification(
         // Fetch the image and convert it to base64
         let imageBase64;
         try {
-          const imageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer' });
-          const buffer = Buffer.from(imageResponse.data, 'binary');
+          console.log(`Attempting to fetch image from: ${imageUrl}`);
+          
+          // Add timeout and retry logic for image fetching
+          const fetchImage = async (attempt = 1, maxAttempts = 3) => {
+            try {
+              const imageResponse = await axios.get(imageUrl, { 
+                responseType: 'arraybuffer',
+                timeout: 10000, // 10 second timeout
+                headers: {
+                  // Add headers that might be needed for Vercel Blob storage
+                  'Accept': 'image/*',
+                  'Cache-Control': 'no-cache'
+                }
+              });
+              return imageResponse.data;
+            } catch (error) {
+              console.error(`Attempt ${attempt} failed:`, error instanceof Error ? error.message : String(error));
+              if (attempt < maxAttempts) {
+                console.log(`Retrying... (${attempt}/${maxAttempts})`);
+                // Wait 1 second before retrying
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                return fetchImage(attempt + 1, maxAttempts);
+              }
+              throw error;
+            }
+          };
+          
+          const imageData = await fetchImage();
+          const buffer = Buffer.from(imageData, 'binary');
           imageBase64 = buffer.toString('base64');
           console.log(`Successfully converted image to base64 (${imageBase64.length} chars)`);
         } catch (fetchError: unknown) {
@@ -138,8 +178,17 @@ async function sendWhatsAppNotification(
     
     if (error.response) {
       console.error('Error status:', error.response.status);
-      console.error('Error headers:', error.response.headers);
-      console.error('Error data:', error.response.data);
+      console.error('Error headers:', JSON.stringify(error.response.headers));
+      console.error('Error data:', JSON.stringify(error.response.data));
+      
+      // Check for specific error types
+      if (error.response.status === 401) {
+        console.error('Authentication error: Please check your WhatsApp API token');
+      } else if (error.response.status === 404) {
+        console.error('API endpoint not found: Please check your WhatsApp API base URL and instance ID');
+      } else if (error.response.status === 429) {
+        console.error('Rate limit exceeded: Too many requests to the WhatsApp API');
+      }
     } else if (error.request) {
       console.error('No response received:', error.request);
     }

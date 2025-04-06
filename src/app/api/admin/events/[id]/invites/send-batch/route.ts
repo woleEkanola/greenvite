@@ -1,9 +1,8 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { sendEmail } from '@/lib/email'
-import { sendWhatsApp } from '@/lib/communications'
+import axios from 'axios'
 
 // Helper function to check event access
 async function canAccessEvent(userId: string, eventId: string): Promise<boolean> {
@@ -36,29 +35,38 @@ async function canAccessEvent(userId: string, eventId: string): Promise<boolean>
 
     return false;
   } catch (error) {
-    console.error('Error checking event access:', error instanceof Error ? error.message : 'Unknown error');
+    console.error('Error checking event access:', error);
     return false;
   }
 }
 
-// Helper function to process template variables
-function processTemplate(template: string, name: string, code: string, link: string, includeHtml = true): string {
-  let processed = template
-    .replace(/{{name}}/gi, name)
-    .replace(/{{code}}/gi, code)
-    .replace(/{{link}}/gi, link);
+// Helper function to process template
+function processTemplate(template: string, name: string, code: string, eventLink: string, isHtml: boolean = false): string {
+  if (!template) return '';
   
-  // Process image placeholder separately
-  if (!includeHtml) {
-    processed = processed.replace(/{{image}}/gi, '');
+  let processed = template
+    .replace(/\{\{name\}\}/g, name)
+    .replace(/\{name\}/g, name)
+    .replace(/\{\{\{name\}\}\}/g, name)
+    .replace(/\{\{code\}\}/g, code)
+    .replace(/\{code\}/g, code)
+    .replace(/\{\{\{code\}\}\}/g, code);
+  
+  // Replace event link
+  if (eventLink) {
+    const linkWithCode = `${eventLink}?code=${code}`;
+    processed = processed
+      .replace(/\{\{link\}\}/g, linkWithCode)
+      .replace(/\{link\}/g, linkWithCode)
+      .replace(/\{\{\{link\}\}\}/g, linkWithCode);
   }
   
   return processed;
 }
 
-// POST /api/admin/events/[id]/invites/send
+// POST /api/admin/events/[id]/invites/send-batch
 export async function POST(
-  request: Request,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
@@ -91,25 +99,23 @@ export async function POST(
     // Parse request body
     const body = await request.json()
     const { 
-      recipients, 
-      template,
-      eventId: eventIdFromBody,
-      eventLink,
-      imageAvailable,
-      // Support for old format
+      recipients,
       emailSubject,
       emailContent,
-      whatsappContent
+      whatsappContent,
+      includeImageInWhatsApp = true,
+      batchId,
+      eventLink
     } = body
 
     // Log the request parameters for debugging
-    console.log('Invite send request parameters:', {
+    console.log('Invite batch send request parameters:', {
       recipientsCount: recipients?.length,
-      hasTemplate: !!template,
-      hasEmailSubject: !!template?.emailSubject || !!emailSubject,
-      hasEmailContent: !!template?.emailContent || !!emailContent,
-      hasWhatsappContent: !!template?.whatsappContent || !!whatsappContent,
-      imageAvailable,
+      hasEmailSubject: !!emailSubject,
+      hasEmailContent: !!emailContent,
+      hasWhatsappContent: !!whatsappContent,
+      includeImageInWhatsApp,
+      batchId,
       eventLink
     });
 
@@ -120,77 +126,64 @@ export async function POST(
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       )
     }
-    
-    // Handle both old and new template formats
-    const templateData = {
-      emailSubject: template?.emailSubject || emailSubject || 'Your Invitation',
-      emailContent: template?.emailContent || emailContent || 'Default email content',
-      whatsappContent: template?.whatsappContent || whatsappContent || 'Default WhatsApp content'
-    };
-    
+
+    // Get the event details
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { 
+        imageUrl: true,
+        slug: true
+      }
+    });
+
+    if (!event) {
+      return new NextResponse(
+        JSON.stringify({ error: 'Event not found' }),
+        { status: 404, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+
     // Define the base URL for API calls
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    
+    // Prepare the event link if not provided
+    const finalEventLink = eventLink || `${baseUrl}/rsvp/${event.slug || eventId}`;
 
-    // Create a batch for these invites
-    let batch;
-    try {
-      console.log('Creating batch for invites with data:', {
-        name: `Batch ${new Date().toISOString().split('T')[0]}`,
-        eventId,
-        recipientsCount: recipients.length
-      });
-      
-      batch = await prisma.batch.create({
-        data: {
-          name: `Batch ${new Date().toISOString().split('T')[0]}`,
-          eventId,
-          status: 'processing',
-          totalInvites: recipients.length,
-          sentInvites: 0,
-          failedInvites: 0
-        }
-      });
-      
-      console.log('Successfully created batch:', batch);
-    } catch (error) {
-      console.error('Error creating batch:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error('Error details:', errorMessage);
-      
-      // Check if it's a Prisma error with more details
-      if (error instanceof Error && 'code' in error) {
-        console.error('Prisma error code:', (error as any).code);
-        console.error('Prisma error meta:', (error as any).meta);
+    // Fetch the image if available
+    let imageBuffer: Buffer | null = null;
+    if (event.imageUrl) {
+      try {
+        const imageResponse = await axios.get(event.imageUrl, {
+          responseType: 'arraybuffer',
+          timeout: 15000
+        });
+        imageBuffer = Buffer.from(imageResponse.data, 'binary');
+        console.log(`Successfully fetched image (${imageBuffer.length} bytes)`);
+      } catch (imageError) {
+        console.error('Error fetching event image:', imageError);
       }
-      
-      return new NextResponse(
-        JSON.stringify({ 
-          error: 'Failed to create batch for invites',
-          details: errorMessage
-        }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } }
-      );
     }
 
     // Process each recipient
-    const results = []
-    const errorDetails = []
-    let sentCount = 0
-    let failedCount = 0
-
-    console.log(`Starting to process ${recipients.length} recipients`);
+    const results = [];
+    const errorDetails = [];
 
     for (const recipient of recipients) {
       try {
         console.log(`Processing recipient: ${recipient.name}, email: ${recipient.email}, phone: ${recipient.phone}`);
         
         // Check if the template uses the {{code}} placeholder
-        const usesCodePlaceholder = templateData.emailContent.includes('{{code}}') || 
-                                    templateData.whatsappContent.includes('{{code}}') ||
-                                    templateData.emailContent.includes('{code}') ||
-                                    templateData.whatsappContent.includes('{code}') ||
-                                    templateData.emailContent.includes('{{{code}}}') ||
-                                    templateData.whatsappContent.includes('{{{code}}}');
+        const usesCodePlaceholder = 
+          (emailContent && (
+            emailContent.includes('{{code}}') || 
+            emailContent.includes('{code}') || 
+            emailContent.includes('{{{code}}}')
+          )) || 
+          (whatsappContent && (
+            whatsappContent.includes('{{code}}') || 
+            whatsappContent.includes('{code}') || 
+            whatsappContent.includes('{{{code}}}')
+          ));
         
         let code: string;
         
@@ -240,9 +233,9 @@ export async function POST(
         }
 
         // Process the templates with the recipient's name and code
-        const processedEmailSubject = processTemplate(templateData.emailSubject, recipient.name, code, eventLink, false);
-        const processedEmailContent = processTemplate(templateData.emailContent, recipient.name, code, eventLink, true);
-        const processedWhatsappContent = processTemplate(templateData.whatsappContent, recipient.name, code, eventLink, false);
+        const processedEmailSubject = processTemplate(emailSubject, recipient.name, code, finalEventLink, false);
+        const processedEmailContent = processTemplate(emailContent, recipient.name, code, finalEventLink, true);
+        const processedWhatsappContent = processTemplate(whatsappContent, recipient.name, code, finalEventLink, false);
         
         // Create an invite record in the database
         const invite = await prisma.invite.create({
@@ -252,7 +245,7 @@ export async function POST(
             phone: recipient.phone || null,
             type: recipient.type,
             code,
-            batchId: batch.id,
+            batchId,
             sent: false,
             status: 'pending',
             emailStatus: 'pending',
@@ -278,7 +271,7 @@ export async function POST(
                 to: recipient.email,
                 subject: processedEmailSubject,
                 html: processedEmailContent,
-                imageUrl: imageAvailable ? `${baseUrl}/api/admin/events/${eventId}/image` : undefined
+                imageUrl: event.imageUrl
               })
             });
 
@@ -317,7 +310,7 @@ export async function POST(
               body: JSON.stringify({
                 phone: recipient.phone,
                 message: processedWhatsappContent,
-                imageUrl: imageAvailable ? `${baseUrl}/api/admin/events/${eventId}/image` : undefined
+                imageUrl: includeImageInWhatsApp ? event.imageUrl : null
               })
             });
 
@@ -340,76 +333,78 @@ export async function POST(
           console.log(`Skipping WhatsApp for ${recipient.name} - phone: ${recipient.phone}, type: ${recipient.type}`);
         }
 
-        // Update the invite record with the status
+        // Update the invite status
         await prisma.invite.update({
           where: { id: invite.id },
           data: {
+            sent: emailStatus === 'sent' || whatsappStatus === 'sent',
             emailStatus,
             whatsappStatus,
-            errorMessage: emailError || whatsappError || null
+            status: emailStatus === 'sent' || whatsappStatus === 'sent' ? 'sent' : 'failed'
           }
-        })
+        });
 
-        const success = emailStatus === 'sent' || whatsappStatus === 'sent'
-        
-        if (success) {
-          sentCount++
-        } else {
-          failedCount++
-        }
-
+        // Add to results
         results.push({
-          recipient,
-          success,
+          id: invite.id,
+          name: recipient.name,
+          email: recipient.email,
+          phone: recipient.phone,
+          code,
           emailStatus,
           whatsappStatus,
-          error: emailError || whatsappError
-        })
+          success: emailStatus === 'sent' || whatsappStatus === 'sent'
+        });
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-        console.error(`Error processing recipient ${recipient.name}:`, errorMessage)
-        failedCount++
-        errorDetails.push(`Processing ${recipient.name} failed: ${errorMessage}`)
+        console.error(`Error processing recipient ${recipient.name}:`, error);
+        errorDetails.push(`Failed to process ${recipient.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
         
+        // Add to results with error
         results.push({
-          recipient,
+          name: recipient.name,
+          email: recipient.email,
+          phone: recipient.phone,
           success: false,
-          error: errorMessage
-        })
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
       }
     }
 
-    // Update the batch with the results
+    // Calculate success and failure counts
+    const successCount = results.filter(r => r.success).length;
+    const failureCount = results.length - successCount;
+
+    // Update batch status
     await prisma.batch.update({
-      where: { id: batch.id },
+      where: { id: batchId },
       data: {
         status: 'completed',
-        sentInvites: sentCount,
-        failedInvites: failedCount
+        totalInvites: results.length,
+        sentInvites: successCount,
+        failedInvites: failureCount
       }
-    })
+    });
 
     return new NextResponse(
       JSON.stringify({
         success: true,
-        sent: sentCount,
-        failed: failedCount,
-        total: recipients.length,
-        batchId: batch.id,
-        details: errorDetails.length > 0 ? errorDetails.join('\n') : null
+        results,
+        totalProcessed: results.length,
+        successCount,
+        failureCount,
+        errorDetails
       }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }
-    )
+    );
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    console.error('Error sending invites:', errorMessage)
-    
+    console.error('Error sending invites:', error);
     return new NextResponse(
       JSON.stringify({ 
-        error: 'Failed to send invites',
-        details: errorMessage
+        error: 'Failed to send invites', 
+        message: error instanceof Error ? error.message : 'Unknown error',
+        success: false
       }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
-    )
+    );
   }
 }

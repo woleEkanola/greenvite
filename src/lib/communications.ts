@@ -10,7 +10,7 @@ const INSTANCE_ID = process.env.WAAPI_INSTANCE_ID;
 /**
  * Sends a WhatsApp message using the WhatsApp API
  */
-export async function sendWhatsApp(phone: string, name: string, code: string, message: string, eventLink: string, imageBuffer?: Buffer): Promise<boolean> {
+export async function sendWhatsApp(phone: string, name: string, code: string, message: string, eventLink: string, imageBuffer?: Buffer, imageUrl?: string): Promise<boolean> {
   // Check if running on Vercel
   const isVercel = process.env.VERCEL === '1';
   
@@ -31,21 +31,75 @@ export async function sendWhatsApp(phone: string, name: string, code: string, me
     
     // Replace placeholders in the message
     const formattedMessage = message
-      .replace(/{{code}}/g, code)
-      .replace(/{{link}}/g, eventLink)
-      .replace(/{{name}}/g, name);
-    
-    // Create a personalized media caption
-    const mediaCaption = `Hello ${name}, Dr. Fred Afor George and Mrs. Ogheneovo Fred George warmly invite you to the church dedication of their son.
-
-To confirm and secure your reservation, please click the link below and complete the form. This will help us plan effectively.
-
-Please note: Attendance is strictly by invitation, and submitting the completed form will grant you an access code required for entry to the venue.
-
-We look forward to celebrating this special occasion with you ${eventLink}#${code}`;
+      .replace(/\{\{code\}\}/g, code)
+      .replace(/\{\{link\}\}/g, eventLink)
+      .replace(/\{\{name\}\}/g, name)
+      .replace(/\{code\}/g, code)
+      .replace(/\{link\}/g, eventLink)
+      .replace(/\{name\}/g, name)
+      .replace(/\{\{\{code\}\}\}/g, code)
+      .replace(/\{\{\{link\}\}\}/g, eventLink)
+      .replace(/\{\{\{name\}\}\}/g, name);
     
     // Set a reasonable timeout based on environment (shorter for Vercel)
     const timeoutMs = isVercel ? 25000 : 30000; // 25 seconds for Vercel, 30 seconds for other environments
+    
+    // Check if we need to extract image URL from the message
+    let imageUrlFromMessage: string | undefined;
+    const imgTagMatch = message.match(/<img[^>]+src="([^"]+)"[^>]*>/i);
+    if (imgTagMatch && imgTagMatch[1]) {
+      imageUrlFromMessage = imgTagMatch[1];
+      console.log(`Found image URL in message: ${imageUrlFromMessage}`);
+    }
+    
+    // Use the provided image URL if available, otherwise use the one from the message
+    imageUrl = imageUrl || imageUrlFromMessage;
+    
+    // Function to fetch image from URL
+    const fetchImageFromUrl = async (url: string): Promise<Buffer | null> => {
+      try {
+        console.log(`Fetching image from URL: ${url}`);
+        
+        // Add retry logic for image fetching
+        const fetchWithRetry = async (attempt = 1, maxAttempts = 3) => {
+          try {
+            const response = await axios.get(url, { 
+              responseType: 'arraybuffer',
+              timeout: 15000, // 15 second timeout
+              headers: {
+                'Accept': 'image/*',
+                'Cache-Control': 'no-cache'
+              }
+            });
+            return response.data;
+          } catch (error) {
+            console.error(`Attempt ${attempt} failed:`, error instanceof Error ? error.message : String(error));
+            if (attempt < maxAttempts) {
+              console.log(`Retrying... (${attempt}/${maxAttempts})`);
+              // Wait 1 second before retrying
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              return fetchWithRetry(attempt + 1, maxAttempts);
+            }
+            throw error;
+          }
+        };
+        
+        const imageData = await fetchWithRetry();
+        return Buffer.from(imageData);
+      } catch (error) {
+        console.error('Error fetching image from URL:', error);
+        return null;
+      }
+    };
+    
+    // If we have an image URL but no buffer, try to fetch the image
+    if (!imageBuffer && imageUrl) {
+      const fetchedBuffer = await fetchImageFromUrl(imageUrl);
+      if (fetchedBuffer) {
+        imageBuffer = fetchedBuffer;
+        console.log(`Successfully fetched image from URL, size: ${imageBuffer.length} bytes`);
+      }
+    }
     
     let resizedImageBuffer;
     if (imageBuffer) {
@@ -62,6 +116,8 @@ We look forward to celebrating this special occasion with you ${eventLink}#${c
       } catch (resizeError) {
         console.error('Error resizing image:', resizeError);
         // Continue without the image if resizing fails
+        console.log('Continuing with original image buffer due to resize failure');
+        resizedImageBuffer = imageBuffer;
       }
     }
 
@@ -75,9 +131,11 @@ We look forward to celebrating this special occasion with you ${eventLink}#${c
           chatId: whatsappPhone + '@c.us',
           mediaBase64: resizedImageBuffer.toString('base64'),
           mediaName: 'invitation.jpg',
-          mediaCaption: mediaCaption
+          mediaCaption: formattedMessage // Use the formatted message with replaced placeholders
         };
 
+        console.log(`Sending media message with base64 image (${resizedImageBuffer.toString('base64').length} chars)`);
+        
         const mediaResponse = await axios.post(
           `${WAAPI_BASE_URL}/instances/${INSTANCE_ID}/client/action/send-media`, 
           mediaPayload, 
@@ -167,7 +225,7 @@ We look forward to celebrating this special occasion with you ${eventLink}#${c
 /**
  * Sends an email with the invitation
  */
-export async function sendEmail(email: string, name: string, code: string, subject: string, htmlMessage: string, eventLink: string, imageBuffer?: Buffer): Promise<boolean> {
+export async function sendEmail(email: string, name: string, code: string, subject: string, htmlMessage: string, eventLink: string, imageBuffer?: Buffer, imageUrl?: string): Promise<boolean> {
   try {
     console.log(`Sending email to ${name} (${email})`)
     
@@ -203,11 +261,21 @@ We look forward to celebrating this special occasion with you.</p>
     
     // Now replace template variables
     personalizedMessage = personalizedMessage
-      .replace(/{{name}}/g, name)
-      .replace(/{{code}}/g, code)
-      .replace(/{{link}}/g, eventLink ? `${eventLink}#${code}` : `https://greenvites.online/jessegeorge#${code}`)
-      .replace(/{{Image}}/g, '<img src="cid:invitation-image" alt="Invitation Image" style="max-width: 100%; height: auto;"/>')
-      .replace(/{{image}}/g, '<img src="cid:invitation-image" alt="Invitation Image" style="max-width: 100%; height: auto;"/>');
+      .replace(/\{\{name\}\}/g, name)
+      .replace(/\{\{code\}\}/g, code)
+      .replace(/\{\{link\}\}/g, eventLink ? `${eventLink}#${code}` : `https://greenvites.online/jessegeorge#${code}`)
+      .replace(/\{\{Image\}\}/g, '<img src="cid:invitation-image" alt="Invitation Image" style="max-width: 100%; height: auto;"/>')
+      .replace(/\{\{image\}\}/g, '<img src="cid:invitation-image" alt="Invitation Image" style="max-width: 100%; height: auto;"/>')
+      .replace(/\{name\}/g, name)
+      .replace(/\{code\}/g, code)
+      .replace(/\{link\}/g, eventLink ? `${eventLink}#${code}` : `https://greenvites.online/jessegeorge#${code}`)
+      .replace(/\{Image\}/g, '<img src="cid:invitation-image" alt="Invitation Image" style="max-width: 100%; height: auto;"/>')
+      .replace(/\{image\}/g, '<img src="cid:invitation-image" alt="Invitation Image" style="max-width: 100%; height: auto;"/>')
+      .replace(/\{\{\{name\}\}\}/g, name)
+      .replace(/\{\{\{code\}\}\}/g, code)
+      .replace(/\{\{\{link\}\}\}/g, eventLink ? `${eventLink}#${code}` : `https://greenvites.online/jessegeorge#${code}`)
+      .replace(/\{\{\{Image\}\}\}/g, '<img src="cid:invitation-image" alt="Invitation Image" style="max-width: 100%; height: auto;"/>')
+      .replace(/\{\{\{image\}\}\}/g, '<img src="cid:invitation-image" alt="Invitation Image" style="max-width: 100%; height: auto;"/>');
     
     // Convert simple newlines to HTML breaks for plain text templates
     if (!personalizedMessage.includes('<div') && !personalizedMessage.includes('<p') && !personalizedMessage.includes('<br')) {
@@ -255,6 +323,52 @@ We look forward to celebrating this special occasion with you.</p>
         return false;
       }
       console.log('Attempting to send email anyway despite connection verification failure...');
+    }
+
+    // Function to fetch image from URL
+    const fetchImageFromUrl = async (url: string): Promise<Buffer | null> => {
+      try {
+        console.log(`Fetching image from URL: ${url}`);
+        
+        // Add retry logic for image fetching
+        const fetchWithRetry = async (attempt = 1, maxAttempts = 3) => {
+          try {
+            const response = await axios.get(url, { 
+              responseType: 'arraybuffer',
+              timeout: 15000, // 15 second timeout
+              headers: {
+                'Accept': 'image/*',
+                'Cache-Control': 'no-cache'
+              }
+            });
+            return response.data;
+          } catch (error) {
+            console.error(`Attempt ${attempt} failed:`, error instanceof Error ? error.message : String(error));
+            if (attempt < maxAttempts) {
+              console.log(`Retrying... (${attempt}/${maxAttempts})`);
+              // Wait 1 second before retrying
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              return fetchWithRetry(attempt + 1, maxAttempts);
+            }
+            throw error;
+          }
+        };
+        
+        const imageData = await fetchWithRetry();
+        return Buffer.from(imageData);
+      } catch (error) {
+        console.error('Error fetching image from URL:', error);
+        return null;
+      }
+    };
+    
+    // If we have an image URL but no buffer, try to fetch the image
+    if (!imageBuffer && imageUrl) {
+      const fetchedBuffer = await fetchImageFromUrl(imageUrl);
+      if (fetchedBuffer) {
+        imageBuffer = fetchedBuffer;
+        console.log(`Successfully fetched image from URL, size: ${imageBuffer.length} bytes`);
+      }
     }
 
     // Use the original image buffer for emails - no resizing

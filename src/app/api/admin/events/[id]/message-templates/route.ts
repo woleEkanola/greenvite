@@ -157,51 +157,88 @@ export async function POST(
       })
     }
 
-    // Create the template - handle imageUrl separately due to Prisma schema issue
-    const createData: any = {
-      name,
-      emailSubject,
-      emailContent,
-      whatsappContent,
-      isDefault,
-      eventId
-    }
+    // Check if a template with this name already exists for this event
+    const existingTemplate = await prisma.messageTemplate.findFirst({
+      where: {
+        name,
+        eventId
+      }
+    });
+
+    let newTemplate;
     
-    // Only include imageUrl if the schema supports it
-    try {
-      const newTemplate = await prisma.messageTemplate.create({
+    if (existingTemplate) {
+      // Update the existing template instead of creating a new one
+      console.log(`Template with name "${name}" already exists for this event. Updating instead of creating.`);
+      
+      newTemplate = await prisma.messageTemplate.update({
+        where: {
+          id: existingTemplate.id
+        },
         data: {
-          ...createData,
+          emailSubject,
+          emailContent,
+          whatsappContent,
+          isDefault,
           imageUrl
         }
-      })
+      });
+    } else {
+      // Create the template - handle imageUrl separately due to Prisma schema issue
+      const createData: any = {
+        name,
+        emailSubject,
+        emailContent,
+        whatsappContent,
+        isDefault,
+        eventId
+      }
       
-      // Add includeImageInWhatsApp to the response but don't store it in the database
-      return new NextResponse(
-        JSON.stringify({
-          ...newTemplate,
-          includeImageInWhatsApp: includeImageInWhatsApp !== undefined ? includeImageInWhatsApp : true
-        }),
-        { status: 201, headers: { 'Content-Type': 'application/json' } }
-      )
-    } catch (error) {
-      console.error('Error creating with imageUrl, trying without:', error)
-      
-      // If the above fails, try without imageUrl
-      const newTemplate = await prisma.messageTemplate.create({
-        data: createData
-      })
-      
-      // Return the template with the imageUrl added back in the response
-      return new NextResponse(
-        JSON.stringify({
-          ...newTemplate,
-          imageUrl,
-          includeImageInWhatsApp: includeImageInWhatsApp !== undefined ? includeImageInWhatsApp : true
-        }),
-        { status: 201, headers: { 'Content-Type': 'application/json' } }
-      )
+      // Only include imageUrl if the schema supports it
+      try {
+        newTemplate = await prisma.messageTemplate.create({
+          data: {
+            ...createData,
+            imageUrl
+          }
+        })
+        
+        // Add includeImageInWhatsApp to the response but don't store it in the database
+        return new NextResponse(
+          JSON.stringify({
+            ...newTemplate,
+            includeImageInWhatsApp: includeImageInWhatsApp !== undefined ? includeImageInWhatsApp : true
+          }),
+          { status: 201, headers: { 'Content-Type': 'application/json' } }
+        )
+      } catch (error) {
+        console.error('Error creating with imageUrl, trying without:', error)
+        
+        // If the above fails, try without imageUrl
+        newTemplate = await prisma.messageTemplate.create({
+          data: createData
+        })
+        
+        // Return the template with the imageUrl added back in the response
+        return new NextResponse(
+          JSON.stringify({
+            ...newTemplate,
+            imageUrl,
+            includeImageInWhatsApp: includeImageInWhatsApp !== undefined ? includeImageInWhatsApp : true
+          }),
+          { status: 201, headers: { 'Content-Type': 'application/json' } }
+        )
+      }
     }
+
+    // Add includeImageInWhatsApp to the response but don't store it in the database
+    return new NextResponse(
+      JSON.stringify({
+        ...newTemplate,
+        includeImageInWhatsApp: includeImageInWhatsApp !== undefined ? includeImageInWhatsApp : true
+      }),
+      { status: 201, headers: { 'Content-Type': 'application/json' } }
+    )
   } catch (error) {
     console.error('Error creating template:', error)
     return new NextResponse(

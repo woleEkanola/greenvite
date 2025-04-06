@@ -47,6 +47,9 @@ export default function EventAccessCodesPage({ params }: { params: { id: string 
   const [deleting, setDeleting] = useState(false);
   const [unassigning, setUnassigning] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [pendingRsvpCount, setPendingRsvpCount] = useState(0);
+  const [batchSize, setBatchSize] = useState(20);
+  const [showBatchSizeModal, setShowBatchSizeModal] = useState(false);
   const [sentFilter, setSentFilter] = useState<'all' | 'sent' | 'not-sent'>('all');
   const [typeFilter, setTypeFilter] = useState<'all' | 'primary' | 'guest' | 'driver' | 'aide'>('all');
   const [tableFilter, setTableFilter] = useState<'all' | 'assigned' | 'unassigned'>('all');
@@ -78,6 +81,9 @@ export default function EventAccessCodesPage({ params }: { params: { id: string 
         
         // Fetch tables for this event
         await fetchTables();
+        
+        // Fetch pending RSVP count
+        await fetchPendingRsvpCount();
       } catch (error) {
         console.error('Error:', error);
         toast.error('Failed to load event data');
@@ -143,12 +149,30 @@ export default function EventAccessCodesPage({ params }: { params: { id: string 
     }
   };
 
+  // Fetch pending RSVP count
+  const fetchPendingRsvpCount = async () => {
+    try {
+      const response = await fetch(`/api/admin/events/${params.id}/access-codes/count-pending`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch pending RSVP count');
+      }
+      const data = await response.json();
+      setPendingRsvpCount(data.pendingCount || 0);
+    } catch (error) {
+      console.error('Error fetching pending RSVP count:', error);
+    }
+  };
+
   // Generate access codes
   const generateAccessCodes = async () => {
     try {
       setGenerating(true);
-      const response = await fetch(`/api/admin/events/${params.id}/access-codes/generate`, {
-        method: 'POST'
+      const response = await fetch(`/api/admin/events/${params.id}/access-codes/generate-batch`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ batchSize }),
       });
       if (!response.ok) {
         throw new Error('Failed to generate access codes');
@@ -156,6 +180,8 @@ export default function EventAccessCodesPage({ params }: { params: { id: string 
       const data = await response.json();
       toast.success(data.message || 'Access codes generated successfully');
       fetchAccessCodes();
+      // Update the pending count
+      setPendingRsvpCount(data.remaining || 0);
     } catch (error) {
       console.error('Error generating access codes:', error);
       toast.error('Failed to generate access codes');
@@ -593,53 +619,34 @@ export default function EventAccessCodesPage({ params }: { params: { id: string 
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <h1 className="text-2xl font-semibold text-gray-900">Access Codes</h1>
-        
-        <div className="flex flex-wrap gap-2">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+        <h1 className="text-2xl font-bold text-gray-900 mb-4 sm:mb-0">Access Codes</h1>
+        <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+          {pendingRsvpCount > 0 && (
+            <button
+              onClick={() => setShowBatchSizeModal(true)}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500"
+              disabled={generating}
+            >
+              <RefreshCw size={16} className={`mr-2 ${generating ? 'animate-spin' : ''}`} />
+              Generate Codes ({pendingRsvpCount} pending)
+            </button>
+          )}
           <button
-            onClick={generateAccessCodes}
-            disabled={generating}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 disabled:bg-emerald-300"
-          >
-            <RefreshCw size={16} className={`mr-2 ${generating ? 'animate-spin' : ''}`} />
-            {generating ? 'Generating...' : 'Generate Codes'}
-          </button>
-          
-          <button
-            onClick={sendAccessCodes}
+            onClick={() => sendAccessCodes()}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             disabled={sending || selectedCodes.length === 0}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-300"
           >
             <Send size={16} className="mr-2" />
-            {sending ? 'Sending...' : 'Send Selected'}
+            Send Selected
           </button>
-          
           <button
-            onClick={openTableAssignModal}
+            onClick={() => openTableAssignModal()}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
             disabled={selectedCodes.length === 0}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:bg-purple-300"
           >
             <Table size={16} className="mr-2" />
-            Assign Table
-          </button>
-          
-          <button
-            onClick={unassignFromTable}
-            disabled={unassigning || selectedCodes.length === 0}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-amber-600 hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 disabled:bg-amber-300"
-          >
-            <Table size={16} className="mr-2" />
-            {unassigning ? 'Unassigning...' : 'Unassign from Table'}
-          </button>
-          
-          <button
-            onClick={deleteAccessCodes}
-            disabled={deleting || selectedCodes.length === 0}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:bg-red-300"
-          >
-            <Trash2 size={16} className="mr-2" />
-            {deleting ? 'Deleting...' : 'Delete Selected'}
+            Assign to Table
           </button>
         </div>
       </div>
@@ -965,23 +972,25 @@ export default function EventAccessCodesPage({ params }: { params: { id: string 
       
       {/* Action buttons */}
       <div className="flex flex-wrap gap-3 mb-6">
-        <button
-          onClick={generateAccessCodes}
-          disabled={generating}
-          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500"
-        >
-          {generating ? (
-            <>
-              <RefreshCw className="animate-spin -ml-1 mr-2 h-4 w-4" />
-              Generating...
-            </>
-          ) : (
-            <>
-              <RefreshCw className="-ml-1 mr-2 h-4 w-4" />
-              Generate Access Codes
-            </>
-          )}
-        </button>
+        {pendingRsvpCount > 0 && (
+          <button
+            onClick={() => setShowBatchSizeModal(true)}
+            disabled={generating}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500"
+          >
+            {generating ? (
+              <>
+                <RefreshCw className="animate-spin -ml-1 mr-2 h-4 w-4" />
+                Generating...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="-ml-1 mr-2 h-4 w-4" />
+                Generate Access Codes ({pendingRsvpCount} pending)
+              </>
+            )}
+          </button>
+        )}
         
         {selectedCodes.length > 0 && (
           <>
@@ -1029,28 +1038,62 @@ export default function EventAccessCodesPage({ params }: { params: { id: string 
                 </>
               )}
             </button>
-            
-            <button
-              onClick={deleteAccessCodes}
-              disabled={deleting}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-            >
-              {deleting ? (
-                <>
-                  <Trash2 className="animate-spin -ml-1 mr-2 h-4 w-4" />
-                  Deleting...
-                </>
-              ) : (
-                <>
-                  <Trash2 className="-ml-1 mr-2 h-4 w-4" />
-                  Delete ({selectedCodes.length})
-                </>
-              )}
-            </button>
           </>
         )}
       </div>
       
+      {/* Batch Size Modal */}
+      <Dialog open={showBatchSizeModal} onOpenChange={setShowBatchSizeModal}>
+        <DialogContent>
+          <div className="max-w-md mx-auto p-4 sm:p-6">
+            <DialogHeader>
+              <DialogTitle>Generate Access Codes</DialogTitle>
+            </DialogHeader>
+            
+            <div className="space-y-4 mt-4">
+              <p>There are {pendingRsvpCount} RSVPs waiting for access code generation.</p>
+              
+              <div className="space-y-2">
+                <label htmlFor="batch-size" className="block text-sm font-medium text-gray-700">
+                  Number of RSVPs to process
+                </label>
+                <input
+                  id="batch-size"
+                  type="number"
+                  min="1"
+                  max={pendingRsvpCount}
+                  value={batchSize}
+                  onChange={(e) => setBatchSize(Math.min(parseInt(e.target.value) || 20, pendingRsvpCount))}
+                  className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm rounded-md"
+                />
+                <p className="text-sm text-gray-500">
+                  Processing large batches may take longer. Default is 20.
+                </p>
+              </div>
+              
+              <div className="flex justify-end space-x-2 pt-4">
+                <button
+                  onClick={() => setShowBatchSizeModal(false)}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    setShowBatchSizeModal(false);
+                    generateAccessCodes();
+                  }}
+                  disabled={generating}
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 disabled:bg-emerald-300"
+                >
+                  {generating ? 'Generating...' : 'Generate'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Table Assignment Modal */}
       <Dialog open={showTableAssignModal} onOpenChange={setShowTableAssignModal}>
         <DialogContent>

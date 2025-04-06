@@ -15,6 +15,7 @@ import DataTable from '@/components/DataTable'
 import { debounce } from 'lodash'
 import { z } from 'zod'
 import Modal from '@/app/components/Modal'
+import { fetchAndCacheImage, getImageFromCache } from '@/lib/imageCache'
 
 interface Recipient {
   name: string
@@ -225,6 +226,11 @@ export default function EventInvitesPage({ params }: { params: { id: string } })
   // Add a new state for WhatsApp image toggle
   const [includeImageInWhatsapp, setIncludeImageInWhatsapp] = useState(false)
 
+  // State for event image
+  const [eventImage, setEventImage] = useState<Buffer | null>(null);
+  const [eventImageUrl, setEventImageUrl] = useState<string | null>(null);
+  const [imageLoading, setImageLoading] = useState(false);
+
   // Validation schema for recipients
   const recipientSchema = z.object({
     name: z.string().min(1, 'Name is required'),
@@ -242,8 +248,11 @@ export default function EventInvitesPage({ params }: { params: { id: string } })
           const data = await response.json()
           setEvent(data)
           
-          // Fetch templates after getting event
-          fetchTemplates()
+          // If event has an image, preload it
+          if (data.imageUrl) {
+            setEventImageUrl(data.imageUrl);
+            preloadEventImage(data.imageUrl);
+          }
         } else {
           console.error('Failed to fetch event')
           toast.error('Failed to fetch event details')
@@ -258,6 +267,31 @@ export default function EventInvitesPage({ params }: { params: { id: string } })
 
     fetchEvent()
   }, [params.id])
+
+  // Preload event image
+  const preloadEventImage = async (imageUrl: string) => {
+    try {
+      setImageLoading(true);
+      // Check if image is already in cache
+      let cachedImage = getImageFromCache(imageUrl);
+      
+      if (!cachedImage) {
+        console.log('Event image not in cache, fetching...');
+        toast.loading('Preloading event image...', { id: 'image-loading' });
+        cachedImage = await fetchAndCacheImage(imageUrl);
+        toast.success('Event image preloaded successfully', { id: 'image-loading' });
+      } else {
+        console.log('Event image found in cache');
+      }
+      
+      setEventImage(cachedImage);
+    } catch (error) {
+      console.error('Error preloading event image:', error);
+      toast.error('Failed to preload event image');
+    } finally {
+      setImageLoading(false);
+    }
+  };
 
   // Fetch templates from the database
   const fetchTemplates = async () => {
@@ -822,16 +856,16 @@ The Event Team
   // Handle send invites
   const handleSendInvites = async () => {
     // Validate recipients
-    if (recipients.length === 0) {
-      toast.error('Please add at least one recipient')
+    const errors = validateRecipients()
+    if (errors.length > 0) {
+      Swal.fire({
+        title: 'Validation Errors',
+        html: errors.join('<br>'),
+        icon: 'error'
+      })
       return
     }
-    
-    if (!enableEmail && !enableWhatsApp) {
-      toast.error('Please enable at least one sending method (Email or WhatsApp)')
-      return
-    }
-    
+
     // Confirm before sending
     const result = await Swal.fire({
       title: 'Send Invites?',
@@ -864,204 +898,41 @@ The Event Team
         
         const batch = await batchResponse.json()
         
-        // Track errors
-        const sendErrors: string[] = []
+        // Prepare the event link
+        const baseUrl = window.location.origin
+        const eventLink = `${baseUrl}/rsvp/${event?.slug || params.id}`
         
-        // Process each recipient
-        const results = await Promise.all(
-          recipients.map(async (recipient) => {
-            try {
-              // Generate a registration code for this recipient
-              const codeResponse = await fetch(`/api/admin/events/${params.id}/registration-codes/generate`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                  count: 1
-                })
-              })
-              
-              if (!codeResponse.ok) {
-                throw new Error('Failed to generate registration code')
-              }
-              
-              const codes = await codeResponse.json()
-              const code = codes[0]
-              
-              // Prepare the event link
-              const baseUrl = window.location.origin
-              const eventLink = `${baseUrl}/rsvp/${event?.slug || params.id}`
-              
-              // Prepare email content with the recipient's name and code
-              const emailContent = processTemplate(emailTemplate, recipient.name, code, eventLink)    
-
-              // Prepare WhatsApp content
-              let whatsappContent = processTemplate(whatsappTemplate, recipient.name, code, eventLink, false)
-              
-              // Add image to WhatsApp content if enabled and image exists
-              if (includeImageInWhatsapp && emailImagePreview) {
-                whatsappContent += '\n\n[Image will be attached]'
-              }
-              
-              // Create the invite record first
-              const inviteResponse = await fetch(`/api/admin/events/${params.id}/invites`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                  name: recipient.name,
-                  email: recipient.email,
-                  phone: recipient.phone,
-                  type: recipient.type || 'both',
-                  code,
-                  status: 'pending',
-                  batchId: batch.id
-                })
-              })
-              
-              if (!inviteResponse.ok) {
-                throw new Error('Failed to create invite record')
-              }
-              
-              const invite = await inviteResponse.json()
-              
-              // Send email if recipient has an email and type includes email
-              let emailStatus = 'not_sent'
-              let emailError = null
-              
-              if (recipient.email && (recipient.type === 'email' || recipient.type === 'both')) {
-                try {
-                  const emailResponse = await fetch('/api/admin/email', {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                      to: recipient.email,
-                      subject: emailSubject,
-                      html: emailContent,
-                      eventId: params.id,
-                      imageUrl: emailImagePreview
-                    })
-                  })
-                  
-                  if (!emailResponse.ok) {
-                    const errorData = await emailResponse.json()
-                    throw new Error(errorData.message || 'Failed to send email')
-                  }
-
-                  emailStatus = 'sent'
-                } catch (error) {
-                  console.error('Error sending email:', error)
-                  emailStatus = 'failed'
-                  emailError = error instanceof Error ? error.message : 'Unknown error occurred'
-                }
-              }
-              
-              // Send WhatsApp if recipient has a phone and type includes whatsapp
-              let whatsappStatus = 'not_sent'
-              let whatsappError = null
-              
-              if (recipient.phone && (recipient.type === 'whatsapp' || recipient.type === 'both')) {
-                try {
-                  const whatsappResponse = await fetch('/api/admin/whatsapp', {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                      phone: recipient.phone,
-                      message: whatsappContent,
-                      eventId: params.id,
-                      imageUrl: includeImageInWhatsapp ? emailImagePreview : null
-                    })
-                  })
-                  
-                  if (!whatsappResponse.ok) {
-                    const errorData = await whatsappResponse.json()
-                    throw new Error(errorData.error || 'Failed to send WhatsApp message')
-                  }
-                  
-                  whatsappStatus = 'sent'
-                } catch (error: any) {
-                  console.error('Error sending WhatsApp:', error)
-                  whatsappStatus = 'failed'
-                  whatsappError = error instanceof Error ? error.message : 'Unknown error occurred'
-                }
-              }
-              
-              // Update the invite record with the status
-              try {
-                const updateResponse = await fetch(`/api/admin/events/${params.id}/invites/${invite.invite.id}`, {
-                  method: 'PUT',
-                  headers: {
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({
-                    recipient: {
-                      ...recipient,
-                      code,
-                    },
-                    emailStatus,
-                    emailError,
-                    whatsappStatus,
-                    whatsappError,
-                  }),
-                })
-                
-                if (!updateResponse.ok) {
-                  const errorData = await updateResponse.json()
-                  throw new Error(errorData.message || 'Failed to update recipient status')
-                }
-              } catch (error) {
-                console.error('Error updating recipient:', error)
-                sendErrors.push(error instanceof Error ? error.message : 'Unknown error occurred')
-              }
-              
-              return {
-                recipient,
-                success: emailStatus === 'sent' || whatsappStatus === 'sent',
-                emailStatus,
-                whatsappStatus,
-                error: emailError || whatsappError
-              }
-            } catch (error: any) {
-              console.error('Error processing recipient:', error)
-              return {
-                recipient,
-                success: false,
-                error: error instanceof Error ? error.message : 'Unknown error occurred'
-              }
-            }
-          })
-        )
-        
-        // Update the batch with the results
-        const successCount = results.filter(r => r.success).length
-        const failureCount = results.length - successCount
-        
-        await fetch(`/api/admin/events/${params.id}/batches/${batch.id}`, {
-          method: 'PUT',
+        // Use the new send-batch endpoint to send all invites at once
+        const sendResponse = await fetch(`/api/admin/events/${params.id}/invites/send-batch`, {
+          method: 'POST',
           headers: {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            status: 'completed',
-            totalInvites: results.length,
-            sentInvites: successCount,
-            failedInvites: failureCount
+            recipients,
+            emailSubject,
+            emailContent: emailTemplate,
+            whatsappContent: whatsappTemplate,
+            includeImageInWhatsApp: includeImageInWhatsapp,
+            batchId: batch.id,
+            eventLink
           })
         })
         
-        // Show the results
-        const successMessage = `Successfully sent ${successCount} out of ${results.length} invites.`
+        if (!sendResponse.ok) {
+          const errorData = await sendResponse.json()
+          throw new Error(errorData.message || 'Failed to send invites')
+        }
         
-        if (failureCount > 0) {
+        const sendResult = await sendResponse.json()
+        
+        // Show the results
+        const successMessage = `Successfully sent ${sendResult.successCount} out of ${sendResult.totalProcessed} invites.`
+        
+        if (sendResult.failureCount > 0) {
           Swal.fire({
             title: 'Invites Sent with Issues',
-            html: `${successMessage}<br/>${failureCount} invites failed to send. Check the logs for details.`,
+            html: `${successMessage}<br/>${sendResult.failureCount} invites failed to send. Check the logs for details.`,
             icon: 'warning'
           })
         } else {
@@ -1465,6 +1336,60 @@ The Event Team
             )}
           </button>
         </div>
+      </div>
+      
+      {/* Event Image */}
+      <div className="mt-6 bg-white rounded-lg shadow p-6">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+          <h2 className="text-xl font-semibold text-gray-900">Event Image</h2>
+          
+          <div className="mt-2 md:mt-0">
+            {eventImageUrl && (
+              <div className="flex items-center">
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${eventImage ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                  {eventImage ? 'Image Preloaded' : 'Image Available'}
+                </span>
+                
+                {!eventImage && !imageLoading && (
+                  <button
+                    onClick={() => preloadEventImage(eventImageUrl)}
+                    className="ml-2 inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500"
+                  >
+                    Preload Now
+                  </button>
+                )}
+                
+                {imageLoading && (
+                  <span className="ml-2 inline-flex items-center text-xs text-gray-500">
+                    <RefreshCw className="animate-spin h-3 w-3 mr-1" />
+                    Loading...
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+        
+        {eventImageUrl ? (
+          <div className="relative h-48 w-full md:w-1/2 mx-auto border rounded-lg overflow-hidden">
+            <Image 
+              src={eventImageUrl} 
+              alt="Event Image" 
+              fill 
+              style={{ objectFit: 'contain' }} 
+            />
+          </div>
+        ) : (
+          <div className="text-center p-8 border border-dashed rounded-lg">
+            <p className="text-gray-500">No event image available. Upload an image in the event settings.</p>
+          </div>
+        )}
+        
+        {eventImage && (
+          <div className="mt-2 text-center text-sm text-gray-500">
+            Image size: {(eventImage.length / 1024).toFixed(2)} KB
+          </div>
+        )}
       </div>
       
       {/* Template Modal */}
