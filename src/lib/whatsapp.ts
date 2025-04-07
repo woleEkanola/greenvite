@@ -13,9 +13,14 @@ const DEFAULT_IMAGE_PATH = path.join(process.cwd(), 'public', 'jessegeorge.jpg')
 // Log configuration status on startup
 console.log('WhatsApp API Configuration Status:', {
   tokenConfigured: !!WAAPI_TOKEN,
+  tokenLength: WAAPI_TOKEN ? WAAPI_TOKEN.length : 0,
   baseUrlConfigured: !!WAAPI_BASE_URL,
+  baseUrl: WAAPI_BASE_URL,
   instanceIdConfigured: !!INSTANCE_ID,
-  defaultImageExists: fs.existsSync(DEFAULT_IMAGE_PATH)
+  instanceId: INSTANCE_ID,
+  defaultImageExists: fs.existsSync(DEFAULT_IMAGE_PATH),
+  environment: process.env.NODE_ENV || 'development',
+  publicUrl: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
 });
 
 // Check if the token is in the correct format (might be a common issue)

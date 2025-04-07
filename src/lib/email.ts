@@ -63,6 +63,19 @@ export async function sendEmail({ to, subject, html, attachments = [], imageUrl 
     return { success: false, error: 'SMTP_CONFIG_MISSING' };
   }
 
+  console.log(`Email Configuration Status:`, {
+    smtpHost: process.env.SMTP_HOST,
+    smtpPort: process.env.SMTP_PORT,
+    smtpUser: process.env.SMTP_USER ? `${process.env.SMTP_USER.substring(0, 3)}...` : undefined,
+    smtpPassConfigured: !!process.env.SMTP_PASS,
+    smtpSecure: process.env.SMTP_SECURE === 'true',
+    environment: process.env.NODE_ENV || 'development',
+    publicUrl: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
+    hasImageUrl: !!imageUrl,
+    imageUrlType: imageUrl ? (imageUrl.startsWith('http') ? 'remote' : 'local') : 'none',
+    attachmentsCount: attachments.length
+  });
+
   console.log(`SMTP Config: Host=${process.env.SMTP_HOST}, Port=${process.env.SMTP_PORT}, User=${process.env.SMTP_USER}, Secure=${process.env.SMTP_SECURE}`);
 
   const transportConfig: any = {
