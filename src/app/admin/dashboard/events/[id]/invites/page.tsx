@@ -298,14 +298,19 @@ export default function EventInvitesPage({ params }: { params: { id: string } })
     setLoadingTemplates(true)
     
     try {
-      // Try the new endpoint first
+      console.log('Fetching templates from new endpoint...')
       let response = await fetch(`/api/admin/events/${params.id}/message-templates`)
+      console.log('New endpoint response status:', response.status)
       
       if (response.ok) {
         const data = await response.json()
+        console.log('New endpoint data:', data)
+        
+        // Set templates even if the array is empty
+        setTemplates(data.templates || [])
         
         if (data.templates && data.templates.length > 0) {
-          setTemplates(data.templates)
+          console.log('Found templates in new endpoint:', data.templates.length)
           
           // Find the default template or use the first one
           const defaultTemplate = data.templates.find((t: MessageTemplate) => t.isDefault) || data.templates[0]
@@ -320,16 +325,32 @@ export default function EventInvitesPage({ params }: { params: { id: string } })
           }
           
           return
+        } else {
+          console.log('No templates found in new endpoint response, creating default template')
+          createDefaultTemplate()
+          return
+        }
+      } else {
+        console.error('New endpoint response not OK:', response.status, response.statusText)
+        try {
+          const errorData = await response.json()
+          console.error('Error details:', errorData)
+        } catch (e) {
+          console.error('Could not parse error response')
         }
       }
       
-      // If the new endpoint fails or returns no templates, try the old endpoint
+      // If the new endpoint fails, try the old endpoint
+      console.log('Fetching templates from old endpoint...')
       response = await fetch(`/api/admin/events/${params.id}/templates`)
+      console.log('Old endpoint response status:', response.status)
       
       if (response.ok) {
         const data = await response.json()
+        console.log('Old endpoint data:', data)
         
         if (Array.isArray(data) && data.length > 0) {
+          console.log('Found templates in old endpoint:', data.length)
           // Convert old templates to new format
           const convertedTemplates = data.map((template: any) => ({
             ...template,
@@ -374,15 +395,21 @@ export default function EventInvitesPage({ params }: { params: { id: string } })
       }
       
       // If both endpoints fail or return no templates, create local templates
+      console.log('Creating local templates...')
       createLocalTemplates()
     } catch (error) {
       console.error('Error fetching templates:', error)
       // Use in-memory templates as fallback
+      console.log('Using in-memory templates as fallback due to error')
       createLocalTemplates()
     } finally {
       setLoadingTemplates(false)
     }
   }
+
+  useEffect(() => {
+    fetchTemplates()
+  }, [])
 
   // Create local in-memory templates as fallback when database templates are not available
   const createLocalTemplates = () => {

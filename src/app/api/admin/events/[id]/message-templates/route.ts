@@ -45,8 +45,10 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    console.log('GET message-templates API called for event:', params.id);
     const session = await getServerSession(authOptions)
     if (!session || !session.user) {
+      console.log('Unauthorized: No session or user');
       return new NextResponse(
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { 'Content-Type': 'application/json' } }
@@ -57,6 +59,7 @@ export async function GET(
     
     // Check if user has access to this event
     if (!session.user.id) {
+      console.log('Invalid user session: No user ID');
       return new NextResponse(
         JSON.stringify({ error: 'Invalid user session' }),
         { status: 401, headers: { 'Content-Type': 'application/json' } }
@@ -65,12 +68,14 @@ export async function GET(
     
     const hasAccess = await canAccessEvent(session.user.id, eventId)
     if (!hasAccess) {
+      console.log('Forbidden: User does not have access to event');
       return new NextResponse(
         JSON.stringify({ error: 'Forbidden' }),
         { status: 403, headers: { 'Content-Type': 'application/json' } }
       )
     }
 
+    console.log('Querying database for templates...');
     // Get all templates for this event
     const templates = await prisma.messageTemplate.findMany({
       where: {
@@ -80,6 +85,19 @@ export async function GET(
         createdAt: 'desc'
       }
     })
+    
+    console.log(`Found ${templates.length} templates for event ${eventId}`);
+    
+    if (templates.length === 0) {
+      console.log('No templates found, checking database schema...');
+      try {
+        // Check if the table exists by doing a count
+        const count = await prisma.messageTemplate.count();
+        console.log('Total message templates in database:', count);
+      } catch (schemaError) {
+        console.error('Error checking message template schema:', schemaError);
+      }
+    }
 
     // Add includeImageInWhatsApp property to each template in the response
     const templatesWithImageFlag = templates.map(template => ({
@@ -87,6 +105,7 @@ export async function GET(
       includeImageInWhatsApp: true // Default to true for existing templates
     }))
 
+    console.log('Returning templates with image flag');
     return new NextResponse(
       JSON.stringify({ templates: templatesWithImageFlag }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }

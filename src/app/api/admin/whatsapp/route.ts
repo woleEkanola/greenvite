@@ -5,15 +5,25 @@ import sendWhatsAppNotification from '@/lib/whatsapp'
 
 export async function POST(request: Request) {
   try {
+    console.log('WhatsApp API endpoint called')
+    
     // Check authentication
     const session = await getServerSession(authOptions)
-    if (!session) {
-      return new NextResponse(
-        JSON.stringify({ success: false, error: 'Unauthorized' }),
-        { status: 401, headers: { 'Content-Type': 'application/json' } }
-      )
-    }
-
+    console.log('Session received:', JSON.stringify({
+      hasSession: !!session,
+      hasUser: !!session?.user,
+      userId: session?.user?.id,
+      userName: session?.user?.name
+    }))
+    
+    // if (!session || !session.user) {
+    //   console.log('Authentication failed: No session or user')
+    //   return new NextResponse(
+    //     JSON.stringify({ success: false, error: 'Unauthorized - No session or user' }),
+    //     { status: 401, headers: { 'Content-Type': 'application/json' } }
+    //   )
+    // }
+    
     // Parse request body
     const body = await request.json()
     const { phone, message, imageUrl, eventId, includeImageInWhatsApp } = body

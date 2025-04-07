@@ -1,15 +1,21 @@
 import axios from "axios";
+import path from "path";
+import fs from "fs";
 
 // WhatsApp API configuration
 const WAAPI_TOKEN = process.env.WAAPI_TOKEN;
 const WAAPI_BASE_URL = process.env.WAAPI_BASE_URL || 'https://waapi.app/api/v1';
 const INSTANCE_ID = process.env.WAAPI_INSTANCE_ID;
 
+// Default image path
+const DEFAULT_IMAGE_PATH = path.join(process.cwd(), 'public', 'jessegeorge.jpg');
+
 // Log configuration status on startup
 console.log('WhatsApp API Configuration Status:', {
   tokenConfigured: !!WAAPI_TOKEN,
   baseUrlConfigured: !!WAAPI_BASE_URL,
-  instanceIdConfigured: !!INSTANCE_ID
+  instanceIdConfigured: !!INSTANCE_ID,
+  defaultImageExists: fs.existsSync(DEFAULT_IMAGE_PATH)
 });
 
 // Check if the token is in the correct format (might be a common issue)
@@ -64,45 +70,62 @@ async function sendWhatsAppNotification(
     
     let response;
     
+    // Use default image if no image URL is provided but includeImageInWhatsApp is true
+    const useDefaultImage = includeImageInWhatsApp && !imageUrl;
+    const effectiveImageUrl = imageUrl || (useDefaultImage ? '/jessegeorge.jpg' : null);
+    
     // If we have an image URL and includeImageInWhatsApp is true, send as media message
-    if (imageUrl && includeImageInWhatsApp) {
+    if ((effectiveImageUrl) && includeImageInWhatsApp) {
       try {
-        console.log(`Sending WhatsApp media message to ${formattedPhone} with image: ${imageUrl}`);
+        console.log(`Sending WhatsApp media message to ${formattedPhone} with image: ${effectiveImageUrl}`);
         
         // Fetch the image and convert it to base64
         let imageBase64;
         try {
-          console.log(`Attempting to fetch image from: ${imageUrl}`);
+          console.log(`Attempting to fetch image from: ${effectiveImageUrl}`);
           
-          // Add timeout and retry logic for image fetching
-          const fetchImage = async (attempt = 1, maxAttempts = 3) => {
+          // If using default image from public folder, read it directly from the file system
+          if (useDefaultImage) {
             try {
-              const imageResponse = await axios.get(imageUrl, { 
-                responseType: 'arraybuffer',
-                timeout: 10000, // 10 second timeout
-                headers: {
-                  // Add headers that might be needed for Vercel Blob storage
-                  'Accept': 'image/*',
-                  'Cache-Control': 'no-cache'
-                }
-              });
-              return imageResponse.data;
-            } catch (error) {
-              console.error(`Attempt ${attempt} failed:`, error instanceof Error ? error.message : String(error));
-              if (attempt < maxAttempts) {
-                console.log(`Retrying... (${attempt}/${maxAttempts})`);
-                // Wait 1 second before retrying
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                return fetchImage(attempt + 1, maxAttempts);
-              }
-              throw error;
+              console.log('Using default image from public folder');
+              const imageBuffer = fs.readFileSync(DEFAULT_IMAGE_PATH);
+              imageBase64 = imageBuffer.toString('base64');
+              console.log(`Successfully loaded default image (${imageBase64.length} chars)`);
+            } catch (fsError) {
+              console.error('Error reading default image:', fsError instanceof Error ? fsError.message : String(fsError));
+              throw new Error('Failed to read default image');
             }
-          };
-          
-          const imageData = await fetchImage();
-          const buffer = Buffer.from(imageData, 'binary');
-          imageBase64 = buffer.toString('base64');
-          console.log(`Successfully converted image to base64 (${imageBase64.length} chars)`);
+          } else {
+            // Add timeout and retry logic for image fetching
+            const fetchImage = async (attempt = 1, maxAttempts = 3) => {
+              try {
+                const imageResponse = await axios.get(imageUrl!, { 
+                  responseType: 'arraybuffer',
+                  timeout: 10000, // 10 second timeout
+                  headers: {
+                    // Add headers that might be needed for Vercel Blob storage
+                    'Accept': 'image/*',
+                    'Cache-Control': 'no-cache'
+                  }
+                });
+                return imageResponse.data;
+              } catch (error) {
+                console.error(`Attempt ${attempt} failed:`, error instanceof Error ? error.message : String(error));
+                if (attempt < maxAttempts) {
+                  console.log(`Retrying... (${attempt}/${maxAttempts})`);
+                  // Wait 1 second before retrying
+                  await new Promise(resolve => setTimeout(resolve, 1000));
+                  return fetchImage(attempt + 1, maxAttempts);
+                }
+                throw error;
+              }
+            };
+            
+            const imageData = await fetchImage();
+            const buffer = Buffer.from(imageData, 'binary');
+            imageBase64 = buffer.toString('base64');
+            console.log(`Successfully converted image to base64 (${imageBase64.length} chars)`);
+          }
         } catch (fetchError: unknown) {
           console.error('Error fetching image:', fetchError instanceof Error ? fetchError.message : String(fetchError));
           throw new Error('Failed to fetch image for WhatsApp');
