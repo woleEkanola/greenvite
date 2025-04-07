@@ -154,6 +154,21 @@ export async function POST(
     
     // Prepare the event link if not provided
     const finalEventLink = eventLink || `${baseUrl}/rsvp/${event.slug || eventId}`;
+    
+    console.log('Environment configuration:', {
+      baseUrl,
+      nodeEnv: process.env.NODE_ENV,
+      defaultImageUrl,
+      finalEventLink
+    });
+    
+    // For internal API calls, we need to use the correct URL based on environment
+    // In production, we need to use the same server for internal API calls
+    const internalApiBaseUrl = process.env.NODE_ENV === 'production' 
+      ? process.env.INTERNAL_API_URL || baseUrl // Use INTERNAL_API_URL if available, otherwise baseUrl
+      : baseUrl; // In development, just use baseUrl
+    
+    console.log(`Using internal API base URL: ${internalApiBaseUrl}`);
 
     // Fetch the image if available
     let imageBuffer: Buffer | null = null;
@@ -267,7 +282,7 @@ export async function POST(
         try {
           console.log(`Sending email to ${recipient.email}`);
           
-          const emailResponse = await fetch(`${baseUrl}/api/admin/email`, {
+          const emailResponse = await fetch(`${internalApiBaseUrl}/api/admin/email`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'
@@ -315,7 +330,7 @@ export async function POST(
           try {
             console.log(`Sending WhatsApp to ${recipient.phone}`);
             
-            const whatsappResponse = await fetch(`${baseUrl}/api/admin/whatsapp`, {
+            const whatsappResponse = await fetch(`${internalApiBaseUrl}/api/admin/whatsapp`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json'
