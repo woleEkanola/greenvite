@@ -42,6 +42,8 @@ export default function EventTablesPage({ params }: { params: { id: string } }) 
   const [loading, setLoading] = useState(true)
   const [event, setEvent] = useState<any>(null)
   const [tables, setTables] = useState<Table[]>([])
+  const [filteredTables, setFilteredTables] = useState<Table[]>([])
+  const [searchTerm, setSearchTerm] = useState('')
   const [hosts, setHosts] = useState<Host[]>([])
   
   // Form states
@@ -87,7 +89,9 @@ export default function EventTablesPage({ params }: { params: { id: string } }) 
         throw new Error('Failed to fetch tables')
       }
       const tablesData = await tablesResponse.json()
-      setTables(tablesData.tables || [])
+      const fetchedTables = tablesData.tables || [];
+      setTables(fetchedTables)
+      setFilteredTables(fetchedTables) // Initialize filtered tables with all tables
       
       // Fetch hosts for this event
       const hostsResponse = await fetch(`/api/admin/events/${params.id}/hosts`)
@@ -108,6 +112,48 @@ export default function EventTablesPage({ params }: { params: { id: string } }) 
     fetchData()
   }, [params.id])
 
+  useEffect(() => {
+    if (!searchTerm.trim()) {
+      setFilteredTables(tables);
+      return;
+    }
+    
+    const lowerCaseSearch = searchTerm.toLowerCase();
+    const filtered = tables.filter(table => {
+      // Search by table name
+      if (table.name.toLowerCase().includes(lowerCaseSearch)) {
+        return true;
+      }
+      
+      // Search by host name
+      if (table.hosts.some(host => 
+        host.name.toLowerCase().includes(lowerCaseSearch) || 
+        host.email.toLowerCase().includes(lowerCaseSearch)
+      )) {
+        return true;
+      }
+      
+      // Search by guest name or email if guests are loaded
+      if (table.guests && table.guests.some(guest => 
+        guest.name.toLowerCase().includes(lowerCaseSearch) ||
+        guest.rsvpName.toLowerCase().includes(lowerCaseSearch) ||
+        guest.rsvpEmail.toLowerCase().includes(lowerCaseSearch)
+      )) {
+        return true;
+      }
+      
+      // Search by capacity or occupancy
+      if (table.capacity.toString().includes(lowerCaseSearch) || 
+          (table.occupancy && table.occupancy.toString().includes(lowerCaseSearch))) {
+        return true;
+      }
+      
+      return false;
+    });
+    
+    setFilteredTables(filtered);
+  }, [searchTerm, tables]);
+
   // Handle table form submission
   const handleTableSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -117,10 +163,15 @@ export default function EventTablesPage({ params }: { params: { id: string } }) 
         name: tableName,
         capacity: parseInt(tableCapacity.toString()),
         color: tableColor,
-        hostIds: selectedHosts
+        hostIds: selectedHosts,
+        // Include the table ID in the request body for updates
+        ...(isEditMode && currentTable ? { id: currentTable.id } : {})
       }
       
-      const url = `/api/admin/events/${params.id}/tables${isEditMode && currentTable ? `/${currentTable.id}` : ''}`
+      console.log('Submitting table data:', tableData);
+      
+      // Use the same endpoint for both create and update operations
+      const url = `/api/admin/events/${params.id}/tables`
       const method = isEditMode ? 'PUT' : 'POST'
       
       const response = await fetch(url, {
@@ -131,8 +182,23 @@ export default function EventTablesPage({ params }: { params: { id: string } }) 
         body: JSON.stringify(tableData)
       })
       
+      // Get the response text first to check if it's valid JSON
+      const responseText = await response.text();
+      let responseData;
+      
+      try {
+        // Try to parse as JSON
+        responseData = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('Failed to parse response as JSON:', responseText.substring(0, 100) + '...');
+        throw new Error('Server returned an invalid response. The server might be experiencing issues.');
+      }
+      
       if (!response.ok) {
-        throw new Error('Failed to save table')
+        // Show a more specific error message if available
+        const errorMessage = responseData.error || 'Failed to save table'
+        console.error('Server error response:', responseData)
+        throw new Error(errorMessage)
       }
       
       // Refresh tables list
@@ -147,7 +213,10 @@ export default function EventTablesPage({ params }: { params: { id: string } }) 
       toast.success(isEditMode ? 'Table updated successfully' : 'Table created successfully')
     } catch (error) {
       console.error('Error saving table:', error)
-      toast.error('Failed to save table')
+      
+      // Show a more specific error message
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save table'
+      toast.error(errorMessage)
     }
   }
   
@@ -345,12 +414,61 @@ export default function EventTablesPage({ params }: { params: { id: string } }) 
         </div>
       </div>
       
-      {/* Tables list */}
-      <div className="mb-6 flex justify-between items-center">
-        <h2 className="text-xl font-semibold">Tables ({tables.length})</h2>
+      {/* Search and actions bar */}
+      <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+        <div className="w-full md:w-1/3">
+          <input
+            type="text"
+            placeholder="Search tables by name, host, guest..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              setIsModalOpen(true)
+              setIsEditMode(false)
+              resetForm()
+            }}
+            className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors flex items-center"
+          >
+            <PlusCircle size={18} className="mr-2" />
+            Add Table
+          </button>
+          <button
+            onClick={() => setIsBulkModalOpen(true)}
+            className="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 transition-colors flex items-center"
+          >
+            <Table2 size={18} className="mr-2" />
+            Bulk Create
+          </button>
+        </div>
       </div>
       
-      {tables.length === 0 ? (
+      {/* Search results summary */}
+      {searchTerm && (
+        <div className="mb-4 text-sm text-gray-600">
+          Found {filteredTables.length} {filteredTables.length === 1 ? 'table' : 'tables'} matching "{searchTerm}"
+          {filteredTables.length === 0 && (
+            <button 
+              onClick={() => setSearchTerm('')}
+              className="ml-2 text-blue-500 hover:underline"
+            >
+              Clear search
+            </button>
+          )}
+        </div>
+      )}
+      
+      {/* Tables list */}
+      <div className="mb-6 flex justify-between items-center">
+        <h2 className="text-xl font-semibold">Tables ({filteredTables.length})</h2>
+      </div>
+      
+      {filteredTables.length === 0 ? (
         <div className="bg-white rounded-lg shadow p-6 text-center">
           <p className="text-gray-500 py-8">
             No tables have been created yet. Click the "Add Table" button to create your first table.
@@ -358,7 +476,7 @@ export default function EventTablesPage({ params }: { params: { id: string } }) 
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {tables.map(table => (
+          {filteredTables.map(table => (
             <div 
               key={table.id} 
               className="bg-white rounded-lg shadow overflow-hidden"

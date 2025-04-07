@@ -102,13 +102,31 @@ export async function POST(
       // Calculate how many new assignments we're making
       const newAssignmentsCount = codeIds.length - alreadyAssignedCount;
       
+      // Get the current occupancy excluding the codes we're reassigning
+      // This ensures we don't double-count when moving guests between tables
+      const currentOccupancyExcludingSelected = table.accessCodes.filter(
+        code => !codeIds.includes(code.id)
+      ).length;
+      
+      console.log('Table assignment calculation:', {
+        tableId,
+        tableName: table.name,
+        capacity: table.capacity,
+        totalCodesSelected: codeIds.length,
+        alreadyAssignedToThisTable: alreadyAssignedCount,
+        newAssignmentsToThisTable: newAssignmentsCount,
+        currentOccupancyExcludingSelected,
+        projectedOccupancy: currentOccupancyExcludingSelected + codeIds.length
+      });
+      
       // Check if this would exceed the table capacity
-      if (table.accessCodes.length + newAssignmentsCount > table.capacity) {
+      if (currentOccupancyExcludingSelected + codeIds.length > table.capacity) {
         return NextResponse.json({ 
           error: 'Cannot assign these guests. Table capacity would be exceeded.',
-          currentOccupancy: table.accessCodes.length,
+          currentOccupancy: currentOccupancyExcludingSelected,
+          selectedGuests: codeIds.length,
           capacity: table.capacity,
-          attempting: newAssignmentsCount
+          projectedOccupancy: currentOccupancyExcludingSelected + codeIds.length
         }, { status: 400 })
       }
     }

@@ -166,7 +166,7 @@ export async function POST(
         capacity: parseInt(capacity.toString()),
         color: color || '#000000',
         eventId: params.id,
-        hosts: hostIds && hostIds.length > 0 ? {
+        hosts: Array.isArray(hostIds) && hostIds.length > 0 ? {
           connect: hostIds.map((id: string) => ({ id }))
         } : undefined
       },
@@ -189,7 +189,7 @@ export async function POST(
 // PUT: Update a table
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string, tableId: string } }
+  { params }: { params: { id: string } }
 ) {
   try {
     // Get the user session
@@ -228,53 +228,111 @@ export async function PUT(
     
     // Parse the request body
     const body = await request.json()
-    const { name, capacity, color, hostIds } = body
+    const { id: tableId, name, capacity, color, hostIds } = body
     
-    if (!name || !capacity) {
+    console.log('Table update request body:', { 
+      tableId,
+      name, 
+      capacity: typeof capacity === 'number' ? capacity : parseInt(capacity?.toString() || '0'), 
+      color,
+      hostIds: Array.isArray(hostIds) ? hostIds : [] 
+    })
+    
+    if (!tableId) {
+      console.error('Missing table ID in update request')
+      return NextResponse.json({ error: 'Table ID is required for updates' }, { status: 400 })
+    }
+    
+    if (!name || capacity === undefined || capacity === null) {
+      console.error('Missing required fields:', { name, capacity })
       return NextResponse.json({ error: 'Name and capacity are required' }, { status: 400 })
     }
     
     // Check if the table exists and belongs to this event
     const table = await prisma.table.findFirst({
       where: {
-        id: params.tableId,
+        id: tableId,
         eventId: params.id
       },
       include: {
-        hosts: true
+        hosts: true,
+        accessCodes: true
       }
     })
     
     if (!table) {
+      console.error('Table not found:', tableId)
       return NextResponse.json({ error: 'Table not found or does not belong to this event' }, { status: 404 })
     }
     
-    // Update the table
-    const updatedTable = await prisma.table.update({
-      where: {
-        id: params.tableId
-      },
-      data: {
-        name,
-        capacity: parseInt(capacity.toString()),
-        color: color || '#000000',
-        hosts: {
-          set: hostIds ? hostIds.map((id: string) => ({ id })) : []
-        }
-      },
-      include: {
-        hosts: true
+    // Check if the new capacity is less than the current number of assigned guests
+    const currentOccupancy = table.accessCodes.length
+    const newCapacity = typeof capacity === 'number' ? capacity : parseInt(capacity.toString())
+    
+    if (newCapacity < currentOccupancy) {
+      console.error('Cannot reduce capacity below current occupancy:', { 
+        currentOccupancy, 
+        requestedCapacity: newCapacity 
+      })
+      return NextResponse.json({ 
+        error: 'Cannot reduce capacity below current occupancy', 
+        currentOccupancy,
+        requestedCapacity: newCapacity
+      }, { status: 400 })
+    }
+    
+    // Prepare the host connection data safely
+    let hostConnection = {}
+    if (Array.isArray(hostIds)) {
+      hostConnection = {
+        set: hostIds.map((id) => ({ id }))
       }
-    })
+    } else {
+      console.log('hostIds is not an array, using empty array instead')
+      hostConnection = { set: [] }
+    }
     
-    return NextResponse.json({ 
-      success: true,
-      table: updatedTable
-    })
-    
+    try {
+      // Update the table
+      const updatedTable = await prisma.table.update({
+        where: {
+          id: tableId
+        },
+        data: {
+          name,
+          capacity: newCapacity,
+          color: color || '#000000',
+          hosts: hostConnection
+        },
+        include: {
+          hosts: true,
+          accessCodes: true
+        }
+      })
+      
+      console.log('Table updated successfully:', updatedTable.id)
+      
+      return NextResponse.json({ 
+        success: true,
+        table: {
+          ...updatedTable,
+          occupancy: updatedTable.accessCodes.length,
+          vacancy: updatedTable.capacity - updatedTable.accessCodes.length
+        }
+      })
+    } catch (prismaError) {
+      console.error('Prisma error updating table:', prismaError)
+      return NextResponse.json({ 
+        error: 'Database error updating table', 
+        details: prismaError instanceof Error ? prismaError.message : 'Unknown error'
+      }, { status: 500 })
+    }
   } catch (error) {
     console.error('Error updating table:', error)
-    return NextResponse.json({ error: 'Failed to update table' }, { status: 500 })
+    return NextResponse.json({ 
+      error: 'Failed to update table',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 })
   }
 }
 
