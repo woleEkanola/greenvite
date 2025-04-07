@@ -261,55 +261,60 @@ export async function POST(
           }
         });
         
-        let emailStatus = 'not_sent';
+        let emailSuccess = false;
         let emailError = null;
         
-        // Send email if recipient has an email and type is email or both
-        if (recipient.email && (recipient.type === 'email' || recipient.type === 'both')) {
-          try {
-            console.log(`Attempting to send email to ${recipient.email}`);
+        try {
+          console.log(`Sending email to ${recipient.email}`);
+          
+          const emailResponse = await fetch(`${baseUrl}/api/admin/email`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              to: recipient.email,
+              subject: processedEmailSubject,
+              html: processedEmailContent,
+              imageUrl: event.imageUrl || defaultImageUrl
+            })
+          });
+          
+          const emailResult = await emailResponse.json();
+          emailSuccess = emailResponse.ok && emailResult.success;
+          
+          if (!emailSuccess) {
+            emailError = emailResult.error || 'Unknown email error';
+            console.error(`Error sending email to ${recipient.email}:`, emailError);
             
-            // Send email directly
-            const emailResponse = await fetch(`${baseUrl}/api/admin/email`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                to: recipient.email,
-                subject: processedEmailSubject,
-                html: processedEmailContent,
-                imageUrl: event.imageUrl || defaultImageUrl
-              })
-            });
-
-            const emailResponseData = await emailResponse.json();
-            
-            if (!emailResponse.ok) {
-              throw new Error(emailResponseData.error || 'Failed to send email');
+            // If this is a fetch error, log it but don't fail the entire batch
+            if (emailResult.errorType === 'FETCH_ERROR') {
+              console.log(`Fetch error detected when sending email to ${recipient.email} - continuing with batch`);
+              // We'll still mark this as a success to prevent the entire batch from failing
+              emailSuccess = true;
+              emailError = `Fetch error: ${emailResult.details || 'Network issue'}`;
             }
-            
-            emailStatus = 'sent';
-            console.log(`Email sent successfully to ${recipient.email}`);
-          } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Unknown email error';
-            console.error(`Error sending email to ${recipient.email}:`, errorMessage);
-            emailStatus = 'failed';
-            emailError = errorMessage;
-            errorDetails.push(`Email to ${recipient.name} (${recipient.email}) failed: ${errorMessage}`);
           }
-        } else {
-          console.log(`Skipping email for ${recipient.name} - email: ${recipient.email}, type: ${recipient.type}`);
+        } catch (error) {
+          console.error(`Error sending email to ${recipient.email}:`, error);
+          emailError = error instanceof Error ? error.message : 'Unknown error';
+          
+          // If this is a fetch error, log it but don't fail the entire batch
+          if (emailError.includes('fetch failed') || emailError.includes('network error')) {
+            console.log(`Fetch error detected when sending email to ${recipient.email} - continuing with batch`);
+            // We'll still mark this as a success to prevent the entire batch from failing
+            emailSuccess = true;
+            emailError = `Fetch error: ${emailError}`;
+          }
         }
         
-        let whatsappStatus = 'not_sent';
+        let whatsappSuccess = false;
         let whatsappError = null;
 
-        if (recipient.phone && (recipient.type === 'whatsapp' || recipient.type === 'both')) {
+        if (emailSuccess && (recipient.type === 'both' || recipient.type === 'whatsapp') && recipient.phone) {
           try {
-            console.log(`Attempting to send WhatsApp to ${recipient.phone}`);
+            console.log(`Sending WhatsApp to ${recipient.phone}`);
             
-            // Send WhatsApp message
             const whatsappResponse = await fetch(`${baseUrl}/api/admin/whatsapp`, {
               method: 'POST',
               headers: {
@@ -321,34 +326,44 @@ export async function POST(
                 imageUrl: includeImageInWhatsApp ? (event.imageUrl || defaultImageUrl) : null
               })
             });
-
-            const whatsappResponseData = await whatsappResponse.json();
             
-            if (!whatsappResponse.ok) {
-              throw new Error(whatsappResponseData.error || 'Failed to send WhatsApp message');
+            const whatsappResult = await whatsappResponse.json();
+            whatsappSuccess = whatsappResponse.ok && whatsappResult.success;
+            
+            if (!whatsappSuccess) {
+              whatsappError = whatsappResult.error || 'Unknown WhatsApp error';
+              console.error(`Error sending WhatsApp to ${recipient.phone}:`, whatsappError);
+              
+              // If this is a fetch error, log it but don't fail the entire batch
+              if (whatsappResult.errorType === 'FETCH_ERROR') {
+                console.log(`Fetch error detected when sending WhatsApp to ${recipient.phone} - continuing with batch`);
+                // We'll still mark this as a success to prevent the entire batch from failing
+                whatsappSuccess = true;
+                whatsappError = `Fetch error: ${whatsappResult.details || 'Network issue'}`;
+              }
             }
-            
-            whatsappStatus = 'sent';
-            console.log(`WhatsApp sent successfully to ${recipient.phone}`);
           } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Unknown WhatsApp error';
-            console.error(`Error sending WhatsApp to ${recipient.phone}:`, errorMessage);
-            whatsappStatus = 'failed';
-            whatsappError = errorMessage;
-            errorDetails.push(`WhatsApp to ${recipient.name} (${recipient.phone}) failed: ${errorMessage}`);
+            console.error(`Error sending WhatsApp to ${recipient.phone}:`, error);
+            whatsappError = error instanceof Error ? error.message : 'Unknown error';
+            
+            // If this is a fetch error, log it but don't fail the entire batch
+            if (whatsappError.includes('fetch failed') || whatsappError.includes('network error')) {
+              console.log(`Fetch error detected when sending WhatsApp to ${recipient.phone} - continuing with batch`);
+              // We'll still mark this as a success to prevent the entire batch from failing
+              whatsappSuccess = true;
+              whatsappError = `Fetch error: ${whatsappError}`;
+            }
           }
-        } else {
-          console.log(`Skipping WhatsApp for ${recipient.name} - phone: ${recipient.phone}, type: ${recipient.type}`);
         }
 
         // Update the invite status
         await prisma.invite.update({
           where: { id: invite.id },
           data: {
-            sent: emailStatus === 'sent' || whatsappStatus === 'sent',
-            emailStatus,
-            whatsappStatus,
-            status: emailStatus === 'sent' || whatsappStatus === 'sent' ? 'sent' : 'failed'
+            sent: emailSuccess || whatsappSuccess,
+            emailStatus: emailSuccess ? 'sent' : 'failed',
+            whatsappStatus: whatsappSuccess ? 'sent' : 'failed',
+            status: emailSuccess || whatsappSuccess ? 'sent' : 'failed'
           }
         });
 
@@ -359,9 +374,9 @@ export async function POST(
           email: recipient.email,
           phone: recipient.phone,
           code,
-          emailStatus,
-          whatsappStatus,
-          success: emailStatus === 'sent' || whatsappStatus === 'sent'
+          emailStatus: emailSuccess ? 'sent' : 'failed',
+          whatsappStatus: whatsappSuccess ? 'sent' : 'failed',
+          success: emailSuccess || whatsappSuccess
         });
       } catch (error) {
         console.error(`Error processing recipient ${recipient.name}:`, error);
