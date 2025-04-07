@@ -149,6 +149,9 @@ export async function POST(
     // Define the base URL for API calls
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
     
+    // Define the default image URL
+    const defaultImageUrl = `${baseUrl}/jessegeorge.jpg`;
+    
     // Prepare the event link if not provided
     const finalEventLink = eventLink || `${baseUrl}/rsvp/${event.slug || eventId}`;
 
@@ -276,7 +279,7 @@ export async function POST(
                 to: recipient.email,
                 subject: processedEmailSubject,
                 html: processedEmailContent,
-                imageUrl: event.imageUrl
+                imageUrl: event.imageUrl || defaultImageUrl
               })
             });
 
@@ -315,7 +318,7 @@ export async function POST(
               body: JSON.stringify({
                 phone: recipient.phone,
                 message: processedWhatsappContent,
-                imageUrl: includeImageInWhatsApp ? event.imageUrl : null
+                imageUrl: includeImageInWhatsApp ? (event.imageUrl || defaultImageUrl) : null
               })
             });
 

@@ -22,16 +22,22 @@ function processEmailTemplate(template: string, imageUrl?: string | null): {
   const attachments: any[] = [];
   let processedHtml = template;
   
-  // If we have an image URL and the template contains the image placeholder
-  if (imageUrl && template.includes('{{image}}')) {
-    // Create a unique content ID for the image
-    const contentId = `image-${Date.now()}`;
+  // If we have an image URL
+  if (imageUrl) {
+    // Create a consistent content ID for the image
+    const contentId = 'invitation-image';
     
-    // Replace the {{image}} placeholder with an img tag referencing the content ID
-    processedHtml = template.replace(
-      '{{image}}', 
-      `<img src="cid:${contentId}" style="max-width: 100%; height: auto;" alt="Invitation Image" />`
-    );
+    // Check if the template contains the image placeholder or already has an img tag with our contentId
+    if (template.includes('{{image}}')) {
+      // Replace the {{image}} placeholder with an img tag referencing the content ID
+      processedHtml = template.replace(
+        '{{image}}', 
+        `<img src="cid:${contentId}" style="max-width: 100%; height: auto;" alt="Invitation Image" />`
+      );
+    } else if (!template.includes(`cid:${contentId}`)) {
+      // If no placeholder and no img tag with our contentId, add the image at the end
+      processedHtml = `${template}\n<div style="margin-top: 20px;"><img src="cid:${contentId}" style="max-width: 100%; height: auto;" alt="Invitation Image" /></div>`;
+    }
     
     // Add the image as an attachment with the content ID
     attachments.push({
@@ -42,7 +48,7 @@ function processEmailTemplate(template: string, imageUrl?: string | null): {
     
     console.log(`Added image attachment with CID: ${contentId}`);
   } else {
-    // If no image or no placeholder, just remove the placeholder
+    // If no image, just remove the placeholder
     processedHtml = template.replace('{{image}}', '');
   }
   
