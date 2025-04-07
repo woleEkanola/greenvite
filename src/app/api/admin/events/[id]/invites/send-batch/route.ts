@@ -48,9 +48,11 @@ function processTemplate(template: string, name: string, code: string, eventLink
     .replace(/\{\{name\}\}/g, name)
     .replace(/\{name\}/g, name)
     .replace(/\{\{\{name\}\}\}/g, name)
+    .replace(/\{\(name\)\}/g, name)
     .replace(/\{\{code\}\}/g, code)
     .replace(/\{code\}/g, code)
-    .replace(/\{\{\{code\}\}\}/g, code);
+    .replace(/\{\{\{code\}\}\}/g, code)
+    .replace(/\{\(code\)\}/g, code);
   
   // Replace event link
   if (eventLink) {
@@ -58,7 +60,8 @@ function processTemplate(template: string, name: string, code: string, eventLink
     processed = processed
       .replace(/\{\{link\}\}/g, linkWithCode)
       .replace(/\{link\}/g, linkWithCode)
-      .replace(/\{\{\{link\}\}\}/g, linkWithCode);
+      .replace(/\{\{\{link\}\}\}/g, linkWithCode)
+      .replace(/\{\(link\)\}/g, linkWithCode);
   }
   
   return processed;
@@ -77,7 +80,7 @@ export async function POST(
         { status: 401, headers: { 'Content-Type': 'application/json' } }
       )
     }
-
+    
     const eventId = params.id
     
     // Check if user has access to this event
@@ -177,12 +180,14 @@ export async function POST(
           (emailContent && (
             emailContent.includes('{{code}}') || 
             emailContent.includes('{code}') || 
-            emailContent.includes('{{{code}}}')
+            emailContent.includes('{{{code}}}') ||
+            emailContent.includes('{(code)}')
           )) || 
           (whatsappContent && (
             whatsappContent.includes('{{code}}') || 
             whatsappContent.includes('{code}') || 
-            whatsappContent.includes('{{{code}}}')
+            whatsappContent.includes('{{{code}}}') ||
+            whatsappContent.includes('{(code)}')
           ));
         
         let code: string;

@@ -407,6 +407,10 @@ export default function EventInvitesPage({ params }: { params: { id: string } })
     }
   }
 
+  useEffect(() => {
+    fetchTemplates()
+  }, [])
+
   // Create local in-memory templates as fallback when database templates are not available
   const createLocalTemplates = () => {
     if (!event) return
