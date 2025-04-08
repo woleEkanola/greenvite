@@ -279,54 +279,64 @@ export async function POST(
         let emailSuccess = false;
         let emailError = null;
         
-        try {
-          console.log(`Sending email to ${recipient.email}`);
-          
-          const emailResponse = await fetch(`${internalApiBaseUrl}/api/admin/email`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              to: recipient.email,
-              subject: processedEmailSubject,
-              html: processedEmailContent,
-              imageUrl: event.imageUrl || defaultImageUrl
-            })
-          });
-          
-          const emailResult = await emailResponse.json();
-          emailSuccess = emailResponse.ok && emailResult.success;
-          
-          if (!emailSuccess) {
-            emailError = emailResult.error || 'Unknown email error';
-            console.error(`Error sending email to ${recipient.email}:`, emailError);
+        // Only attempt to send email if the recipient type is 'email' or 'both'
+        if (recipient.type === 'email' || recipient.type === 'both') {
+          try {
+            console.log(`Sending email to ${recipient.email}`);
+            
+            const emailResponse = await fetch(`${internalApiBaseUrl}/api/admin/email`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                to: recipient.email,
+                subject: processedEmailSubject,
+                html: processedEmailContent,
+                imageUrl: event.imageUrl || defaultImageUrl
+              })
+            });
+            
+            const emailResult = await emailResponse.json();
+            emailSuccess = emailResponse.ok && emailResult.success;
+            
+            if (!emailSuccess) {
+              emailError = emailResult.error || 'Unknown email error';
+              console.error(`Error sending email to ${recipient.email}:`, emailError);
+              
+              // If this is a fetch error, log it but don't fail the entire batch
+              if (emailResult.errorType === 'FETCH_ERROR') {
+                console.log(`Fetch error detected when sending email to ${recipient.email} - continuing with batch`);
+                // We'll still mark this as a success to prevent the entire batch from failing
+                emailSuccess = true;
+                emailError = `Fetch error: ${emailResult.details || 'Network issue'}`;
+              }
+            }
+          } catch (error) {
+            console.error(`Error sending email to ${recipient.email}:`, error);
+            emailError = error instanceof Error ? error.message : 'Unknown error';
             
             // If this is a fetch error, log it but don't fail the entire batch
-            if (emailResult.errorType === 'FETCH_ERROR') {
+            if (emailError.includes('fetch failed') || emailError.includes('network error')) {
               console.log(`Fetch error detected when sending email to ${recipient.email} - continuing with batch`);
               // We'll still mark this as a success to prevent the entire batch from failing
               emailSuccess = true;
-              emailError = `Fetch error: ${emailResult.details || 'Network issue'}`;
+              emailError = `Fetch error: ${emailError}`;
             }
           }
-        } catch (error) {
-          console.error(`Error sending email to ${recipient.email}:`, error);
-          emailError = error instanceof Error ? error.message : 'Unknown error';
-          
-          // If this is a fetch error, log it but don't fail the entire batch
-          if (emailError.includes('fetch failed') || emailError.includes('network error')) {
-            console.log(`Fetch error detected when sending email to ${recipient.email} - continuing with batch`);
-            // We'll still mark this as a success to prevent the entire batch from failing
-            emailSuccess = true;
-            emailError = `Fetch error: ${emailError}`;
-          }
+        } else {
+          // If recipient type is 'whatsapp', skip email sending and mark as not applicable
+          console.log(`Skipping email for ${recipient.name} - WhatsApp only selected`);
+          emailSuccess = true; // Mark as success so WhatsApp will be sent
+          emailError = 'Not applicable - WhatsApp only';
         }
         
         let whatsappSuccess = false;
         let whatsappError = null;
 
-        if (emailSuccess && (recipient.type === 'both' || recipient.type === 'whatsapp') && recipient.phone) {
+        // Modified condition: Send WhatsApp if type is 'whatsapp' or 'both' and phone exists
+        // Removed dependency on emailSuccess for WhatsApp-only messages
+        if ((recipient.type === 'whatsapp' || recipient.type === 'both') && recipient.phone) {
           try {
             console.log(`Sending WhatsApp to ${recipient.phone}`);
             
