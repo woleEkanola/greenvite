@@ -252,10 +252,25 @@ export default function EventAccessCodesPage({ params }: { params: { id: string 
 
     try {
       setDeleting(true);
+      
+      // Get the primary codes from the selected codes
+      const primaryCodes = selectedCodes.filter(codeId => {
+        const code = accessCodes.find(c => c.id === codeId);
+        return code && (code.type === 'primary' || !code.parentId);
+      });
+      
+      // Get all dependent codes for the primary codes
+      const dependentCodes = accessCodes
+        .filter(code => code.parentId && primaryCodes.includes(code.parentId))
+        .map(code => code.id);
+      
+      // Combine primary and dependent codes for deletion
+      const allCodesToDelete = [...new Set([...selectedCodes, ...dependentCodes])];
+      
       const response = await fetch(`/api/admin/events/${params.id}/access-codes/delete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ codeIds: selectedCodes })
+        body: JSON.stringify({ codeIds: allCodesToDelete })
       });
       
       if (!response.ok) {
@@ -263,7 +278,18 @@ export default function EventAccessCodesPage({ params }: { params: { id: string 
       }
       
       const data = await response.json();
-      toast.success(data.message || 'Access codes deleted successfully');
+      
+      // Show success message with count of deleted codes
+      const deletedCount = allCodesToDelete.length;
+      const selectedCount = selectedCodes.length;
+      const additionalCount = deletedCount - selectedCount;
+      
+      let successMessage = `${selectedCount} access code(s) deleted successfully`;
+      if (additionalCount > 0) {
+        successMessage += `, along with ${additionalCount} associated code(s)`;
+      }
+      
+      toast.success(successMessage);
       
       // Refresh the list to update after deletion
       fetchAccessCodes();
@@ -648,6 +674,23 @@ export default function EventAccessCodesPage({ params }: { params: { id: string 
             <Table size={16} className="mr-2" />
             Assign to Table
           </button>
+          <button
+            onClick={() => deleteAccessCodes()}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+            disabled={deleting || selectedCodes.length === 0}
+          >
+            {deleting ? (
+              <>
+                <Trash2 className="animate-spin -ml-1 mr-2 h-4 w-4" />
+                Deleting...
+              </>
+            ) : (
+              <>
+                <Trash2 className="-ml-1 mr-2 h-4 w-4" />
+                Delete ({selectedCodes.length})
+              </>
+            )}
+          </button>
         </div>
       </div>
       
@@ -937,7 +980,7 @@ export default function EventAccessCodesPage({ params }: { params: { id: string 
                       {!code.isAdmitted && (
                         <button
                           onClick={() => markAsAdmitted(code.id)}
-                          className="text-emerald-600 hover:text-emerald-900"
+                          className="text-emerald-600 hover:text-emerald-900 mr-4"
                         >
                           Admit
                         </button>
@@ -1035,6 +1078,24 @@ export default function EventAccessCodesPage({ params }: { params: { id: string 
                 <>
                   <Table className="-ml-1 mr-2 h-4 w-4" />
                   Unassign from Table
+                </>
+              )}
+            </button>
+            
+            <button
+              onClick={deleteAccessCodes}
+              disabled={deleting || selectedCodes.length === 0}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+            >
+              {deleting ? (
+                <>
+                  <Trash2 className="animate-spin -ml-1 mr-2 h-4 w-4" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="-ml-1 mr-2 h-4 w-4" />
+                  Delete ({selectedCodes.length})
                 </>
               )}
             </button>

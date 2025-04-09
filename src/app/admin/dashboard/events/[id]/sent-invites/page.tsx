@@ -131,21 +131,47 @@ export default function EventSentInvitesPage({ params }: { params: { id: string 
   const applyFilters = () => {
     let filtered = [...invites]
     
+    // For debugging - log the initial invites count
+    console.log(`Total invites before filtering: ${filtered.length}`)
+    console.log(`Current RSVP filter: ${filterOptions.rsvpStatus}`)
+    
     // Filter by status
     if (filterOptions.status !== 'all') {
       filtered = filtered.filter(invite => invite.status === filterOptions.status)
+      console.log(`After status filter: ${filtered.length} invites`)
     }
     
     // Filter by RSVP status
     if (filterOptions.rsvpStatus === 'not_responded') {
-      filtered = filtered.filter(invite => !invite.rsvpStatus || invite.rsvpStatus === 'pending')
+      // Count invites by RSVP status for debugging
+      const notRespondedCount = invites.filter(invite => 
+        invite.rsvpStatus === 'not_responded' || 
+        invite.rsvpStatus === 'pending' || 
+        invite.rsvpStatus === null || 
+        invite.rsvpStatus === ''
+      ).length
+      console.log(`Invites with no response: ${notRespondedCount}`)
+      
+      // Log all unique RSVP statuses for debugging
+      const uniqueStatuses = [...new Set(invites.map(invite => invite.rsvpStatus))]
+      console.log('Unique RSVP statuses in data:', uniqueStatuses)
+      
+      filtered = filtered.filter(invite => 
+        invite.rsvpStatus === 'not_responded' || 
+        invite.rsvpStatus === 'pending' || 
+        invite.rsvpStatus === null || 
+        invite.rsvpStatus === ''
+      )
+      console.log(`After not_responded filter: ${filtered.length} invites`)
     } else if (filterOptions.rsvpStatus !== 'all') {
       filtered = filtered.filter(invite => invite.rsvpStatus === filterOptions.rsvpStatus)
+      console.log(`After specific RSVP filter: ${filtered.length} invites`)
     }
     
     // Filter by invite type
     if (filterOptions.type !== 'all') {
       filtered = filtered.filter(invite => invite.type === filterOptions.type)
+      console.log(`After type filter: ${filtered.length} invites`)
     }
     
     // Apply search query if present
@@ -157,12 +183,14 @@ export default function EventSentInvitesPage({ params }: { params: { id: string 
         (invite.phone && invite.phone.toLowerCase().includes(query)) ||
         (invite.code && invite.code.toLowerCase().includes(query))
       )
+      console.log(`After search filter: ${filtered.length} invites`)
     }
     
     setFilteredInvites(filtered)
   }
   
   const handleFilterChange = (field: string, value: string) => {
+    console.log(`Changing filter ${field} to ${value}`)
     setFilterOptions(prev => ({
       ...prev,
       [field]: value
@@ -793,12 +821,12 @@ export default function EventSentInvitesPage({ params }: { params: { id: string 
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            !invite.rsvpStatus || invite.rsvpStatus === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                            invite.rsvpStatus === 'not_responded' || invite.rsvpStatus === 'pending' || !invite.rsvpStatus ? 'bg-yellow-100 text-yellow-800' :
                             invite.rsvpStatus === 'attending' ? 'bg-green-100 text-green-800' :
                             invite.rsvpStatus === 'not_attending' ? 'bg-red-100 text-red-800' :
                             'bg-blue-100 text-blue-800'
                           }`}>
-                            {!invite.rsvpStatus || invite.rsvpStatus === 'pending' ? 'Not Responded' : 
+                            {invite.rsvpStatus === 'not_responded' || invite.rsvpStatus === 'pending' || !invite.rsvpStatus ? 'Not Responded' : 
                              invite.rsvpStatus.charAt(0).toUpperCase() + invite.rsvpStatus.slice(1).replace('_', ' ')}
                           </span>
                         </td>
