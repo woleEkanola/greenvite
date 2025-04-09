@@ -43,12 +43,16 @@ async function canAccessEvent(userId: string, eventId: string): Promise<boolean>
 function processTemplate(template: string, name: string, code: string, link: string, includeHtml = true): string {
   let processed = template
     .replace(/{{name}}/gi, name)
+    .replace(/\(\(name\)\)/gi, name)
     .replace(/{{code}}/gi, code)
-    .replace(/{{link}}/gi, link);
+    .replace(/\(\(code\)\)/gi, code)
+    .replace(/{{link}}/gi, link)
+    .replace(/\(\(link\)\)/gi, link);
   
   // Process image placeholder separately
   if (!includeHtml) {
     processed = processed.replace(/{{image}}/gi, '');
+    processed = processed.replace(/\(\(image\)\)/gi, '');
   }
   
   return processed;
@@ -88,12 +92,12 @@ export async function POST(
 
     // Parse request body
     const body = await request.json()
-    const { inviteIds, templateId } = body
+    const { recipients, templateId } = body
 
     // Validate required fields
-    if (!inviteIds || !Array.isArray(inviteIds) || inviteIds.length === 0) {
+    if (!recipients || !Array.isArray(recipients) || recipients.length === 0) {
       return new NextResponse(
-        JSON.stringify({ error: 'No invites selected' }),
+        JSON.stringify({ error: 'No recipients selected' }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       )
     }
@@ -125,7 +129,7 @@ export async function POST(
         name: `Reminders ${new Date().toISOString().split('T')[0]}`,
         eventId,
         status: 'processing',
-        totalInvites: inviteIds.length,
+        totalInvites: recipients.length,
         sentInvites: 0,
         failedInvites: 0
       }
@@ -141,29 +145,51 @@ export async function POST(
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
     const eventLink = `${baseUrl}/rsvp/${event?.slug || eventId}`
 
+    // Get the invites
+    const invites = await prisma.invite.findMany({
+      where: {
+        id: { in: recipients.map(r => r.id) }
+      }
+    })
+
+    if (invites.length === 0) {
+      return new NextResponse(
+        JSON.stringify({ error: 'No invites found' }),
+        { status: 404, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+
     // Process each invite
     const results = []
     const errorDetails = []
     let sentCount = 0
     let failedCount = 0
 
-    // Get all the invites at once
-    const invites = await prisma.invite.findMany({
-      where: {
-        id: {
-          in: inviteIds
-        }
-      }
-    })
-
     for (const invite of invites) {
       try {
+        // Find the recipient with edited information
+        const recipientData = recipients.find(r => r.id === invite.id)
+        
+        if (!recipientData) {
+          console.error(`No recipient data found for invite ${invite.id}`)
+          failedCount++
+          continue
+        }
+        
+        // Use the edited contact information
+        const email = recipientData.email
+        const phone = recipientData.phone
+        const type = recipientData.type
+        
+        // Prepare the event link with the invite code
+        const inviteLink = `${baseUrl}/events/${event?.slug}?code=${invite.code}`
+        
         // Prepare email content with the recipient's name and code
         const processedEmailContent = processTemplate(
           template.emailContent, 
           invite.name || 'Guest', 
           invite.code || '', 
-          eventLink
+          inviteLink
         )
 
         // Prepare WhatsApp content
@@ -171,7 +197,7 @@ export async function POST(
           template.whatsappContent, 
           invite.name || 'Guest', 
           invite.code || '', 
-          eventLink, 
+          inviteLink, 
           false
         )
 
@@ -179,7 +205,7 @@ export async function POST(
         let emailStatus = 'not_sent'
         let emailError = null
 
-        if (invite.email && (invite.type === 'email' || invite.type === 'both')) {
+        if (email && (type === 'email' || type === 'both')) {
           try {
             const emailResponse = await fetch(`${baseUrl}/api/admin/email`, {
               method: 'POST',
@@ -187,11 +213,10 @@ export async function POST(
                 'Content-Type': 'application/json'
               },
               body: JSON.stringify({
-                to: invite.email,
+                to: email,
                 subject: template.emailSubject,
                 html: processedEmailContent,
-                eventId,
-                imageUrl: template.imageUrl
+                eventId
               })
             })
 
@@ -203,10 +228,10 @@ export async function POST(
             emailStatus = 'sent'
           } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown email error'
-            console.error(`Error sending reminder email to ${invite.email}:`, errorMessage)
+            console.error(`Error sending reminder email to ${email}:`, errorMessage)
             emailStatus = 'failed'
             emailError = errorMessage
-            errorDetails.push(`Email to ${invite.name} (${invite.email}) failed: ${errorMessage}`)
+            errorDetails.push(`Email to ${invite.name} (${email}) failed: ${errorMessage}`)
           }
         }
 
@@ -214,7 +239,7 @@ export async function POST(
         let whatsappStatus = 'not_sent'
         let whatsappError = null
 
-        if (invite.phone && (invite.type === 'whatsapp' || invite.type === 'both')) {
+        if (phone && (type === 'whatsapp' || type === 'both')) {
           try {
             const whatsappResponse = await fetch(`${baseUrl}/api/admin/whatsapp`, {
               method: 'POST',
@@ -222,7 +247,7 @@ export async function POST(
                 'Content-Type': 'application/json'
               },
               body: JSON.stringify({
-                phone: invite.phone,
+                phone: phone,
                 message: processedWhatsappContent,
                 eventId,
                 imageUrl: template.imageUrl
@@ -237,10 +262,10 @@ export async function POST(
             whatsappStatus = 'sent'
           } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown WhatsApp error'
-            console.error(`Error sending reminder WhatsApp to ${invite.phone}:`, errorMessage)
+            console.error(`Error sending reminder WhatsApp to ${phone}:`, errorMessage)
             whatsappStatus = 'failed'
             whatsappError = errorMessage
-            errorDetails.push(`WhatsApp to ${invite.name} (${invite.phone}) failed: ${errorMessage}`)
+            errorDetails.push(`WhatsApp to ${invite.name} (${phone}) failed: ${errorMessage}`)
           }
         }
 
@@ -301,7 +326,7 @@ export async function POST(
         success: true,
         sent: sentCount,
         failed: failedCount,
-        total: inviteIds.length,
+        total: recipients.length,
         batchId: batch.id,
         details: errorDetails.length > 0 ? errorDetails.join('\n') : null
       }),
