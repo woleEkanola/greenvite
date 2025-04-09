@@ -149,6 +149,9 @@ export async function POST(
     const invites = await prisma.invite.findMany({
       where: {
         id: { in: recipients.map(r => r.id) }
+      },
+      include: {
+        registrationCode: true // Include the registration code
       }
     })
 
@@ -181,14 +184,17 @@ export async function POST(
         const phone = recipientData.phone
         const type = recipientData.type
         
-        // Prepare the event link with the invite code
-        const inviteLink = `${baseUrl}/events/${event?.slug}?code=${invite.code}`
+        // Get the code to use in templates - prefer registration code if available
+        const codeToUse = invite.registrationCode?.code || invite.code || '';
+        
+        // Prepare the event link with the code
+        const inviteLink = `${baseUrl}/events/${event?.slug}?code=${codeToUse}`
         
         // Prepare email content with the recipient's name and code
         const processedEmailContent = processTemplate(
           template.emailContent, 
           invite.name || 'Guest', 
-          invite.code || '', 
+          codeToUse, 
           inviteLink
         )
 
@@ -196,7 +202,7 @@ export async function POST(
         let processedWhatsappContent = processTemplate(
           template.whatsappContent, 
           invite.name || 'Guest', 
-          invite.code || '', 
+          codeToUse, 
           inviteLink, 
           false
         )
