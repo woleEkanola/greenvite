@@ -45,33 +45,86 @@ export async function GET(
     
     // Get query parameters
     const searchTerm = request.nextUrl.searchParams.get('search') || ''
+    const page = parseInt(request.nextUrl.searchParams.get('page') || '1', 10)
+    const limit = parseInt(request.nextUrl.searchParams.get('limit') || '10', 10)
+    const skip = (page - 1) * limit
     
-    // Fetch RSVPs for this event
-    const rsvps = await prisma.rsvp.findMany({
-      where: {
-        registrationCode: {
-          eventId: params.id
-        },
-        OR: searchTerm ? [
-          { name: { contains: searchTerm, mode: 'insensitive' } },
-          { email: { contains: searchTerm, mode: 'insensitive' } },
-          { phone: { contains: searchTerm, mode: 'insensitive' } }
-        ] : undefined
+    // Create the where clause for the query
+    const whereClause = {
+      registrationCode: {
+        eventId: params.id
       },
+      ...(searchTerm ? {
+        OR: [
+          { name: { contains: searchTerm, mode: 'insensitive' as const } },
+          { email: { contains: searchTerm, mode: 'insensitive' as const } },
+          { phone: { contains: searchTerm, mode: 'insensitive' as const } }
+        ]
+      } : {})
+    }
+    
+    // Get total count for pagination
+    const totalCount = await prisma.rsvp.count({
+      where: whereClause
+    })
+    
+    // Fetch paginated RSVPs for this event
+    const rsvps = await prisma.rsvp.findMany({
+      where: whereClause,
       include: {
         registrationCode: true,
         accessCodes: true
       },
       orderBy: {
         createdAt: 'desc'
-      }
+      },
+      skip,
+      take: limit
     })
     
     // Calculate statistics
-    const attending = rsvps.filter(rsvp => rsvp.registrationCode.status === 'attending').length
-    const notAttending = rsvps.filter(rsvp => rsvp.registrationCode.status === 'not_attending').length
-    const pending = rsvps.filter(rsvp => rsvp.registrationCode.status === 'pending').length
-    const totalGuests = rsvps.reduce((sum, rsvp) => {
+    const attending = await prisma.rsvp.count({
+      where: {
+        registrationCode: {
+          eventId: params.id,
+          status: 'attending'
+        }
+      }
+    })
+    
+    const notAttending = await prisma.rsvp.count({
+      where: {
+        registrationCode: {
+          eventId: params.id,
+          status: 'not_attending'
+        }
+      }
+    })
+    
+    const pending = await prisma.rsvp.count({
+      where: {
+        registrationCode: {
+          eventId: params.id,
+          status: 'pending'
+        }
+      }
+    })
+    
+    // Count total guests
+    const allRsvps = await prisma.rsvp.findMany({
+      where: {
+        registrationCode: {
+          eventId: params.id
+        }
+      },
+      select: {
+        hasGuest: true,
+        hasDriver: true,
+        hasAide: true
+      }
+    })
+    
+    const totalGuests = allRsvps.reduce((sum, rsvp) => {
       // Count guests based on hasGuest, hasDriver, hasAide
       let guestCount = 0;
       if (rsvp.hasGuest) guestCount += 1;
@@ -84,7 +137,7 @@ export async function GET(
       success: true,
       rsvps,
       stats: {
-        total: rsvps.length,
+        total: totalCount,
         attending,
         notAttending,
         pending,

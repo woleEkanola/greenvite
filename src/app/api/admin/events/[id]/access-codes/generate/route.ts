@@ -44,7 +44,80 @@ export async function POST(
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
     
-    // Find RSVPs for this event that don't have access codes yet
+    // Parse request body
+    const body = await request.json()
+    
+    // Check if we're adding a single dependent guest to an existing RSVP
+    if (body.rsvpId && body.type && body.name) {
+      // Validate the guest type
+      if (!['guest', 'driver', 'aide'].includes(body.type)) {
+        return NextResponse.json({ 
+          success: false, 
+          error: 'Invalid guest type. Must be one of: guest, driver, aide' 
+        }, { status: 400 })
+      }
+      
+      // Find the RSVP
+      const rsvp = await prisma.rsvp.findUnique({
+        where: {
+          id: body.rsvpId
+        },
+        include: {
+          registrationCode: {
+            select: {
+              eventId: true
+            }
+          }
+        }
+      })
+      
+      if (!rsvp) {
+        return NextResponse.json({ 
+          success: false, 
+          error: 'RSVP not found' 
+        }, { status: 404 })
+      }
+      
+      // Ensure the RSVP belongs to this event
+      if (rsvp.registrationCode?.eventId !== params.id) {
+        return NextResponse.json({ 
+          success: false, 
+          error: 'RSVP does not belong to this event' 
+        }, { status: 403 })
+      }
+      
+      // Generate a new access code for the dependent
+      const newCode = await prisma.accessCode.create({
+        data: {
+          code: generateRandomCode(6),
+          rsvpId: rsvp.id,
+          type: body.type,
+          name: body.name,
+          isAdmitted: false,
+          isSent: false
+        }
+      })
+      
+      // Update the RSVP to reflect the new dependent
+      await prisma.rsvp.update({
+        where: {
+          id: rsvp.id
+        },
+        data: {
+          ...(body.type === 'guest' && { hasGuest: true }),
+          ...(body.type === 'driver' && { hasDriver: true }),
+          ...(body.type === 'aide' && { hasAide: true }),
+        }
+      })
+      
+      return NextResponse.json({ 
+        success: true,
+        message: `Added ${body.type} "${body.name}" with access code ${newCode.code}`,
+        accessCode: newCode
+      })
+    }
+    
+    // If no specific RSVP ID provided, generate codes for all RSVPs without them
     const rsvpsWithoutAccessCodes = await prisma.rsvp.findMany({
       where: {
         registrationCode: {

@@ -51,6 +51,81 @@ export async function POST(
       return NextResponse.json({ error: 'Code IDs are required' }, { status: 400 })
     }
     
+    // First, get the access codes to determine their types and RSVP IDs
+    const accessCodes = await prisma.accessCode.findMany({
+      where: {
+        id: {
+          in: codeIds
+        }
+      },
+      select: {
+        id: true,
+        type: true,
+        rsvpId: true
+      }
+    })
+    
+    if (accessCodes.length === 0) {
+      return NextResponse.json({ 
+        success: false,
+        message: 'No access codes found with the provided IDs.'
+      }, { status: 404 })
+    }
+    
+    // Group access codes by RSVP ID
+    const rsvpUpdates = new Map()
+    
+    for (const code of accessCodes) {
+      if (!rsvpUpdates.has(code.rsvpId)) {
+        rsvpUpdates.set(code.rsvpId, {
+          guestCount: 0,
+          driverCount: 0,
+          aideCount: 0,
+          codeIds: []
+        })
+      }
+      
+      const update = rsvpUpdates.get(code.rsvpId)
+      update.codeIds.push(code.id)
+      
+      if (code.type === 'guest') update.guestCount++
+      if (code.type === 'driver') update.driverCount++
+      if (code.type === 'aide') update.aideCount++
+    }
+    
+    // Process each RSVP that needs updating
+    for (const [rsvpId, update] of rsvpUpdates.entries()) {
+      // Get remaining access codes for this RSVP (excluding the ones being deleted)
+      const remainingCodes = await prisma.accessCode.findMany({
+        where: {
+          rsvpId,
+          id: {
+            notIn: update.codeIds
+          }
+        },
+        select: {
+          type: true
+        }
+      })
+      
+      // Count remaining codes by type
+      const remainingTypes = {
+        guest: remainingCodes.filter(c => c.type === 'guest').length,
+        driver: remainingCodes.filter(c => c.type === 'driver').length,
+        aide: remainingCodes.filter(c => c.type === 'aide').length
+      }
+      
+      // Update RSVP flags based on remaining codes
+      await prisma.rsvp.update({
+        where: { id: rsvpId },
+        data: {
+          hasGuest: remainingTypes.guest > 0,
+          hasDriver: remainingTypes.driver > 0,
+          hasAide: remainingTypes.aide > 0
+        }
+      })
+    }
+    
     // Delete the access codes
     const deleteResult = await prisma.accessCode.deleteMany({
       where: {

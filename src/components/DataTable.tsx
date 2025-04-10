@@ -121,14 +121,15 @@ export default function DataTable<T>({
       {customHeader}
       
       {/* Table */}
-      <div className="bg-white shadow-md rounded-lg overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
+      <div className="bg-white shadow-md rounded-lg overflow-x-auto">
+        <table className="w-full divide-y divide-gray-200 table-fixed">
           <thead className="bg-gray-50">
             <tr>
               {columns.map((column, index) => (
                 <th 
                   key={index} 
                   className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  style={{ minWidth: '120px' }}
                 >
                   {column.header}
                 </th>
@@ -140,7 +141,7 @@ export default function DataTable<T>({
               currentData.map((item, rowIndex) => (
                 <tr key={rowIndex} className={rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                   {columns.map((column, colIndex) => (
-                    <td key={colIndex} className="px-6 py-4 whitespace-nowrap">
+                    <td key={colIndex} className="px-6 py-4 break-words">
                       {typeof column.accessor === 'function' 
                         ? column.accessor(item)
                         : item[column.accessor as keyof T] as React.ReactNode}
