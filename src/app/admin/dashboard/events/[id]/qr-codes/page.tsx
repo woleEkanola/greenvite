@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, createRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ChevronLeft, QrCode, Search, Send, Download, RefreshCw, Filter, ChevronDown, ChevronUp, Users, User, Trash2, CheckCircle, XCircle, UserPlus, Car, UserCog } from 'lucide-react'
+import { ChevronLeft, QrCode, Search, Send, Download, RefreshCw, Filter, ChevronDown, ChevronUp, Users, User, Trash2, CheckCircle, XCircle, UserPlus, Car, UserCog, Table2 } from 'lucide-react'
 import QRCodeLib from 'qrcode'
 import Swal from 'sweetalert2'
 import ReactDOM from 'react-dom'
@@ -1012,18 +1012,50 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="mb-6">
-        <Link href={`/admin/dashboard/events/${eventId}`} className="flex items-center text-blue-600 hover:text-blue-800">
-          <ChevronLeft className="h-4 w-4 mr-1" />
-          Back to Event Dashboard
-        </Link>
+    <div className="p-6">
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <Link href={`/admin/dashboard/events/${eventId}`} className="text-blue-600 hover:text-blue-800 flex items-center mb-2">
+            <ChevronLeft className="h-4 w-4 mr-1" />
+            Back to Event
+          </Link>
+          <h1 className="text-2xl font-semibold">{event?.title ? `QR Codes for ${event.title}` : 'Event QR Codes'}</h1>
+        </div>
+        
+        <div className="flex space-x-2">
+          <button
+            onClick={handleAutoAssignTables}
+            disabled={loading || assigningTables}
+            className="flex items-center px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 disabled:bg-amber-300"
+          >
+            <Table2 className="h-4 w-4 mr-2" />
+            {assigningTables ? 'Assigning...' : 'Auto-Assign Tables'}
+          </button>
+          
+          <button
+            onClick={handleSendQRCodes}
+            disabled={selectedAttendees.length === 0 || sending}
+            className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-green-300"
+          >
+            <Send className="h-4 w-4 mr-2" />
+            {sending ? 'Sending...' : `Send QR Codes (${selectedAttendees.length})`}
+          </button>
+          
+          <button
+            onClick={handleDownloadSelected}
+            disabled={selectedAttendees.length === 0}
+            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-300"
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Download Selected ({selectedAttendees.length})
+          </button>
+        </div>
       </div>
-
+      
       <div className="mb-6">
-        <h1 className="text-2xl font-bold">QR Codes for {event?.title}</h1>
+        <h2 className="text-xl font-bold">Attendees</h2>
         <p className="text-gray-600 mt-1">
-          Generate and send QR codes for attendee check-in
+          {filteredAttendees.length} of {primaryAttendees.length} attendees shown
         </p>
       </div>
 
@@ -1092,10 +1124,7 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
           <div className="mb-3 sm:mb-0">
-            <h2 className="text-xl font-bold">Attendees</h2>
-            <p className="text-sm text-gray-500">
-              {filteredAttendees.length} of {primaryAttendees.length} attendees shown
-            </p>
+            <h3 className="text-lg font-bold">Filters</h3>
           </div>
 
           <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
