@@ -7,7 +7,6 @@ import { ChevronLeft, Search, Download, Clock, User, Users, Table2 } from 'lucid
 import DataTable from '@/components/DataTable'
 import debounce from 'lodash/debounce'
 import toast from 'react-hot-toast'
-import Swal from 'sweetalert2'
 
 interface Guest {
   id: string

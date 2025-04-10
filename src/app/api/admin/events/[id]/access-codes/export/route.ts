@@ -2,7 +2,30 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { Parser } from 'json2csv'
+
+// Helper function to convert array of objects to CSV
+function convertToCSV(objArray: any[]) {
+  if (objArray.length === 0) return '';
+  
+  const fields = Object.keys(objArray[0]);
+  
+  // Create header row
+  const csvRows = [fields.join(',')];
+  
+  // Create data rows
+  for (const obj of objArray) {
+    const values = fields.map(field => {
+      const value = obj[field];
+      // Handle strings with commas by wrapping in quotes
+      return typeof value === 'string' && value.includes(',') 
+        ? `"${value.replace(/"/g, '""')}"` 
+        : value === null || value === undefined ? '' : value;
+    });
+    csvRows.push(values.join(','));
+  }
+  
+  return csvRows.join('\n');
+}
 
 // GET: Export access codes as CSV
 export async function GET(
@@ -154,19 +177,17 @@ export async function GET(
     
     // Generate CSV
     if (format === 'csv') {
-      const fields = ['Name', 'Code', 'Email', 'Phone', 'Type', 'Table', 'AdmittedAt', 'PrimaryAttendee']
-      const json2csvParser = new Parser({ fields })
-      const csv = json2csvParser.parse(exportData)
+      const csv = convertToCSV(exportData);
       
       // Set headers for CSV download
-      const headers = new Headers()
-      headers.set('Content-Type', 'text/csv')
-      headers.set('Content-Disposition', `attachment; filename="admitted-guests-${new Date().toISOString().split('T')[0]}.csv"`)
+      const headers = new Headers();
+      headers.set('Content-Type', 'text/csv');
+      headers.set('Content-Disposition', `attachment; filename="admitted-guests-${new Date().toISOString().split('T')[0]}.csv"`);
       
       return new NextResponse(csv, {
         status: 200,
         headers
-      })
+      });
     }
     
     // Default to JSON if format is not recognized
