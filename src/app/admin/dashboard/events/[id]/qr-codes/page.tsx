@@ -264,7 +264,17 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
             <div>Method</div>
           </div>
           <form id="recipientsForm" class="max-h-[50vh] overflow-y-auto">
-            ${selectedAttendeesData.map((attendee, index) => `
+            ${selectedAttendeesData.map((attendee, index) => {
+              // Format phone number if it exists
+              let formattedPhone = attendee.phone || '';
+              
+              // Ensure phone number has country code
+              if (formattedPhone && !formattedPhone.startsWith('+')) {
+                // Default to +234 (Nigeria) if no country code is present
+                formattedPhone = `+234${formattedPhone.startsWith('0') ? formattedPhone.substring(1) : formattedPhone}`;
+              }
+              
+              return `
               <div class="grid grid-cols-4 gap-2 mb-3 text-left">
                 <div class="text-sm">${attendee.name}</div>
                 <div>
@@ -272,22 +282,23 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
                     class="w-full text-sm p-1 border rounded" ${!attendee.email ? 'placeholder="No email"' : ''}>
                 </div>
                 <div>
-                  <input type="tel" name="phone_${attendee.id}" value="${attendee.phone || ''}" 
+                  <input type="tel" name="phone_${attendee.id}" value="${formattedPhone}" 
                     class="w-full text-sm p-1 border rounded" ${!attendee.phone ? 'placeholder="No phone"' : ''}>
+                  <div class="text-xs text-gray-500 mt-1">Include country code (e.g. +234, +1)</div>
                 </div>
                 <div>
                   <select name="method_${attendee.id}" class="w-full text-sm p-1 border rounded">
-                    ${attendee.email && attendee.phone 
+                    ${attendee.email && formattedPhone 
                       ? '<option value="both">Email & WhatsApp</option><option value="email">Email Only</option><option value="whatsapp">WhatsApp Only</option>' 
                       : attendee.email 
                         ? '<option value="email">Email Only</option>' 
-                        : attendee.phone 
+                        : formattedPhone 
                           ? '<option value="whatsapp">WhatsApp Only</option>' 
                           : '<option value="none">No Contact</option>'}
                   </select>
                 </div>
               </div>
-            `).join('')}
+            `}).join('')}
           </form>
         `,
         width: '80%',

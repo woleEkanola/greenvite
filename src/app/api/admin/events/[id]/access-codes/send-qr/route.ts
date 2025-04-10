@@ -199,6 +199,15 @@ export async function POST(
                 <p style="margin: 5px 0; color: #666;">Code: ${code}</p>
                 <img src="cid:primary-qr-code" alt="QR Code" style="width: 200px; height: 200px; margin: 10px 0;" />
               </div>
+              
+              <div style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px;">
+                <h3 style="margin-top: 0; color: #333;">Event Details</h3>
+                <p><strong>Church Dedication:</strong> RCCG Church, Champions Cathedral</p>
+                <p><strong>Address:</strong> #16-18 Airport Road, Effurun, Warri Delta, Nigeria</p>
+                <p><strong>Date:</strong> April 13th, 2025</p>
+                <p><strong>Time:</strong> 9:00 am</p>
+                <p><strong>Reception:</strong> Follows at KFT Event Hall</p>
+              </div>
           `;
           
           // Add related attendees QR codes if any
@@ -269,6 +278,13 @@ Here ${relatedAttendees.length > 0 ? 'are your QR codes' : 'is your QR code'} fo
 
 Your primary QR code:
 Code: ${code}
+
+*Event Details:*
+Church Dedication: RCCG Church, Champions Cathedral
+Address: #16-18 Airport Road, Effurun, Warri Delta, Nigeria
+Date: April 13th, 2025
+Time: 9:00 am
+Reception: Follows at KFT Event Hall
           `.trim();
           
           // Send the primary QR code
