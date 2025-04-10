@@ -152,7 +152,7 @@ export async function POST(
         // Generate QR codes for related attendees if any
         const relatedAttendees = related || [];
         const relatedQrCodes = await Promise.all(
-          relatedAttendees.map(async (relatedAttendee) => {
+          relatedAttendees.map(async (relatedAttendee: { id: string, name: string, code: string }, index: number) => {
             const relatedQrUrl = `${baseUrl}/admin/dashboard/events/${eventId}/qr/${relatedAttendee.code}`;
             const relatedQrBuffer = await QRCode.toBuffer(relatedQrUrl, { 
               width: 300,
@@ -203,7 +203,7 @@ export async function POST(
           
           // Add related attendees QR codes if any
           if (relatedAttendees.length > 0) {
-            relatedAttendees.forEach((related, index) => {
+            relatedAttendees.forEach((related: { id: string, name: string, code: string }, index: number) => {
               // Clean up the name for display
               const relatedName = related.name;
               const relationshipType = 
@@ -240,7 +240,7 @@ export async function POST(
               content: qrCodeBuffer,
               cid: 'primary-qr-code' // Content-ID for referencing in the HTML
             },
-            ...relatedQrCodes.map((relatedQr, index) => ({
+            ...relatedQrCodes.map((relatedQr, index: number) => ({
               filename: `related-qr-code-${index}.png`,
               content: Buffer.from(relatedQr.qrCode.split(',')[1], 'base64'),
               cid: `related-qr-code-${index}` // Content-ID for referencing in the HTML

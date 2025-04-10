@@ -102,7 +102,7 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
         }))
 
         // Group codes by RSVP ID (which connects primary attendees with guests, aids, drivers)
-        const groupedByRsvp = processedCodes.reduce((groups: any, code: AccessCode) => {
+        const groupedByRsvp: Record<string, AccessCode[]> = processedCodes.reduce((groups: Record<string, AccessCode[]>, code: AccessCode) => {
           const key = code.rsvpId
           if (!groups[key]) groups[key] = []
           groups[key].push(code)
@@ -110,7 +110,7 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
         }, {});
 
         // Create primary attendees with their related codes
-        const primaryAttendees: PrimaryAttendee[] = Object.values(groupedByRsvp).map(group => {
+        const primaryAttendees: PrimaryAttendee[] = Object.values(groupedByRsvp).map((group: AccessCode[]) => {
           const primaryCode = group.find(code => code.type === 'primary') || group[0]
           const relatedCodes = group.filter(code => code.id !== primaryCode.id)
 
@@ -329,7 +329,8 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
       })
 
       // Prepare data for API
-      const attendeesData = Object.entries(formResult).map(([attendeeId, recipient]) => {
+      type RecipientData = { email: string, phone: string, method: string };
+      const attendeesData = Object.entries(formResult as Record<string, RecipientData>).map(([attendeeId, recipient]) => {
         const attendee = primaryAttendees.find(a => a.id === attendeeId)
         if (!attendee) return null
         
