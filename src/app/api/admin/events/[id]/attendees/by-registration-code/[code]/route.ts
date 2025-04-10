@@ -21,7 +21,7 @@ async function canAccessEvent(userId: string, eventId: string): Promise<boolean>
     }
 
     // Check if the user is a host for this event
-    const isHost = await prisma.eventHost.findFirst({
+    const isHost = await prisma.eventAdmin.findFirst({
       where: {
         eventId,
         userId
@@ -64,72 +64,33 @@ export async function GET(
       );
     }
 
-    // First, look for the registration code
+    // Find the registration code
     const registrationCode = await prisma.registrationCode.findFirst({
       where: {
-        code: code,
-        eventId: eventId
-      },
-      include: {
-        invite: {
-          include: {
-            table: {
-              select: {
-                id: true,
-                name: true,
-                capacity: true
-              }
-            }
-          }
-        }
+        code: code
       }
     });
 
     if (!registrationCode) {
-      console.log(`No registration code found with code ${code} for event ${eventId}`);
-      
-      // Try a case-insensitive search
-      const allCodes = await prisma.registrationCode.findMany({
-        where: {
-          eventId: eventId
-        },
-        select: {
-          id: true,
-          code: true
-        }
-      });
-      
-      console.log(`Found ${allCodes.length} total registration codes for event ${eventId}`);
-      if (allCodes.length > 0) {
-        const sampleCodes = allCodes.slice(0, 10).map(c => c.code);
-        console.log(`Sample registration codes: ${sampleCodes.join(', ')}`);
+      return new NextResponse(
+        JSON.stringify({ success: false, error: 'Registration code not found' }),
+        { status: 404, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Find the associated invite by code
+    const invite = await prisma.invite.findFirst({
+      where: {
+        code: registrationCode.code
       }
-      
+    });
+
+    if (!invite) {
       return new NextResponse(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Attendee not found',
-          message: `No registration code found with code ${code} for event ${eventId}`
-        }),
+        JSON.stringify({ success: false, error: 'No attendee associated with this registration code' }),
         { status: 404, headers: { 'Content-Type': 'application/json' } }
       );
     }
-
-    // Check if the registration code has an associated invite
-    if (!registrationCode.invite) {
-      console.log(`Registration code ${code} found but has no associated invite`);
-      return new NextResponse(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Attendee not found',
-          message: `Registration code ${code} has no associated attendee`
-        }),
-        { status: 404, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const invite = registrationCode.invite;
-    console.log(`Found invite via registration code: ${code}`);
 
     // Format the attendee data
     const attendee = {
@@ -137,14 +98,11 @@ export async function GET(
       name: invite.name,
       email: invite.email,
       phone: invite.phone,
-      code: invite.code || registrationCode.code,
-      rsvpStatus: invite.status === 'sent' ? 'attending' : 'pending',
-      tableId: invite.tableId,
-      tableName: invite.table?.name || null,
-      attended: invite.attended || false,
-      attendedAt: invite.attendedAt,
+      code: invite.code,
+      status: invite.status,
       createdAt: invite.createdAt,
-      updatedAt: invite.updatedAt
+      updatedAt: invite.updatedAt,
+      registrationCode: registrationCode.code
     };
 
     return new NextResponse(

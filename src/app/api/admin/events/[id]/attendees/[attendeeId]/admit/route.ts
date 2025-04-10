@@ -21,7 +21,7 @@ async function canAccessEvent(userId: string, eventId: string): Promise<boolean>
     }
 
     // Check if the user is a host for this event
-    const isHost = await prisma.eventHost.findFirst({
+    const isHost = await prisma.eventAdmin.findFirst({
       where: {
         eventId,
         userId
@@ -62,11 +62,10 @@ export async function POST(
       );
     }
 
-    // Find the attendee
-    const attendee = await prisma.invite.findFirst({
+    // Get the attendee
+    const attendee = await prisma.invite.findUnique({
       where: {
-        id: attendeeId,
-        eventId
+        id: attendeeId
       }
     });
 
@@ -77,27 +76,22 @@ export async function POST(
       );
     }
 
-    // Mark the attendee as attended
+    // Update the attendee to mark as attended
     const updatedAttendee = await prisma.invite.update({
       where: {
         id: attendeeId
       },
       data: {
-        attended: true,
-        attendedAt: new Date()
+        status: 'attended'
       }
     });
 
+    // Return success response
     return new NextResponse(
-      JSON.stringify({ 
-        success: true, 
+      JSON.stringify({
+        success: true,
         message: 'Attendee admitted successfully',
-        attendee: {
-          id: updatedAttendee.id,
-          name: updatedAttendee.name,
-          attended: updatedAttendee.attended,
-          attendedAt: updatedAttendee.attendedAt
-        }
+        attendee: updatedAttendee
       }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     );

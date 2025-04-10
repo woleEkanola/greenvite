@@ -34,6 +34,8 @@ interface AssociatedAttendee {
   code: string
   rsvpStatus: string
   attended: boolean
+  cleanName?: string
+  relationshipType?: string | null
 }
 
 export default function AttendeeDetailsPage({ params }: { params: { id: string, 'access-code': string } }) {
@@ -90,7 +92,13 @@ export default function AttendeeDetailsPage({ params }: { params: { id: string, 
           throw new Error('Invalid attendee data returned')
         }
         
-        setAttendee(attendeeData.attendee)
+        // Clean up attendee name by removing relationship suffixes
+        const attendeeWithCleanName = {
+          ...attendeeData.attendee,
+          name: cleanAttendeeNameForDisplay(attendeeData.attendee.name)
+        }
+        
+        setAttendee(attendeeWithCleanName)
         
         // Fetch associated attendees (same email or phone)
         if (attendeeData.attendee) {
@@ -99,7 +107,13 @@ export default function AttendeeDetailsPage({ params }: { params: { id: string, 
           )
           if (associatedResponse.ok) {
             const associatedData = await associatedResponse.json()
-            setAssociatedAttendees(associatedData.attendees || [])
+            // Add relationship type to associated attendees
+            const processedAssociatedAttendees = (associatedData.attendees || []).map((associate: AssociatedAttendee) => ({
+              ...associate,
+              cleanName: cleanAttendeeNameForDisplay(associate.name),
+              relationshipType: determineRelationshipType(associate.name)
+            }))
+            setAssociatedAttendees(processedAssociatedAttendees)
           }
         }
       } catch (error) {
@@ -112,6 +126,32 @@ export default function AttendeeDetailsPage({ params }: { params: { id: string, 
     
     fetchData()
   }, [eventId, accessCode])
+  
+  // Helper function to clean attendee names for display
+  const cleanAttendeeNameForDisplay = (name: string) => {
+    // Remove "'s Guest", "'s Driver", "'s Aide" suffixes
+    let cleanName = name.replace(/'s\s+(Guest|Driver|Aide|Aid)$/i, '');
+    
+    // Remove text in parentheses like "(Guest)" or "(Primary)"
+    cleanName = cleanName.replace(/\s*\([^)]*\)\s*$/, '');
+    
+    return cleanName.trim();
+  }
+  
+  // Helper function to determine relationship type
+  const determineRelationshipType = (name: string) => {
+    const nameLower = name.toLowerCase();
+    
+    if (nameLower.includes('guest')) {
+      return 'Guest';
+    } else if (nameLower.includes('driver')) {
+      return 'Driver';
+    } else if (nameLower.includes('aid') || nameLower.includes('aide')) {
+      return 'Aide';
+    }
+    
+    return null;
+  }
   
   const handleAdmit = async () => {
     if (!attendee) return
@@ -316,10 +356,17 @@ export default function AttendeeDetailsPage({ params }: { params: { id: string, 
               <div className="space-y-4">
                 {associatedAttendees.map(associate => (
                   <div key={associate.id} className="border rounded-md p-3 hover:bg-gray-50">
-                    <Link href={`/admin/dashboard/events/${eventId}/${associate.code}`}>
+                    <Link href={`/admin/dashboard/events/${eventId}/qr/${associate.code}`}>
                       <div className="flex justify-between items-center">
                         <div>
-                          <div className="font-medium">{associate.name}</div>
+                          <div className="font-medium">
+                            {associate.cleanName}
+                            {associate.relationshipType && (
+                              <span className="ml-1 text-xs px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full">
+                                {associate.relationshipType}
+                              </span>
+                            )}
+                          </div>
                           <div className="text-sm text-gray-500">Code: {associate.code}</div>
                         </div>
                         <div className={`px-2 py-1 rounded-full text-xs font-medium ${

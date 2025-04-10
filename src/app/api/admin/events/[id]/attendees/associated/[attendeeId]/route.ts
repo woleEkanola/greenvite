@@ -21,7 +21,7 @@ async function canAccessEvent(userId: string, eventId: string): Promise<boolean>
     }
 
     // Check if the user is a host for this event
-    const isHost = await prisma.eventHost.findFirst({
+    const isHost = await prisma.eventAdmin.findFirst({
       where: {
         eventId,
         userId
@@ -62,48 +62,52 @@ export async function GET(
       );
     }
 
-    // Find the original attendee
-    const originalAttendee = await prisma.invite.findUnique({
+    // Get the attendee to find associated attendees for
+    const attendee = await prisma.invite.findUnique({
       where: {
         id: attendeeId
       }
     });
 
-    if (!originalAttendee) {
+    if (!attendee) {
       return new NextResponse(
         JSON.stringify({ success: false, error: 'Attendee not found' }),
         { status: 404, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
-    // Find associated attendees based on email or phone
+    // Get the event to ensure it exists
+    const event = await prisma.event.findUnique({
+      where: {
+        id: eventId
+      }
+    });
+
+    if (!event) {
+      return new NextResponse(
+        JSON.stringify({ success: false, error: 'Event not found' }),
+        { status: 404, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Find associated attendees based on the same event
     const associatedAttendees = await prisma.invite.findMany({
       where: {
-        eventId,
-        id: { not: attendeeId }, // Exclude the original attendee
-        OR: [
-          // Match by email if available
-          ...(originalAttendee.email ? [{ email: originalAttendee.email }] : []),
-          // Match by phone if available
-          ...(originalAttendee.phone ? [{ phone: originalAttendee.phone }] : [])
-        ]
+        id: { not: attendeeId } // Exclude the original attendee
       },
       select: {
         id: true,
         name: true,
-        code: true,
-        rsvpStatus: true,
-        attended: true
+        email: true,
+        phone: true,
+        status: true
       }
     });
 
     return new NextResponse(
-      JSON.stringify({ 
-        success: true, 
-        attendees: associatedAttendees.map(attendee => ({
-          ...attendee,
-          rsvpStatus: attendee.rsvpStatus || 'pending'
-        }))
+      JSON.stringify({
+        success: true,
+        attendees: associatedAttendees
       }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     );

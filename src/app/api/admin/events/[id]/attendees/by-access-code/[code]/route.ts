@@ -21,7 +21,7 @@ async function canAccessEvent(userId: string, eventId: string): Promise<boolean>
     }
 
     // Check if the user is a host for this event
-    const isHost = await prisma.eventHost.findFirst({
+    const isHost = await prisma.eventAdmin.findFirst({
       where: {
         eventId,
         userId

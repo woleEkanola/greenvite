@@ -3,7 +3,8 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { sendEmail } from '@/lib/email'
-import { sendWhatsAppNotification } from '@/lib/whatsapp'
+import sendWhatsAppNotification from '@/lib/whatsapp'
+import QRCode from 'qrcode'
 
 // Helper function to check event access
 async function canAccessEvent(userId: string, eventId: string): Promise<boolean> {
@@ -23,7 +24,7 @@ async function canAccessEvent(userId: string, eventId: string): Promise<boolean>
     }
 
     // Check if the user is a host for this event
-    const isHost = await prisma.eventHost.findFirst({
+    const isHost = await prisma.eventAdmin.findFirst({
       where: {
         eventId,
         userId
@@ -113,177 +114,223 @@ export async function POST(
     });
 
     // Process each attendee group
+    const results = [];
     let successCount = 0;
     let errorCount = 0;
-    const errors = [];
 
     for (const attendeeGroup of attendees) {
       try {
-        const { primary, related } = attendeeGroup;
+        const { primary, related, sendMethod } = attendeeGroup;
+        const { id, name, email, phone, code } = primary;
         
-        if (!primary) {
-          errors.push('Missing primary attendee data');
+        // Skip if no contact method is available
+        if ((sendMethod === 'email' || sendMethod === 'both') && !email) {
+          results.push({ id, success: false, error: 'Email is required but not provided' });
           errorCount++;
           continue;
         }
         
-        const { id, name, email, phone, code, qrCodeDataUrl } = primary;
-        
-        // Skip if missing required data
-        if (!id || !name || !qrCodeDataUrl) {
-          errors.push(`Missing required data for primary attendee ${name || id}`);
+        if ((sendMethod === 'whatsapp' || sendMethod === 'both') && !phone) {
+          results.push({ id, success: false, error: 'Phone is required but not provided' });
           errorCount++;
           continue;
         }
+
+        // Generate QR code for primary attendee
+        const qrCodeUrl = `${baseUrl}/admin/dashboard/events/${eventId}/qr/${code}`;
+        const qrCodeBuffer = await QRCode.toBuffer(qrCodeUrl, { 
+          width: 300,
+          margin: 2,
+          color: {
+            dark: '#000000',
+            light: '#ffffff'
+          }
+        });
         
-        // Prepare related attendees data (if any)
-        const relatedAttendees = Array.isArray(related) ? related.filter(r => r && r.name && r.code && r.qrCodeDataUrl) : [];
+        const qrCodeBase64 = `data:image/png;base64,${qrCodeBuffer.toString('base64')}`;
         
-        // Send email if requested and email is available
-        if ((method === 'email' || method === 'both') && email) {
-          // Start building the email HTML
-          let emailHtml = `
+        // Generate QR codes for related attendees if any
+        const relatedAttendees = related || [];
+        const relatedQrCodes = await Promise.all(
+          relatedAttendees.map(async (relatedAttendee) => {
+            const relatedQrUrl = `${baseUrl}/admin/dashboard/events/${eventId}/qr/${relatedAttendee.code}`;
+            const relatedQrBuffer = await QRCode.toBuffer(relatedQrUrl, { 
+              width: 300,
+              margin: 2,
+              color: {
+                dark: '#000000',
+                light: '#ffffff'
+              }
+            });
+            
+            return {
+              code: relatedAttendee.code,
+              name: relatedAttendee.name,
+              qrCode: `data:image/png;base64,${relatedQrBuffer.toString('base64')}`
+            };
+          })
+        );
+        
+        // Format date for email/message
+        const eventDate = event.startDate 
+          ? new Date(event.startDate).toLocaleDateString('en-US', { 
+              weekday: 'long', 
+              year: 'numeric', 
+              month: 'long', 
+              day: 'numeric' 
+            })
+          : 'the event date';
+        
+        // Send QR code via email if requested
+        if (sendMethod === 'email' || sendMethod === 'both') {
+          // Extract the base name without any relationship suffix for email greeting
+          const baseName = name.includes('(') ? name.split('(')[0].trim() : name.includes("'s") ? name.split("'s")[0].trim() : name;
+          
+          // Build email content with embedded QR codes
+          let emailContent = `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #333;">Hello ${name},</h2>
+              <h2 style="color: #333;">Your QR Code for ${event.title}</h2>
+              <p>Hello ${baseName},</p>
               <p>Here ${relatedAttendees.length > 0 ? 'are your QR codes' : 'is your QR code'} for ${event.title} on ${eventDate}.</p>
-              <p>Please present ${relatedAttendees.length > 0 ? 'these QR codes' : 'this QR code'} when you arrive at the event for quick check-in.</p>
+              <p>Please present ${relatedAttendees.length > 0 ? 'these QR codes' : 'this QR code'} at the entrance for check-in.</p>
+              
+              <div style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; text-align: center;">
+                <h3 style="margin-top: 0;">${baseName} (Primary)</h3>
+                <p style="margin: 5px 0; color: #666;">Code: ${code}</p>
+                <img src="cid:primary-qr-code" alt="QR Code" style="width: 200px; height: 200px; margin: 10px 0;" />
+              </div>
           `;
           
-          // Add primary QR code to the email
-          emailHtml += `
-            <div style="margin: 30px 0; padding: 15px; border: 1px solid #eee; border-radius: 8px;">
-              <h3 style="color: #555;">Your QR Code</h3>
-              <div style="text-align: center; margin: 20px 0;">
-                <img src="cid:qrcode-primary" alt="QR Code" style="max-width: 200px; height: auto;" />
-              </div>
-              <p>Access code: <strong>${code}</strong></p>
+          // Add related attendees QR codes if any
+          if (relatedAttendees.length > 0) {
+            relatedAttendees.forEach((related, index) => {
+              // Clean up the name for display
+              const relatedName = related.name;
+              const relationshipType = 
+                relatedName.toLowerCase().includes('guest') ? 'Guest' :
+                relatedName.toLowerCase().includes('aide') ? 'Aide' :
+                relatedName.toLowerCase().includes('driver') ? 'Driver' : 'Related';
+              
+              const cleanRelatedName = relatedName
+                .replace(/\(.*?\)/g, '') // Remove text in parentheses
+                .replace(/'s (guest|aide|driver)/i, '') // Remove "'s guest/aide/driver"
+                .trim();
+              
+              emailContent += `
+                <div style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; text-align: center;">
+                  <h3 style="margin-top: 0;">${cleanRelatedName} (${relationshipType})</h3>
+                  <p style="margin: 5px 0; color: #666;">Code: ${related.code}</p>
+                  <img src="cid:related-qr-code-${index}" alt="QR Code" style="width: 200px; height: 200px; margin: 10px 0;" />
+                </div>
+              `;
+            });
+          }
+          
+          // Close the email content
+          emailContent += `
+              <p>We look forward to seeing you at the event!</p>
+              <p>Best regards,<br>${event.title} Team</p>
             </div>
           `;
           
-          // Add related QR codes to the email (if any)
-          for (let i = 0; i < relatedAttendees.length; i++) {
-            const relatedAttendee = relatedAttendees[i];
-            const relationship = 
-              relatedAttendee.name.toLowerCase().includes('guest') ? 'Guest' :
-              relatedAttendee.name.toLowerCase().includes('aid') ? 'Aid' :
-              relatedAttendee.name.toLowerCase().includes('driver') ? 'Driver' : 'Additional';
-            
-            emailHtml += `
-              <div style="margin: 30px 0; padding: 15px; border: 1px solid #eee; border-radius: 8px;">
-                <h3 style="color: #555;">${relationship} QR Code - ${relatedAttendee.name}</h3>
-                <div style="text-align: center; margin: 20px 0;">
-                  <img src="cid:qrcode-related-${i}" alt="QR Code" style="max-width: 200px; height: auto;" />
-                </div>
-                <p>Access code: <strong>${relatedAttendee.code}</strong></p>
-              </div>
-            `;
-          }
+          // Prepare email attachments with Content-ID references for inline images
+          const attachments = [
+            {
+              filename: 'primary-qr-code.png',
+              content: qrCodeBuffer,
+              cid: 'primary-qr-code' // Content-ID for referencing in the HTML
+            },
+            ...relatedQrCodes.map((relatedQr, index) => ({
+              filename: `related-qr-code-${index}.png`,
+              content: Buffer.from(relatedQr.qrCode.split(',')[1], 'base64'),
+              cid: `related-qr-code-${index}` // Content-ID for referencing in the HTML
+            }))
+          ];
           
-          // Complete the email HTML
-          emailHtml += `
-            <p>Event details:</p>
-            <ul>
-              <li><strong>Event:</strong> ${event.title}</li>
-              <li><strong>Date:</strong> ${eventDate}</li>
-              ${event.location ? `<li><strong>Location:</strong> ${event.location}</li>` : ''}
-            </ul>
-            <p>We look forward to seeing you!</p>
-          </div>
-          `;
-          
-          // Prepare attachments
-          const attachments = [];
-          
-          // Add primary QR code attachment
-          const primaryQrCodeBuffer = Buffer.from(
-            qrCodeDataUrl.replace(/^data:image\/png;base64,/, ''),
-            'base64'
-          );
-          
-          attachments.push({
-            filename: `qrcode-${code}.png`,
-            content: primaryQrCodeBuffer,
-            cid: 'qrcode-primary',
-            contentType: 'image/png'
-          });
-          
-          // Add related QR code attachments
-          for (let i = 0; i < relatedAttendees.length; i++) {
-            const relatedAttendee = relatedAttendees[i];
-            
-            if (relatedAttendee.qrCodeDataUrl) {
-              const relatedQrCodeBuffer = Buffer.from(
-                relatedAttendee.qrCodeDataUrl.replace(/^data:image\/png;base64,/, ''),
-                'base64'
-              );
-              
-              attachments.push({
-                filename: `qrcode-${relatedAttendee.code}.png`,
-                content: relatedQrCodeBuffer,
-                cid: `qrcode-related-${i}`,
-                contentType: 'image/png'
-              });
-            }
-          }
-          
+          // Send the email
           await sendEmail({
             to: email,
-            subject: `Your QR Codes for ${event.title}`,
-            html: emailHtml,
+            subject: `Your QR Code for ${event.title}`,
+            html: emailContent,
             attachments
           });
         }
         
         // Send WhatsApp if requested and phone is available
-        if ((method === 'whatsapp' || method === 'both') && phone) {
+        if ((sendMethod === 'whatsapp' || sendMethod === 'both') && phone) {
+          // Extract the base name without any relationship suffix for WhatsApp message
+          const baseName = name.includes('(') ? name.split('(')[0].trim() : name.includes("'s") ? name.split("'s")[0].trim() : name;
+          
           // Start building the WhatsApp message
           let whatsappMessage = `
-Hello ${name},
+Hello ${baseName},
 
 Here ${relatedAttendees.length > 0 ? 'are your QR codes' : 'is your QR code'} for ${event.title} on ${eventDate}.
-Please present ${relatedAttendees.length > 0 ? 'these QR codes' : 'this QR code'} when you arrive at the event for quick check-in.
 
-Your Access code: ${code}
-`;
-          
-          // Add related QR codes info to the message (if any)
-          if (relatedAttendees.length > 0) {
-            whatsappMessage += `\nAdditional QR codes for your guests:\n`;
-            
-            for (const relatedAttendee of relatedAttendees) {
-              const relationship = 
-                relatedAttendee.name.toLowerCase().includes('guest') ? 'Guest' :
-                relatedAttendee.name.toLowerCase().includes('aid') ? 'Aid' :
-                relatedAttendee.name.toLowerCase().includes('driver') ? 'Driver' : 'Additional';
-              
-              whatsappMessage += `
-- ${relationship}: ${relatedAttendee.name}
-  Access code: ${relatedAttendee.code}
-`;
-            }
-          }
-          
-          whatsappMessage += `
-Event details:
-- Event: ${event.title}
-- Date: ${eventDate}
-${event.location ? `- Location: ${event.location}` : ''}
-
-We look forward to seeing you!
+Your primary QR code:
+Code: ${code}
           `.trim();
           
-          // For WhatsApp, we can only send one image, so we'll send the primary QR code
-          await sendWhatsAppNotification(
-            phone,
-            whatsappMessage,
-            qrCodeDataUrl
-          );
+          // Send the primary QR code
+          await sendWhatsAppNotification(phone, whatsappMessage, qrCodeBase64);
+          
+          // Send related QR codes if any
+          for (const relatedQr of relatedQrCodes) {
+            // Clean up the name for display
+            const relatedName = relatedQr.name;
+            const relationshipType = 
+              relatedName.toLowerCase().includes('guest') ? 'Guest' :
+              relatedName.toLowerCase().includes('aide') ? 'Aide' :
+              relatedName.toLowerCase().includes('driver') ? 'Driver' : 'Related';
+            
+            const cleanRelatedName = relatedName
+              .replace(/\(.*?\)/g, '') // Remove text in parentheses
+              .replace(/'s (guest|aide|driver)/i, '') // Remove "'s guest/aide/driver"
+              .trim();
+            
+            const relatedMessage = `
+${cleanRelatedName} (${relationshipType}) QR code:
+Code: ${relatedQr.code}
+            `.trim();
+            
+            // Send each related QR code as a separate message
+            await sendWhatsAppNotification(phone, relatedMessage, relatedQr.qrCode);
+          }
         }
         
+        // Update the database to mark QR code as sent
+        await prisma.accessCode.update({
+          where: { id },
+          data: {
+            isSent: true,
+            sentAt: new Date(),
+            updatedAt: new Date()
+          }
+        });
+        
+        // Update related access codes as well
+        if (relatedAttendees.length > 0) {
+          for (const related of relatedAttendees) {
+            await prisma.accessCode.update({
+              where: { id: related.id },
+              data: {
+                isSent: true,
+                sentAt: new Date(),
+                updatedAt: new Date()
+              }
+            });
+          }
+        }
+        
+        results.push({ id, success: true });
         successCount++;
       } catch (error) {
-        console.error('Error sending QR codes:', error);
-        errors.push(`Failed to send QR codes: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        console.error('Error sending QR code:', error);
+        results.push({ 
+          id: attendeeGroup.primary.id, 
+          success: false, 
+          error: error instanceof Error ? error.message : 'Unknown error' 
+        });
         errorCount++;
       }
     }
@@ -293,7 +340,7 @@ We look forward to seeing you!
         success: true,
         successCount,
         errorCount,
-        errors: errors.length > 0 ? errors : undefined
+        errors: results.filter(result => !result.success).map(result => result.error)
       }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     );

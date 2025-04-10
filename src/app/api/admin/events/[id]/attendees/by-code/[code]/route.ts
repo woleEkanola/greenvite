@@ -21,7 +21,7 @@ async function canAccessEvent(userId: string, eventId: string): Promise<boolean>
     }
 
     // Check if the user is a host for this event
-    const isHost = await prisma.eventHost.findFirst({
+    const isHost = await prisma.eventAdmin.findFirst({
       where: {
         eventId,
         userId
@@ -64,109 +64,34 @@ export async function GET(
       );
     }
 
-    // Find the invite by code - first try exact match
-    let invite = await prisma.invite.findFirst({
+    // Find the attendee by code
+    const attendee = await prisma.invite.findFirst({
       where: {
-        code: code,
-        eventId: eventId
-      },
-      include: {
-        table: {
-          select: {
-            id: true,
-            name: true,
-            capacity: true
-          }
-        }
+        code: code
       }
     });
 
-    // If not found with exact match, try case-insensitive search
-    if (!invite) {
-      console.log(`No exact match found for code ${code}, trying case-insensitive search`);
-      
-      // Get all invites for this event and filter manually for case-insensitive match
-      const allInvites = await prisma.invite.findMany({
-        where: {
-          eventId: eventId
-        }
-      });
-      
-      console.log(`Found ${allInvites.length} total invites for event ${eventId}`);
-      
-      // Log some sample codes to help diagnose the issue
-      const sampleCodes = allInvites.slice(0, 10).map(i => i.code);
-      console.log(`Sample invite codes: ${sampleCodes.join(', ')}`);
-      
-      // Find a case-insensitive match
-      invite = allInvites.find(i => 
-        i.code && i.code.toLowerCase() === code.toLowerCase()
-      );
-      
-      if (invite) {
-        console.log(`Found invite with case-insensitive match: ${invite.code}`);
-      }
-    }
-
-    // If still not found, check if it's a registration code instead
-    if (!invite) {
-      console.log(`No invite found with code ${code}, checking registration codes`);
-      
-      const registrationCode = await prisma.registrationCode.findFirst({
-        where: {
-          code: code,
-          eventId: eventId
-        },
-        include: {
-          invite: {
-            include: {
-              table: {
-                select: {
-                  id: true,
-                  name: true,
-                  capacity: true
-                }
-              }
-            }
-          }
-        }
-      });
-      
-      if (registrationCode?.invite) {
-        console.log(`Found invite via registration code: ${registrationCode.code}`);
-        invite = registrationCode.invite;
-      }
-    }
-
-    if (!invite) {
+    if (!attendee) {
       return new NextResponse(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Attendee not found',
-          message: `No attendee found with code ${code} for event ${eventId}`
-        }),
+        JSON.stringify({ success: false, error: 'Attendee not found' }),
         { status: 404, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
     // Format the attendee data
-    const attendee = {
-      id: invite.id,
-      name: invite.name,
-      email: invite.email,
-      phone: invite.phone,
-      code: invite.code,
-      rsvpStatus: invite.rsvpStatus || 'pending',
-      tableId: invite.tableId,
-      tableName: invite.table?.name || null,
-      attended: invite.attended || false,
-      attendedAt: invite.attendedAt,
-      createdAt: invite.createdAt,
-      updatedAt: invite.updatedAt
+    const formattedAttendee = {
+      id: attendee.id,
+      name: attendee.name,
+      email: attendee.email,
+      phone: attendee.phone,
+      code: attendee.code,
+      status: attendee.status,
+      createdAt: attendee.createdAt,
+      updatedAt: attendee.updatedAt
     };
 
     return new NextResponse(
-      JSON.stringify({ success: true, attendee }),
+      JSON.stringify({ success: true, attendee: formattedAttendee }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     );
   } catch (error) {
