@@ -245,6 +245,19 @@ export default function EventDashboardLayout({
                   {isSidebarOpen && <span className="ml-3">Floor Plans</span>}
                 </Link>
               </li>
+              <li>
+                <Link
+                  href={`/admin/dashboard/events/${params.id}/qr-codes`}
+                  className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
+                    isActive(`/admin/dashboard/events/${params.id}/qr-codes`)
+                      ? 'bg-emerald-500 text-white'
+                      : 'hover:bg-gray-100'
+                  }`}
+                >
+                  <QrCode className="h-5 w-5 min-w-5" />
+                  {isSidebarOpen && <span className="ml-3">QR Codes</span>}
+                </Link>
+              </li>
             </ul>
 
             <div className="mt-8 pt-6 border-t border-gray-200">

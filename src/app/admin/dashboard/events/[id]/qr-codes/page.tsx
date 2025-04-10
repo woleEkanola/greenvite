@@ -1,0 +1,946 @@
+'use client'
+
+import { useState, useEffect, useRef, createRef, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import { ChevronLeft, QrCode, Search, Send, Download, RefreshCw, Filter, ChevronDown, ChevronUp, Users, User } from 'lucide-react'
+import QRCodeLib from 'qrcode'
+import Swal from 'sweetalert2'
+import ReactDOM from 'react-dom'
+import { toPng } from 'html-to-image'
+
+interface AccessCode {
+  id: string
+  name: string
+  code: string
+  rsvpId: string
+  rsvpStatus: string
+  isAdmitted: boolean
+  tableId: string | null
+  tableName: string | null
+  email?: string | null
+  phone?: string | null
+  type: string
+  isSent: boolean
+  sentAt: Date | null
+}
+
+interface PrimaryAttendee {
+  id: string
+  name: string
+  email: string | null
+  phone: string | null
+  code: string
+  tableId: string | null
+  tableName: string | null
+  isAdmitted: boolean
+  relatedCodes: AccessCode[]
+  isExpanded?: boolean
+  qrCodeDataUrl?: string
+  relatedQrCodes?: string[]
+  isSent?: boolean
+  sentAt?: Date | null
+}
+
+export default function QRCodesPage({ params }: { params: { id: string } }) {
+  const router = useRouter()
+  const eventId = params.id
+  const [loading, setLoading] = useState(true)
+  const [sending, setSending] = useState(false)
+  const [event, setEvent] = useState<any>(null)
+  const [primaryAttendees, setPrimaryAttendees] = useState<PrimaryAttendee[]>([])
+  const [filteredAttendees, setFilteredAttendees] = useState<PrimaryAttendee[]>([])
+  const [selectedAttendees, setSelectedAttendees] = useState<string[]>([])
+  const [searchQuery, setSearchQuery] = useState('')
+  const [filterOptions, setFilterOptions] = useState({
+    admitted: 'all', // all, admitted, not_admitted
+    hasTable: 'all', // all, assigned, not_assigned
+    qrSent: 'all' // all, sent, not_sent
+  })
+  const [selectAll, setSelectAll] = useState(false)
+  const [isFilterOpen, setIsFilterOpen] = useState(false)
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [pageSize] = useState(20)
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true)
+
+        // Fetch event details
+        const eventResponse = await fetch(`/api/admin/events/${eventId}`)
+        if (!eventResponse.ok) {
+          throw new Error('Failed to fetch event details')
+        }
+        const eventData = await eventResponse.json()
+        setEvent(eventData)
+
+        // Fetch access codes
+        const response = await fetch(`/api/admin/events/${eventId}/access-codes`)
+        if (!response.ok) {
+          throw new Error('Failed to fetch access codes')
+        }
+
+        const codesData = await response.json()
+
+        // Process the access codes
+        const processedCodes = codesData.accessCodes.map((code: any) => ({
+          id: code.id,
+          name: code.name,
+          code: code.code,
+          rsvpId: code.rsvpId,
+          rsvpStatus: code.rsvpStatus,
+          isAdmitted: code.isAdmitted,
+          tableId: code.tableId,
+          tableName: code.table?.name || null,
+          email: code.rsvp?.email || null,
+          phone: code.rsvp?.phone || null,
+          type: code.type,
+          isSent: code.isSent || false,
+          sentAt: code.sentAt ? new Date(code.sentAt) : null
+        }))
+
+        // Group codes by RSVP ID (which connects primary attendees with guests, aids, drivers)
+        const groupedByRsvp: Record<string, AccessCode[]> = processedCodes.reduce((groups: Record<string, AccessCode[]>, code: AccessCode) => {
+          const key = code.rsvpId
+          if (!groups[key]) groups[key] = []
+          groups[key].push(code)
+          return groups;
+        }, {});
+
+        // Create primary attendees with their related codes
+        const primaryAttendees: PrimaryAttendee[] = Object.values(groupedByRsvp).map((group: AccessCode[]) => {
+          const primaryCode = group.find(code => code.type === 'primary') || group[0]
+          const relatedCodes = group.filter(code => code.id !== primaryCode.id)
+
+          return {
+            id: primaryCode.id,
+            name: primaryCode.name,
+            email: primaryCode.email || null,
+            phone: primaryCode.phone || null,
+            code: primaryCode.code,
+            tableId: primaryCode.tableId,
+            tableName: primaryCode.tableName,
+            isAdmitted: primaryCode.isAdmitted,
+            relatedCodes,
+            isExpanded: false,
+            isSent: primaryCode.isSent || false,
+            sentAt: primaryCode.sentAt
+          }
+        })
+
+        // Sort by name
+        primaryAttendees.sort((a, b) => a.name.localeCompare(b.name));
+
+        setPrimaryAttendees(primaryAttendees);
+
+        // Apply initial filters
+        applyFilters(primaryAttendees);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        Swal.fire({
+          title: 'Error',
+          text: 'Failed to load attendees. Please try again.',
+          icon: 'error',
+          confirmButtonColor: '#f44336'  // Red color for error button
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [eventId]);
+
+  // Apply filters whenever access codes or filter options change
+  useEffect(() => {
+    applyFilters()
+  }, [primaryAttendees, filterOptions, searchQuery])
+
+  const applyFilters = (attendees: PrimaryAttendee[] = primaryAttendees) => {
+    let filtered = [...attendees]
+
+    // Filter by admission status
+    if (filterOptions.admitted === 'admitted') {
+      filtered = filtered.filter(attendee => attendee.isAdmitted)
+    } else if (filterOptions.admitted === 'not_admitted') {
+      filtered = filtered.filter(attendee => !attendee.isAdmitted)
+    }
+
+    // Filter by table assignment
+    if (filterOptions.hasTable === 'assigned') {
+      filtered = filtered.filter(attendee => !!attendee.tableId)
+    } else if (filterOptions.hasTable === 'not_assigned') {
+      filtered = filtered.filter(attendee => !attendee.tableId)
+    }
+
+    // Filter by QR code send status
+    if (filterOptions.qrSent === 'sent') {
+      filtered = filtered.filter(attendee => attendee.isSent)
+    } else if (filterOptions.qrSent === 'not_sent') {
+      filtered = filtered.filter(attendee => !attendee.isSent)
+    }
+
+    // Apply search query if present
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim()
+      filtered = filtered.filter(attendee =>
+        attendee.name.toLowerCase().includes(query) ||
+        attendee.code.toLowerCase().includes(query) ||
+        (attendee.tableName && attendee.tableName.toLowerCase().includes(query)) ||
+        (attendee.email && attendee.email.toLowerCase().includes(query)) ||
+        (attendee.phone && attendee.phone.toLowerCase().includes(query))
+      )
+    }
+
+    setFilteredAttendees(filtered)
+  }
+
+  const handleFilterChange = (field: string, value: string) => {
+    setFilterOptions(prev => ({
+      ...prev,
+      [field]: value
+    }))
+    setSelectAll(false)
+  }
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(e.target.value)
+    setSelectAll(false)
+  }
+
+  const handleSelectAttendee = (id: string) => {
+    setSelectedAttendees(prev => {
+      const newSelected = prev.includes(id) 
+        ? prev.filter(attendeeId => attendeeId !== id)
+        : [...prev, id];
+      
+      // Update selectAll state without triggering a separate render
+      const allSelected = newSelected.length === filteredAttendees.length;
+      if (allSelected !== selectAll) {
+        // Use setTimeout to batch state updates
+        setTimeout(() => setSelectAll(allSelected), 0);
+      }
+      
+      return newSelected;
+    });
+  }
+
+  const handleSelectAll = () => {
+    const newSelectAll = !selectAll;
+    setSelectAll(newSelectAll);
+    
+    // Use a single state update for better performance
+    setSelectedAttendees(newSelectAll ? filteredAttendees.map(attendee => attendee.id) : []);
+  }
+
+  const handleSendQRCodes = async () => {
+    if (selectedAttendees.length === 0) {
+      Swal.fire({
+        title: 'No Attendees Selected',
+        text: 'Please select at least one attendee to send QR codes.',
+        icon: 'warning',
+        confirmButtonColor: '#f44336'
+      })
+      return
+    }
+
+    try {
+      // Get selected attendees data
+      const selectedAttendeesData = primaryAttendees.filter(
+        attendee => selectedAttendees.includes(attendee.id)
+      )
+
+      // Show recipient confirmation modal
+      const { value: formResult, isConfirmed } = await Swal.fire({
+        title: 'Review Recipients',
+        html: `
+          <div class="text-sm mb-4">Review and edit recipient details before sending QR codes.</div>
+          <div class="grid grid-cols-4 gap-2 font-medium text-gray-700 mb-2 text-left">
+            <div>Name</div>
+            <div>Email</div>
+            <div>Phone</div>
+            <div>Method</div>
+          </div>
+          <form id="recipientsForm" class="max-h-[50vh] overflow-y-auto">
+            ${selectedAttendeesData.map((attendee, index) => `
+              <div class="grid grid-cols-4 gap-2 mb-3 text-left">
+                <div class="text-sm">${attendee.name}</div>
+                <div>
+                  <input type="email" name="email_${attendee.id}" value="${attendee.email || ''}" 
+                    class="w-full text-sm p-1 border rounded" ${!attendee.email ? 'placeholder="No email"' : ''}>
+                </div>
+                <div>
+                  <input type="tel" name="phone_${attendee.id}" value="${attendee.phone || ''}" 
+                    class="w-full text-sm p-1 border rounded" ${!attendee.phone ? 'placeholder="No phone"' : ''}>
+                </div>
+                <div>
+                  <select name="method_${attendee.id}" class="w-full text-sm p-1 border rounded">
+                    ${attendee.email && attendee.phone 
+                      ? '<option value="both">Email & WhatsApp</option><option value="email">Email Only</option><option value="whatsapp">WhatsApp Only</option>' 
+                      : attendee.email 
+                        ? '<option value="email">Email Only</option>' 
+                        : attendee.phone 
+                          ? '<option value="whatsapp">WhatsApp Only</option>' 
+                          : '<option value="none">No Contact</option>'}
+                  </select>
+                </div>
+              </div>
+            `).join('')}
+          </form>
+        `,
+        width: '80%',
+        showCancelButton: true,
+        confirmButtonText: 'Send QR Codes',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#4CAF50',  // Green color for confirm button
+        cancelButtonColor: '#f44336',   // Red color for cancel button
+        preConfirm: () => {
+          const form = document.getElementById('recipientsForm') as HTMLFormElement
+          const formData = new FormData(form)
+          
+          const result: Record<string, { email: string, phone: string, method: string }> = {}
+          
+          selectedAttendeesData.forEach(attendee => {
+            result[attendee.id] = {
+              email: formData.get(`email_${attendee.id}`) as string || '',
+              phone: formData.get(`phone_${attendee.id}`) as string || '',
+              method: formData.get(`method_${attendee.id}`) as string || 'none'
+            }
+          })
+          
+          return result
+        }
+      })
+
+      if (!isConfirmed || !formResult) {
+        return
+      }
+
+      // Show loading state
+      Swal.fire({
+        title: 'Sending QR Codes',
+        text: 'Please wait while we send the QR codes...',
+        allowOutsideClick: false,
+        didOpen: () => {
+          Swal.showLoading()
+        }
+      })
+
+      // Prepare data for API
+      type RecipientData = { email: string, phone: string, method: string };
+      const attendeesData = Object.entries(formResult as Record<string, RecipientData>).map(([attendeeId, recipient]) => {
+        const attendee = primaryAttendees.find(a => a.id === attendeeId)
+        if (!attendee) return null
+        
+        return {
+          primary: {
+            id: attendee.id,
+            name: attendee.name,
+            code: attendee.code,
+            email: recipient.email,
+            phone: recipient.phone
+          },
+          related: attendee.relatedCodes.map(related => ({
+            id: related.id,
+            name: related.name,
+            code: related.code
+          })),
+          sendMethod: recipient.method
+        }
+      }).filter(Boolean)
+
+      // Send QR codes
+      setSending(true)
+      const response = await fetch(`/api/admin/events/${params.id}/access-codes/send-qr`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          attendees: attendeesData,
+          method: 'both' // Default method (will be overridden by individual preferences)
+        })
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        // Update local state to reflect the sent status
+        const updatedPrimaryAttendees = [...primaryAttendees]
+        
+        // Update primary attendees
+        attendeesData.forEach(attendeeData => {
+          if (!attendeeData) return
+          
+          const primaryIndex = updatedPrimaryAttendees.findIndex(a => a.id === attendeeData.primary.id)
+          if (primaryIndex !== -1) {
+            updatedPrimaryAttendees[primaryIndex] = {
+              ...updatedPrimaryAttendees[primaryIndex],
+              isSent: true,
+              sentAt: new Date()
+            }
+            
+            // Also update related codes
+            const relatedIds = attendeeData.related.map(r => r.id)
+            updatedPrimaryAttendees[primaryIndex].relatedCodes = 
+              updatedPrimaryAttendees[primaryIndex].relatedCodes.map(related => ({
+                ...related,
+                isSent: relatedIds.includes(related.id) ? true : related.isSent,
+                sentAt: relatedIds.includes(related.id) ? new Date() : related.sentAt
+              }))
+          }
+        })
+        
+        // Update state
+        setPrimaryAttendees(updatedPrimaryAttendees)
+        
+        // Apply filters to update the filtered list
+        applyFilters(updatedPrimaryAttendees)
+        
+        // Clear selection
+        setSelectedAttendees([])
+        setSelectAll(false)
+
+        // Show success message
+        Swal.fire({
+          title: 'QR Codes Sent',
+          html: `
+            Successfully sent QR codes to ${data.successCount} recipients.
+            ${data.errorCount > 0 ? `
+              <div class="mt-4 p-3 bg-red-50 text-red-700 rounded-md text-sm">
+                Failed to send ${data.errorCount} QR codes. Please try again for these recipients.
+              </div>
+            ` : ''}
+          `,
+          icon: 'success',
+          confirmButtonColor: '#4CAF50',  // Green color for confirm button
+        })
+      } else {
+        throw new Error(data.error || 'Failed to send QR codes')
+      }
+    } catch (error) {
+      console.error('Error sending QR codes:', error)
+      Swal.fire({
+        title: 'Error',
+        text: error instanceof Error ? error.message : 'An error occurred while sending QR codes',
+        icon: 'error',
+        confirmButtonColor: '#f44336'  // Red color for error button
+      })
+    } finally {
+      setSending(false)
+    }
+  }
+
+  const handleDownloadQRCode = async (attendee: PrimaryAttendee) => {
+    try {
+      // Show loading modal
+      Swal.fire({
+        title: 'Generating QR Codes',
+        html: 'Please wait while we generate the QR codes...',
+        allowOutsideClick: false,
+        didOpen: () => {
+          Swal.showLoading()
+        }
+      })
+
+      // Base URL for QR code content
+      const baseUrl = window.location.origin
+      
+      // Generate QR code for primary attendee
+      const primaryQrCodeUrl = `${baseUrl}/admin/dashboard/events/${eventId}/qr/${attendee.code}`
+      
+      // Generate QR code data URL for primary
+      const primaryQrDataUrl = await QRCodeLib.toDataURL(primaryQrCodeUrl, {
+        width: 180,
+        margin: 1,
+        color: {
+          dark: '#000000',
+          light: '#ffffff'
+        }
+      })
+      
+      // Generate QR codes for related attendees
+      const relatedQrDataUrls = await Promise.all(
+        attendee.relatedCodes.map(async (relatedCode) => {
+          const relatedQrCodeUrl = `${baseUrl}/admin/dashboard/events/${eventId}/qr/${relatedCode.code}`
+          
+          // Generate QR code data URL for related
+          return QRCodeLib.toDataURL(relatedQrCodeUrl, {
+            width: 180,
+            margin: 1,
+            color: {
+              dark: '#000000',
+              light: '#ffffff'
+            }
+          })
+        })
+      )
+      
+      // Store the QR code data URLs in the attendee object for future use
+      const updatedAttendees = primaryAttendees.map(a => {
+        if (a.id === attendee.id) {
+          return {
+            ...a,
+            qrCodeDataUrl: primaryQrDataUrl,
+            relatedQrCodes: relatedQrDataUrls
+          }
+        }
+        return a
+      })
+      
+      setPrimaryAttendees(updatedAttendees)
+      
+      // Create array to store all QR code data URLs
+      const allQrDataUrls = [primaryQrDataUrl, ...relatedQrDataUrls]
+      
+      // Show QR codes in modal for download
+      Swal.fire({
+        title: 'QR Codes',
+        html: `
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[70vh] overflow-y-auto p-4">
+            ${allQrDataUrls.map((dataUrl, index) => {
+              const isMain = index === 0
+              const codeInfo = isMain 
+                ? { name: attendee.name, code: attendee.code, type: 'Primary' }
+                : { 
+                    name: attendee.relatedCodes[index - 1].name, 
+                    code: attendee.relatedCodes[index - 1].code,
+                    type: attendee.relatedCodes[index - 1].name.toLowerCase().includes('guest') ? 'Guest' :
+                          attendee.relatedCodes[index - 1].name.toLowerCase().includes('aid') ? 'Aid' :
+                          attendee.relatedCodes[index - 1].name.toLowerCase().includes('driver') ? 'Driver' : 'Related'
+                  }
+              
+              return `
+                <div class="border rounded-lg p-4 bg-white flex flex-col items-center">
+                  <img src="${dataUrl}" alt="QR Code" class="w-48 h-48 object-contain mb-2" />
+                  <div class="text-center">
+                    <p class="font-bold">${codeInfo.name} (${codeInfo.type})</p>
+                    <p class="text-sm text-gray-600">Code: ${codeInfo.code}</p>
+                  </div>
+                  <a href="${dataUrl}" download="qrcode-${codeInfo.code}.png" class="mt-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Download
+                  </a>
+                </div>
+              `
+            }).join('')}
+          </div>
+        `,
+        width: '80%',
+        showCloseButton: true,
+        showConfirmButton: false,
+        confirmButtonColor: '#4CAF50',
+        didOpen: () => {
+          // Add event listeners to download buttons
+          const downloadButtons = document.querySelectorAll('a[download]')
+          downloadButtons.forEach(button => {
+            button.addEventListener('click', (e) => {
+              // Let the default download behavior happen
+              // This is handled by the download attribute on the anchor tag
+            })
+          })
+        }
+      })
+      
+    } catch (error) {
+      console.error('Error generating QR codes:', error)
+      Swal.fire({
+        title: 'Error',
+        text: 'Failed to generate QR codes. Please try again.',
+        icon: 'error',
+        confirmButtonColor: '#f44336'  // Red color for error button
+      })
+    }
+  }
+
+  const handleDownloadSelected = async () => {
+    if (selectedAttendees.length === 0) {
+      Swal.fire({
+        title: 'No Attendees Selected',
+        text: 'Please select at least one attendee to download.',
+        icon: 'warning'
+      })
+      return
+    }
+
+    // Download each selected QR code
+    for (const id of selectedAttendees) {
+      const attendee = primaryAttendees.find(attendee => attendee.id === id)
+      if (attendee) {
+        await handleDownloadQRCode(attendee)
+        // Small delay to prevent browser issues with multiple downloads
+        await new Promise(resolve => setTimeout(resolve, 300))
+      }
+    }
+  }
+
+  const toggleExpanded = (id: string) => {
+    setPrimaryAttendees(prev => 
+      prev.map(attendee => 
+        attendee.id === id 
+          ? { ...attendee, isExpanded: !attendee.isExpanded } 
+          : attendee
+      )
+    );
+    
+    // Also update filtered attendees to reflect the change
+    setFilteredAttendees(prev => 
+      prev.map(attendee => 
+        attendee.id === id 
+          ? { ...attendee, isExpanded: !attendee.isExpanded } 
+          : attendee
+      )
+    );
+  };
+
+  const paginatedAttendees = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    const end = start + pageSize;
+    return filteredAttendees.slice(start, end);
+  }, [filteredAttendees, page, pageSize]);
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setPage(newPage);
+      // Scroll to top when changing pages
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-6">
+        <div className="flex justify-center items-center h-64">
+          <RefreshCw className="h-8 w-8 animate-spin text-blue-500" />
+          <span className="ml-2 text-lg">Loading QR codes...</span>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="mb-6">
+        <Link href={`/admin/dashboard/events/${eventId}`} className="flex items-center text-blue-600 hover:text-blue-800">
+          <ChevronLeft className="h-4 w-4 mr-1" />
+          Back to Event Dashboard
+        </Link>
+      </div>
+
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold">QR Codes for {event?.title}</h1>
+        <p className="text-gray-600 mt-1">
+          Generate and send QR codes for attendee check-in
+        </p>
+      </div>
+
+      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+          <div className="mb-3 sm:mb-0">
+            <h2 className="text-xl font-bold">Attendees</h2>
+            <p className="text-sm text-gray-500">
+              {filteredAttendees.length} of {primaryAttendees.length} attendees shown
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <div className="relative w-full sm:w-64 mb-2 sm:mb-0">
+              <input
+                type="text"
+                placeholder="Search by name, code, table..."
+                value={searchQuery}
+                onChange={handleSearchChange}
+                className="w-full pl-10 pr-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+            </div>
+
+            <button
+              onClick={() => setIsFilterOpen(!isFilterOpen)}
+              className="flex items-center justify-center px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+            >
+              <Filter className="h-4 w-4 mr-2" />
+              Filters
+            </button>
+          </div>
+        </div>
+
+        {isFilterOpen && (
+          <div className="mb-6 p-4 border rounded-md bg-gray-50">
+            <h3 className="text-lg font-semibold mb-3">Filter Options</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Admission Status
+                </label>
+                <select
+                  value={filterOptions.admitted}
+                  onChange={(e) => handleFilterChange('admitted', e.target.value)}
+                  className="w-full p-2 border rounded-md"
+                >
+                  <option value="all">All Attendees</option>
+                  <option value="admitted">Admitted Only</option>
+                  <option value="not_admitted">Not Admitted Only</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Table Assignment
+                </label>
+                <select
+                  value={filterOptions.hasTable}
+                  onChange={(e) => handleFilterChange('hasTable', e.target.value)}
+                  className="w-full p-2 border rounded-md"
+                >
+                  <option value="all">All Tables</option>
+                  <option value="assigned">Assigned to Table</option>
+                  <option value="not_assigned">Not Assigned to Table</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  QR Code Send Status
+                </label>
+                <select
+                  value={filterOptions.qrSent}
+                  onChange={(e) => handleFilterChange('qrSent', e.target.value)}
+                  className="w-full p-2 border rounded-md"
+                >
+                  <option value="all">All QR Codes</option>
+                  <option value="sent">Sent Only</option>
+                  <option value="not_sent">Not Sent Only</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {selectedAttendees.length > 0 && (
+          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
+            <div className="flex flex-col sm:flex-row justify-between items-center">
+              <div className="mb-3 sm:mb-0">
+                <span className="font-medium">{selectedAttendees.length} attendees selected</span>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={handleDownloadSelected}
+                  className="flex items-center px-3 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-800"
+                >
+                  <Download className="h-4 w-4 mr-1" />
+                  Download Selected
+                </button>
+
+                <button
+                  onClick={() => handleSendQRCodes()}
+                  disabled={sending}
+                  className="flex items-center px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                >
+                  <Send className="h-4 w-4 mr-1" />
+                  Send via Email
+                </button>
+
+                <button
+                  onClick={() => handleSendQRCodes()}
+                  disabled={sending}
+                  className="flex items-center px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
+                >
+                  <Send className="h-4 w-4 mr-1" />
+                  Send via WhatsApp
+                </button>
+
+                <button
+                  onClick={() => handleSendQRCodes()}
+                  disabled={sending}
+                  className="flex items-center px-3 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50"
+                >
+                  <Send className="h-4 w-4 mr-1" />
+                  Send Both
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="select-all"
+              checked={selectAll}
+              onChange={handleSelectAll}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+            />
+            <label htmlFor="select-all" className="ml-2 text-sm text-gray-700 cursor-pointer">
+              Select All
+            </label>
+          </div>
+        </div>
+
+        {filteredAttendees.length > 0 ? (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {paginatedAttendees.map(attendee => (
+                <div
+                  key={attendee.id}
+                  className={`border rounded-lg overflow-hidden ${
+                    selectedAttendees.includes(attendee.id) ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-200'
+                  }`}
+                >
+                  <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        id={`select-${attendee.id}`}
+                        checked={selectedAttendees.includes(attendee.id)}
+                        onChange={() => handleSelectAttendee(attendee.id)}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                      />
+                      <div className="ml-2">
+                        <h3 className="font-medium">{attendee.name}</h3>
+                        <p className="text-sm text-gray-500">Code: {attendee.code}</p>
+                        {attendee.relatedCodes.length > 0 && (
+                          <p className="text-xs text-blue-600">
+                            +{attendee.relatedCodes.length} {attendee.relatedCodes.length === 1 ? 'guest' : 'guests'}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      <div className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        attendee.tableId ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {attendee.tableId ? `Table: ${attendee.tableName || attendee.tableId}` : 'No Table'}
+                      </div>
+                      <div className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        attendee.isAdmitted ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {attendee.isAdmitted ? 'Admitted' : 'Not Admitted'}
+                      </div>
+                      <div className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        attendee.isSent ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800'
+                      }`}>
+                        {attendee.isSent ? 'QR Sent' : 'QR Not Sent'}
+                      </div>
+                    </div>
+                    
+                  </div>
+
+                  {attendee.isSent && attendee.sentAt && (
+                    <div className="text-xs text-gray-500 mt-1">
+                      Sent on: {new Date(attendee.sentAt).toLocaleDateString()} at {new Date(attendee.sentAt).toLocaleTimeString()}
+                    </div>
+                  )}
+                  
+                  <div className="p-4 flex flex-col items-center">
+                    <div className="mb-3 bg-white p-2 rounded-lg shadow-sm">
+                      {attendee.qrCodeDataUrl ? (
+                        <img src={attendee.qrCodeDataUrl} alt="QR Code" width={150} height={150} />
+                      ) : (
+                        <div className="w-[150px] h-[150px] flex items-center justify-center bg-gray-100">
+                          <QrCode className="text-gray-400" size={50} />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="w-full text-center mb-3">
+                      <div className="font-medium">{attendee.name}</div>
+                      <div className="text-sm text-gray-500">Code: {attendee.code}</div>
+                    </div>
+
+                    <div className="flex justify-center space-x-2">
+                      <button
+                        onClick={() => handleDownloadQRCode(attendee)}
+                        className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 flex items-center"
+                      >
+                        <Download size={14} className="mr-1" />
+                        Download
+                      </button>
+                    </div>
+                  </div>
+
+                  {attendee.isExpanded && (
+                    <div className="mt-4 w-full border-t pt-3">
+                      <h4 className="text-sm font-medium mb-2 flex items-center">
+                        <Users className="h-4 w-4 mr-1 text-gray-500" />
+                        Associated Guests
+                      </h4>
+                      {attendee.relatedCodes.map(guest => (
+                        <div key={guest.id} className="flex items-center justify-between py-2 border-b last:border-b-0">
+                          <div className="flex items-center">
+                            <User className="h-4 w-4 mr-2 text-gray-500 flex-shrink-0" />
+                            <div>
+                              <p className="text-sm font-medium">{guest.name}</p>
+                              <p className="text-xs text-gray-500">Code: {guest.code}</p>
+                            </div>
+                          </div>
+                          <div className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            guest.isAdmitted ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {guest.isAdmitted ? 'Admitted' : 'Not Admitted'}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex justify-center mt-6">
+                <nav className="flex items-center space-x-2">
+                  <button
+                    onClick={() => handlePageChange(page - 1)}
+                    disabled={page === 1}
+                    className="px-3 py-1 rounded-md border bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNum => (
+                    <button
+                      key={pageNum}
+                      onClick={() => handlePageChange(pageNum)}
+                      className={`px-3 py-1 rounded-md ${
+                        pageNum === page
+                          ? 'bg-blue-600 text-white'
+                          : 'border bg-white text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  ))}
+                  
+                  <button
+                    onClick={() => handlePageChange(page + 1)}
+                    disabled={page === totalPages}
+                    className="px-3 py-1 rounded-md border bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </nav>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="text-center py-12">
+            <QrCode className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-1">No Attendees Found</h3>
+            <p className="text-gray-500">
+              No attendees match your current filters. Try adjusting your search or filters.
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
