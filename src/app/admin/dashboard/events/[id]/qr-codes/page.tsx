@@ -57,7 +57,8 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
   const [filterOptions, setFilterOptions] = useState({
     admitted: 'all', // all, admitted, not_admitted
     hasTable: 'all', // all, assigned, not_assigned
-    qrSent: 'all' // all, sent, not_sent
+    qrSent: 'all', // all, sent, not_sent
+    hasDependents: 'all' // all, with_dependents, without_dependents
   })
   const [selectAll, setSelectAll] = useState(false)
   const [isFilterOpen, setIsFilterOpen] = useState(false)
@@ -275,6 +276,17 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
       filtered = filtered.filter((attendee: PrimaryAttendee) => attendee.isSent)
     } else if (filterOptions.qrSent === 'not_sent') {
       filtered = filtered.filter((attendee: PrimaryAttendee) => !attendee.isSent)
+    }
+    
+    // Filter by dependent status
+    if (filterOptions.hasDependents === 'with_dependents') {
+      filtered = filtered.filter((attendee: PrimaryAttendee) => 
+        attendee.relatedCodes && attendee.relatedCodes.length > 0
+      )
+    } else if (filterOptions.hasDependents === 'without_dependents') {
+      filtered = filtered.filter((attendee: PrimaryAttendee) => 
+        !attendee.relatedCodes || attendee.relatedCodes.length === 0
+      )
     }
 
     // Apply search query if present
@@ -970,7 +982,7 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
         {isFilterOpen && (
           <div className="mb-6 p-4 border rounded-md bg-gray-50">
             <h3 className="text-lg font-semibold mb-3">Filter Options</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Admission Status
@@ -1013,6 +1025,21 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
                   <option value="all">All QR Codes</option>
                   <option value="sent">Sent Only</option>
                   <option value="not_sent">Not Sent Only</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Dependents
+                </label>
+                <select
+                  value={filterOptions.hasDependents}
+                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleFilterChange('hasDependents', e.target.value)}
+                  className="w-full p-2 border rounded-md"
+                >
+                  <option value="all">All Attendees</option>
+                  <option value="with_dependents">With Dependents</option>
+                  <option value="without_dependents">Without Dependents</option>
                 </select>
               </div>
             </div>
