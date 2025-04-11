@@ -56,6 +56,13 @@ export default function EventRsvpsPage({ params }: { params: { id: string } }) {
   const [exporting, setExporting] = useState(false)
   const [managingRsvp, setManagingRsvp] = useState<Rsvp | null>(null)
   const [processingAction, setProcessingAction] = useState(false)
+  const [summary, setSummary] = useState({
+    totalInvitees: 0,
+    totalPrimary: 0,
+    totalGuests: 0,
+    totalDrivers: 0,
+    totalAides: 0
+  })
 
   // Fetch event data
   useEffect(() => {
@@ -101,6 +108,10 @@ export default function EventRsvpsPage({ params }: { params: { id: string } }) {
         limit: pagination.limit,
         totalPages: Math.ceil(data.stats.total / pagination.limit)
       })
+      
+      // Fetch summary data
+      fetchSummary()
+      
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch RSVPs')
@@ -109,6 +120,28 @@ export default function EventRsvpsPage({ params }: { params: { id: string } }) {
       setLoading(false)
     }
   }, [pagination.limit, params.id])
+
+  // Fetch summary data
+  const fetchSummary = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/admin/events/${params.id}/rsvps/summary`)
+      if (!response.ok) throw new Error('Failed to fetch summary data')
+
+      const data = await response.json()
+      if (!data.success) throw new Error(data.error)
+
+      setSummary({
+        totalInvitees: data.totalInvitees || 0,
+        totalPrimary: data.totalPrimary || 0,
+        totalGuests: data.totalGuests || 0,
+        totalDrivers: data.totalDrivers || 0,
+        totalAides: data.totalAides || 0
+      })
+    } catch (error) {
+      console.error('Error fetching summary data:', error)
+      // Don't show error toast for summary as it's not critical
+    }
+  }, [params.id])
 
   // Fetch a single RSVP to ensure data consistency
   const fetchSingleRsvp = useCallback(async (rsvpId: string) => {
@@ -223,6 +256,7 @@ export default function EventRsvpsPage({ params }: { params: { id: string } }) {
               class="remove-guest-btn px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700" 
               data-code-id="${code.id}"
               data-rsvp-id="${rsvp.id}"
+              data-dependent-type="${code.type}"
             >
               Remove
             </button>
@@ -289,13 +323,13 @@ export default function EventRsvpsPage({ params }: { params: { id: string } }) {
             const target = e.currentTarget as HTMLButtonElement;
             const codeId = target.getAttribute('data-code-id');
             const rsvpId = target.getAttribute('data-rsvp-id');
+            const dependentType = target.getAttribute('data-dependent-type');
             
-            if (codeId) {
+            if (codeId && rsvpId && dependentType) {
               // Close current modal before opening the remove confirmation
               Swal.close();
               setTimeout(() => {
-                // Only pass rsvpId if it's not null
-                handleRemoveGuest(codeId, rsvpId || undefined);
+                handleRemoveGuest(codeId, rsvpId, dependentType);
               }, 300);
             }
           })
@@ -313,19 +347,15 @@ export default function EventRsvpsPage({ params }: { params: { id: string } }) {
   const handleAddGuest = async (rsvpId: string) => {
     // Show form to add a new guest
     const { value: formValues, isConfirmed } = await Swal.fire({
-      title: 'Add New Guest',
+      title: 'Add Dependent',
       html: `
         <div class="mb-4">
-          <label class="block text-sm font-medium text-gray-700 mb-1">Guest Type</label>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Dependent Type</label>
           <select id="guest-type" class="w-full p-2 border rounded-md">
             <option value="guest">Guest</option>
             <option value="driver">Driver</option>
             <option value="aide">Aide</option>
           </select>
-        </div>
-        <div class="mb-4">
-          <label class="block text-sm font-medium text-gray-700 mb-1">Guest Name</label>
-          <input id="guest-name" class="w-full p-2 border rounded-md" placeholder="Enter guest name">
         </div>
       `,
       showCancelButton: true,
@@ -333,15 +363,14 @@ export default function EventRsvpsPage({ params }: { params: { id: string } }) {
       confirmButtonColor: '#4CAF50',
       cancelButtonColor: '#9CA3AF',
       preConfirm: () => {
-        const guestType = (document.getElementById('guest-type') as HTMLSelectElement).value
-        const guestName = (document.getElementById('guest-name') as HTMLInputElement).value
+        const dependentType = (document.getElementById('guest-type') as HTMLSelectElement).value
         
-        if (!guestName.trim()) {
-          Swal.showValidationMessage('Guest name is required')
+        if (!['guest', 'driver', 'aide'].includes(dependentType)) {
+          Swal.showValidationMessage('Invalid dependent type')
           return false
         }
         
-        return { guestType, guestName }
+        return { dependentType }
       }
     })
     
@@ -350,28 +379,27 @@ export default function EventRsvpsPage({ params }: { params: { id: string } }) {
     try {
       setProcessingAction(true)
       
-      // Call API to add a new guest
-      const response = await fetch(`/api/admin/events/${params.id}/access-codes/generate`, {
+      // Call API to update the RSVP flags
+      const response = await fetch(`/api/admin/events/${params.id}/rsvps/${rsvpId}/update-dependents`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          rsvpId,
-          name: formValues.guestName,
-          type: formValues.guestType
+          dependentType: formValues.dependentType,
+          action: 'add'
         })
       })
       
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to add guest')
+        throw new Error(errorData.error || 'Failed to add dependent')
       }
       
       const data = await response.json()
       
       // Show success message
-      toast.success(`Added ${formValues.guestType}: ${formValues.guestName}`)
+      toast.success(`Added ${formValues.dependentType} to attendee`)
       
       // Fetch the updated RSVP from the server to ensure data consistency
       const updatedRsvp = await fetchSingleRsvp(rsvpId)
@@ -383,72 +411,73 @@ export default function EventRsvpsPage({ params }: { params: { id: string } }) {
       }
       
     } catch (error) {
-      console.error('Error adding guest:', error)
-      toast.error(error instanceof Error ? error.message : 'Failed to add guest')
+      console.error('Error adding dependent:', error)
+      toast.error(error instanceof Error ? error.message : 'Failed to add dependent')
     } finally {
       setProcessingAction(false)
     }
   }
   
   // Handle removing a guest
-  const handleRemoveGuest = async (codeId: string, rsvpId?: string) => {
-    // Confirm before removing
-    const { isConfirmed } = await Swal.fire({
-      title: 'Remove Guest',
-      text: 'Are you sure you want to remove this guest? This will delete their access code and QR code.',
+  const handleRemoveGuest = async (codeId: string, rsvpId?: string, dependentType?: string) => {
+    if (!rsvpId || !dependentType) {
+      // If we don't have the RSVP ID or dependent type, we can't proceed
+      toast.error('Missing RSVP ID or dependent type')
+      return
+    }
+
+    // Show confirmation dialog
+    const result = await Swal.fire({
+      title: 'Remove Dependent?',
+      text: `Are you sure you want to remove this ${dependentType}?`,
       icon: 'warning',
       showCancelButton: true,
-      confirmButtonText: 'Yes, remove',
-      confirmButtonColor: '#EF4444',
-      cancelButtonColor: '#9CA3AF'
+      confirmButtonText: 'Yes, remove it',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      reverseButtons: true
     })
-    
-    if (!isConfirmed) return
-    
+
+    if (!result.isConfirmed) return
+
     try {
       setProcessingAction(true)
-      
-      // Use provided rsvpId or get it from managingRsvp
-      const effectiveRsvpId = rsvpId || managingRsvp?.id
-      
-      // Call API to delete the access code
-      const response = await fetch(`/api/admin/events/${params.id}/access-codes/delete`, {
+
+      // Call API to update the RSVP flags
+      const response = await fetch(`/api/admin/events/${params.id}/rsvps/${rsvpId}/update-dependents`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          codeIds: [codeId]
+          dependentType,
+          action: 'remove'
         })
       })
-      
+
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to remove guest')
+        throw new Error(errorData.error || 'Failed to remove dependent')
       }
-      
+
       const data = await response.json()
-      
+
       // Show success message
-      toast.success('Guest removed successfully')
-      
+      toast.success(`Removed ${dependentType} from attendee`)
+
       // Fetch the updated RSVP from the server to ensure data consistency
-      if (effectiveRsvpId) {
-        const updatedRsvp = await fetchSingleRsvp(effectiveRsvpId)
-        
-        // If we have the updated RSVP and we're managing it, refresh the modal
-        if (updatedRsvp) {
-          // If we're still managing this RSVP, reopen the modal with updated data
-          if (managingRsvp && managingRsvp.id === updatedRsvp.id) {
-            setManagingRsvp(updatedRsvp)
-            handleManageGuests(updatedRsvp)
-          }
-        }
+      const updatedRsvp = await fetchSingleRsvp(rsvpId)
+
+      // If we have the updated RSVP and we're managing it, refresh the modal
+      if (updatedRsvp && managingRsvp && managingRsvp.id === updatedRsvp.id) {
+        setManagingRsvp(updatedRsvp)
+        handleManageGuests(updatedRsvp)
       }
-      
+
     } catch (error) {
-      console.error('Error removing guest:', error)
-      toast.error(error instanceof Error ? error.message : 'Failed to remove guest')
+      console.error('Error removing dependent:', error)
+      toast.error(error instanceof Error ? error.message : 'Failed to remove dependent')
     } finally {
       setProcessingAction(false)
     }
@@ -585,6 +614,33 @@ export default function EventRsvpsPage({ params }: { params: { id: string } }) {
       <h1 className="text-2xl font-semibold mb-6">
         {event?.title ? `RSVPs for ${event.title}` : 'Event RSVPs'}
       </h1>
+      
+      {/* Summary Section */}
+      <div className="bg-white rounded-lg shadow mb-6 p-4">
+        <h2 className="text-lg font-medium mb-3 text-gray-700">Attendee Summary</h2>
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100">
+            <p className="text-sm text-emerald-700 font-medium">Total Invitees</p>
+            <p className="text-2xl font-bold text-emerald-800">{summary.totalInvitees}</p>
+          </div>
+          <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
+            <p className="text-sm text-blue-700 font-medium">Primary Attendees</p>
+            <p className="text-2xl font-bold text-blue-800">{summary.totalPrimary}</p>
+          </div>
+          <div className="bg-purple-50 p-3 rounded-lg border border-purple-100">
+            <p className="text-sm text-purple-700 font-medium">Guests</p>
+            <p className="text-2xl font-bold text-purple-800">{summary.totalGuests}</p>
+          </div>
+          <div className="bg-amber-50 p-3 rounded-lg border border-amber-100">
+            <p className="text-sm text-amber-700 font-medium">Drivers</p>
+            <p className="text-2xl font-bold text-amber-800">{summary.totalDrivers}</p>
+          </div>
+          <div className="bg-pink-50 p-3 rounded-lg border border-pink-100">
+            <p className="text-sm text-pink-700 font-medium">Aides</p>
+            <p className="text-2xl font-bold text-pink-800">{summary.totalAides}</p>
+          </div>
+        </div>
+      </div>
       
       <DataTable
         data={rsvps}

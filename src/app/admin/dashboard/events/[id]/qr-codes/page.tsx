@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, createRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ChevronLeft, QrCode, Search, Send, Download, RefreshCw, Filter, ChevronDown, ChevronUp, Users, User } from 'lucide-react'
+import { ChevronLeft, QrCode, Search, Send, Download, RefreshCw, Filter, ChevronDown, ChevronUp, Users, User, Trash2 } from 'lucide-react'
 import QRCodeLib from 'qrcode'
 import Swal from 'sweetalert2'
 import ReactDOM from 'react-dom'
@@ -23,6 +23,7 @@ interface AccessCode {
   type: string
   isSent: boolean
   sentAt: Date | null
+  isVirtual?: boolean
 }
 
 interface PrimaryAttendee {
@@ -47,6 +48,7 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
   const eventId = params.id
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [event, setEvent] = useState<any>(null)
   const [primaryAttendees, setPrimaryAttendees] = useState<PrimaryAttendee[]>([])
   const [filteredAttendees, setFilteredAttendees] = useState<PrimaryAttendee[]>([])
@@ -63,95 +65,188 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
   const [totalPages, setTotalPages] = useState(1)
   const [pageSize] = useState(20)
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true)
+  // Function to fetch and process data
+  const refreshData = async () => {
+    try {
+      setLoading(true)
 
-        // Fetch event details
-        const eventResponse = await fetch(`/api/admin/events/${eventId}`)
-        if (!eventResponse.ok) {
-          throw new Error('Failed to fetch event details')
-        }
-        const eventData = await eventResponse.json()
-        setEvent(eventData)
-
-        // Fetch access codes
-        const response = await fetch(`/api/admin/events/${eventId}/access-codes`)
-        if (!response.ok) {
-          throw new Error('Failed to fetch access codes')
-        }
-
-        const codesData = await response.json()
-
-        // Process the access codes
-        const processedCodes = codesData.accessCodes.map((code: any) => ({
-          id: code.id,
-          name: code.name,
-          code: code.code,
-          rsvpId: code.rsvpId,
-          rsvpStatus: code.rsvpStatus,
-          isAdmitted: code.isAdmitted,
-          tableId: code.tableId,
-          tableName: code.table?.name || null,
-          email: code.rsvp?.email || null,
-          phone: code.rsvp?.phone || null,
-          type: code.type,
-          isSent: code.isSent || false,
-          sentAt: code.sentAt ? new Date(code.sentAt) : null
-        }))
-
-        // Group codes by RSVP ID (which connects primary attendees with guests, aids, drivers)
-        const groupedByRsvp: Record<string, AccessCode[]> = processedCodes.reduce((groups: Record<string, AccessCode[]>, code: AccessCode) => {
-          const key = code.rsvpId
-          if (!groups[key]) groups[key] = []
-          groups[key].push(code)
-          return groups;
-        }, {});
-
-        // Create primary attendees with their related codes
-        const primaryAttendees: PrimaryAttendee[] = Object.values(groupedByRsvp).map((group: AccessCode[]) => {
-          const primaryCode = group.find(code => code.type === 'primary') || group[0]
-          const relatedCodes = group.filter(code => code.id !== primaryCode.id)
-
-          return {
-            id: primaryCode.id,
-            name: primaryCode.name,
-            email: primaryCode.email || null,
-            phone: primaryCode.phone || null,
-            code: primaryCode.code,
-            tableId: primaryCode.tableId,
-            tableName: primaryCode.tableName,
-            isAdmitted: primaryCode.isAdmitted,
-            relatedCodes,
-            isExpanded: false,
-            isSent: primaryCode.isSent || false,
-            sentAt: primaryCode.sentAt
-          }
-        })
-
-        // Sort by name
-        primaryAttendees.sort((a, b) => a.name.localeCompare(b.name));
-
-        setPrimaryAttendees(primaryAttendees);
-
-        // Apply initial filters
-        applyFilters(primaryAttendees);
-      } catch (error) {
-        console.error('Error fetching data:', error);
-        Swal.fire({
-          title: 'Error',
-          text: 'Failed to load attendees. Please try again.',
-          icon: 'error',
-          confirmButtonColor: '#f44336'  // Red color for error button
-        });
-      } finally {
-        setLoading(false);
+      // Fetch event details
+      const eventResponse = await fetch(`/api/admin/events/${eventId}`)
+      if (!eventResponse.ok) {
+        throw new Error('Failed to fetch event details')
       }
-    };
+      const eventData = await eventResponse.json()
+      setEvent(eventData)
 
-    fetchData();
-  }, [eventId]);
+      // Fetch access codes
+      const response = await fetch(`/api/admin/events/${eventId}/access-codes`)
+      if (!response.ok) {
+        throw new Error('Failed to fetch access codes')
+      }
+
+      const codesData = await response.json()
+
+      // Process the access codes
+      const processedCodes = codesData.accessCodes.map((code: any) => ({
+        id: code.id,
+        name: code.name,
+        code: code.code,
+        rsvpId: code.rsvpId,
+        rsvpStatus: code.rsvpStatus,
+        isAdmitted: code.isAdmitted,
+        tableId: code.tableId,
+        tableName: code.table?.name || null,
+        email: code.rsvp?.email || null,
+        phone: code.rsvp?.phone || null,
+        type: code.type,
+        isSent: code.isSent || false,
+        sentAt: code.sentAt ? new Date(code.sentAt) : null
+      }))
+
+      // Create virtual dependent codes for RSVPs with hasGuest, hasDriver, or hasAide flags
+      // This ensures we show dependents even if they don't have actual access codes
+      const virtualDependentCodes: AccessCode[] = [];
+      
+      codesData.accessCodes.forEach((code: any) => {
+        // Only process primary codes
+        if (code.type === 'primary' && code.rsvp) {
+          // Add virtual guest code if RSVP has guest flag
+          if (code.rsvp.hasGuest) {
+            const existingGuestCode = processedCodes.find((c: AccessCode) => 
+              c.rsvpId === code.rsvpId && c.type === 'guest'
+            );
+            
+            // Only add virtual code if no actual code exists
+            if (!existingGuestCode) {
+              virtualDependentCodes.push({
+                id: `virtual-guest-${code.rsvpId}`,
+                name: `${code.name}'s Guest`,
+                code: 'VIRTUAL',
+                rsvpId: code.rsvpId,
+                rsvpStatus: code.rsvpStatus,
+                isAdmitted: false,
+                tableId: null,
+                tableName: null,
+                email: code.rsvp.email || null,
+                phone: code.rsvp.phone || null,
+                type: 'guest',
+                isSent: false,
+                sentAt: null,
+                isVirtual: true // Flag to identify virtual codes
+              });
+            }
+          }
+          
+          // Add virtual driver code if RSVP has driver flag
+          if (code.rsvp.hasDriver) {
+            const existingDriverCode = processedCodes.find((c: AccessCode) => 
+              c.rsvpId === code.rsvpId && c.type === 'driver'
+            );
+            
+            // Only add virtual code if no actual code exists
+            if (!existingDriverCode) {
+              virtualDependentCodes.push({
+                id: `virtual-driver-${code.rsvpId}`,
+                name: `${code.name}'s Driver`,
+                code: 'VIRTUAL',
+                rsvpId: code.rsvpId,
+                rsvpStatus: code.rsvpStatus,
+                isAdmitted: false,
+                tableId: null,
+                tableName: null,
+                email: code.rsvp.email || null,
+                phone: code.rsvp.phone || null,
+                type: 'driver',
+                isSent: false,
+                sentAt: null,
+                isVirtual: true // Flag to identify virtual codes
+              });
+            }
+          }
+          
+          // Add virtual aide code if RSVP has aide flag
+          if (code.rsvp.hasAide) {
+            const existingAideCode = processedCodes.find((c: AccessCode) => 
+              c.rsvpId === code.rsvpId && c.type === 'aide'
+            );
+            
+            // Only add virtual code if no actual code exists
+            if (!existingAideCode) {
+              virtualDependentCodes.push({
+                id: `virtual-aide-${code.rsvpId}`,
+                name: `${code.name}'s Aide`,
+                code: 'VIRTUAL',
+                rsvpId: code.rsvpId,
+                rsvpStatus: code.rsvpStatus,
+                isAdmitted: false,
+                tableId: null,
+                tableName: null,
+                email: code.rsvp.email || null,
+                phone: code.rsvp.phone || null,
+                type: 'aide',
+                isSent: false,
+                sentAt: null,
+                isVirtual: true // Flag to identify virtual codes
+              });
+            }
+          }
+        }
+      });
+      
+      // Combine actual codes with virtual dependent codes
+      const allCodes = [...processedCodes, ...virtualDependentCodes];
+
+      // Group codes by RSVP ID (which connects primary attendees with guests, aids, drivers)
+      const groupedByRsvp: Record<string, AccessCode[]> = allCodes.reduce((groups: Record<string, AccessCode[]>, code: AccessCode) => {
+        const key = code.rsvpId
+        if (!groups[key]) groups[key] = []
+        groups[key].push(code)
+        return groups;
+      }, {});
+
+      // Create primary attendees with their related codes
+      const primaryAttendees: PrimaryAttendee[] = Object.values(groupedByRsvp).map((group: AccessCode[]) => {
+        const primaryCode = group.find((code: AccessCode) => code.type === 'primary') || group[0]
+        
+        return {
+          id: primaryCode.id,
+          name: primaryCode.name,
+          email: primaryCode.email || null,
+          phone: primaryCode.phone || null,
+          code: primaryCode.code,
+          tableId: primaryCode.tableId,
+          tableName: primaryCode.tableName,
+          isAdmitted: primaryCode.isAdmitted,
+          relatedCodes: group.filter((code: AccessCode) => code.id !== primaryCode.id),
+          isExpanded: false,
+          isSent: primaryCode.isSent,
+          sentAt: primaryCode.sentAt
+        }
+      })
+
+      setPrimaryAttendees(primaryAttendees)
+      
+      // Apply filters
+      applyFilters(primaryAttendees)
+      
+      // Calculate total pages
+      setTotalPages(Math.ceil(primaryAttendees.length / pageSize))
+    } catch (error) {
+      console.error('Error fetching data:', error)
+      Swal.fire({
+        title: 'Error',
+        text: 'Failed to load attendees. Please try again.',
+        icon: 'error',
+        confirmButtonText: 'OK'
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    refreshData()
+  }, [eventId])
 
   // Apply filters whenever access codes or filter options change
   useEffect(() => {
@@ -163,29 +258,29 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
 
     // Filter by admission status
     if (filterOptions.admitted === 'admitted') {
-      filtered = filtered.filter(attendee => attendee.isAdmitted)
+      filtered = filtered.filter((attendee: PrimaryAttendee) => attendee.isAdmitted)
     } else if (filterOptions.admitted === 'not_admitted') {
-      filtered = filtered.filter(attendee => !attendee.isAdmitted)
+      filtered = filtered.filter((attendee: PrimaryAttendee) => !attendee.isAdmitted)
     }
 
     // Filter by table assignment
     if (filterOptions.hasTable === 'assigned') {
-      filtered = filtered.filter(attendee => !!attendee.tableId)
+      filtered = filtered.filter((attendee: PrimaryAttendee) => !!attendee.tableId)
     } else if (filterOptions.hasTable === 'not_assigned') {
-      filtered = filtered.filter(attendee => !attendee.tableId)
+      filtered = filtered.filter((attendee: PrimaryAttendee) => !attendee.tableId)
     }
 
     // Filter by QR code send status
     if (filterOptions.qrSent === 'sent') {
-      filtered = filtered.filter(attendee => attendee.isSent)
+      filtered = filtered.filter((attendee: PrimaryAttendee) => attendee.isSent)
     } else if (filterOptions.qrSent === 'not_sent') {
-      filtered = filtered.filter(attendee => !attendee.isSent)
+      filtered = filtered.filter((attendee: PrimaryAttendee) => !attendee.isSent)
     }
 
     // Apply search query if present
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim()
-      filtered = filtered.filter(attendee =>
+      filtered = filtered.filter((attendee: PrimaryAttendee) =>
         attendee.name.toLowerCase().includes(query) ||
         attendee.code.toLowerCase().includes(query) ||
         (attendee.tableName && attendee.tableName.toLowerCase().includes(query)) ||
@@ -213,7 +308,7 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
   const handleSelectAttendee = (id: string) => {
     setSelectedAttendees(prev => {
       const newSelected = prev.includes(id) 
-        ? prev.filter(attendeeId => attendeeId !== id)
+        ? prev.filter((attendeeId: string) => attendeeId !== id)
         : [...prev, id];
       
       // Update selectAll state without triggering a separate render
@@ -232,7 +327,7 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
     setSelectAll(newSelectAll);
     
     // Use a single state update for better performance
-    setSelectedAttendees(newSelectAll ? filteredAttendees.map(attendee => attendee.id) : []);
+    setSelectedAttendees(newSelectAll ? filteredAttendees.map((attendee: PrimaryAttendee) => attendee.id) : []);
   }
 
   const handleSendQRCodes = async () => {
@@ -241,7 +336,7 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
         title: 'No Attendees Selected',
         text: 'Please select at least one attendee to send QR codes.',
         icon: 'warning',
-        confirmButtonColor: '#f44336'
+        confirmButtonText: 'OK'
       })
       return
     }
@@ -249,7 +344,7 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
     try {
       // Get selected attendees data
       const selectedAttendeesData = primaryAttendees.filter(
-        attendee => selectedAttendees.includes(attendee.id)
+        (attendee: PrimaryAttendee) => selectedAttendees.includes(attendee.id)
       )
 
       // Show recipient confirmation modal
@@ -264,7 +359,7 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
             <div>Method</div>
           </div>
           <form id="recipientsForm" class="max-h-[50vh] overflow-y-auto">
-            ${selectedAttendeesData.map((attendee, index) => {
+            ${selectedAttendeesData.map((attendee: PrimaryAttendee, index: number) => {
               // Format phone number if it exists
               let formattedPhone = attendee.phone || '';
               
@@ -313,7 +408,7 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
           
           const result: Record<string, { email: string, phone: string, method: string }> = {}
           
-          selectedAttendeesData.forEach(attendee => {
+          selectedAttendeesData.forEach((attendee: PrimaryAttendee) => {
             result[attendee.id] = {
               email: formData.get(`email_${attendee.id}`) as string || '',
               phone: formData.get(`phone_${attendee.id}`) as string || '',
@@ -342,7 +437,7 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
       // Prepare data for API
       type RecipientData = { email: string, phone: string, method: string };
       const attendeesData = Object.entries(formResult as Record<string, RecipientData>).map(([attendeeId, recipient]) => {
-        const attendee = primaryAttendees.find(a => a.id === attendeeId)
+        const attendee = primaryAttendees.find((a: PrimaryAttendee) => a.id === attendeeId)
         if (!attendee) return null
         
         return {
@@ -353,7 +448,7 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
             email: recipient.email,
             phone: recipient.phone
           },
-          related: attendee.relatedCodes.map(related => ({
+          related: attendee.relatedCodes.map((related: AccessCode) => ({
             id: related.id,
             name: related.name,
             code: related.code
@@ -382,10 +477,10 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
         const updatedPrimaryAttendees = [...primaryAttendees]
         
         // Update primary attendees
-        attendeesData.forEach(attendeeData => {
+        attendeesData.forEach((attendeeData: any) => {
           if (!attendeeData) return
           
-          const primaryIndex = updatedPrimaryAttendees.findIndex(a => a.id === attendeeData.primary.id)
+          const primaryIndex = updatedPrimaryAttendees.findIndex((a: PrimaryAttendee) => a.id === attendeeData.primary.id)
           if (primaryIndex !== -1) {
             updatedPrimaryAttendees[primaryIndex] = {
               ...updatedPrimaryAttendees[primaryIndex],
@@ -394,9 +489,9 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
             }
             
             // Also update related codes
-            const relatedIds = attendeeData.related.map(r => r.id)
+            const relatedIds = attendeeData.related.map((r: any) => r.id)
             updatedPrimaryAttendees[primaryIndex].relatedCodes = 
-              updatedPrimaryAttendees[primaryIndex].relatedCodes.map(related => ({
+              updatedPrimaryAttendees[primaryIndex].relatedCodes.map((related: AccessCode) => ({
                 ...related,
                 isSent: relatedIds.includes(related.id) ? true : related.isSent,
                 sentAt: relatedIds.includes(related.id) ? new Date() : related.sentAt
@@ -474,7 +569,7 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
       
       // Generate QR codes for related attendees
       const relatedQrDataUrls = await Promise.all(
-        attendee.relatedCodes.map(async (relatedCode) => {
+        attendee.relatedCodes.map(async (relatedCode: AccessCode) => {
           const relatedQrCodeUrl = `${baseUrl}/admin/dashboard/events/${eventId}/qr/${relatedCode.code}`
           
           // Generate QR code data URL for related
@@ -490,7 +585,7 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
       )
       
       // Store the QR code data URLs in the attendee object for future use
-      const updatedAttendees = primaryAttendees.map(a => {
+      const updatedAttendees = primaryAttendees.map((a: PrimaryAttendee) => {
         if (a.id === attendee.id) {
           return {
             ...a,
@@ -511,7 +606,7 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
         title: 'QR Codes',
         html: `
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[70vh] overflow-y-auto p-4">
-            ${allQrDataUrls.map((dataUrl, index) => {
+            ${allQrDataUrls.map((dataUrl: string, index: number) => {
               const isMain = index === 0
               const codeInfo = isMain 
                 ? { name: attendee.name, code: attendee.code, type: 'Primary' }
@@ -548,8 +643,8 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
         didOpen: () => {
           // Add event listeners to download buttons
           const downloadButtons = document.querySelectorAll('a[download]')
-          downloadButtons.forEach(button => {
-            button.addEventListener('click', (e) => {
+          downloadButtons.forEach((button: HTMLAnchorElement) => {
+            button.addEventListener('click', (e: MouseEvent) => {
               // Let the default download behavior happen
               // This is handled by the download attribute on the anchor tag
             })
@@ -580,18 +675,193 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
 
     // Download each selected QR code
     for (const id of selectedAttendees) {
-      const attendee = primaryAttendees.find(attendee => attendee.id === id)
+      const attendee = primaryAttendees.find((attendee: PrimaryAttendee) => attendee.id === id)
       if (attendee) {
         await handleDownloadQRCode(attendee)
         // Small delay to prevent browser issues with multiple downloads
-        await new Promise(resolve => setTimeout(resolve, 300))
+        await new Promise((resolve: (value: void) => void) => setTimeout(resolve, 300))
       }
     }
   }
 
+  const handleDeleteDependents = async () => {
+    if (selectedAttendees.length === 0) return;
+    
+    // Get the selected attendees with their related codes
+    const selectedAttendeeData = primaryAttendees.filter((attendee: PrimaryAttendee) => 
+      selectedAttendees.includes(attendee.id)
+    );
+    
+    // Show selection dialog for dependent types
+    const { value: dependentTypes } = await Swal.fire({
+      title: 'Select Dependent Types to Delete',
+      html: `
+        <div class="text-left">
+          <p class="mb-4">Select which types of dependents you want to delete:</p>
+          <div class="flex items-center mb-3">
+            <input type="checkbox" id="delete-guests" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" checked>
+            <label for="delete-guests" class="ml-2 text-gray-700">Guests</label>
+          </div>
+          <div class="flex items-center mb-3">
+            <input type="checkbox" id="delete-drivers" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" checked>
+            <label for="delete-drivers" class="ml-2 text-gray-700">Drivers</label>
+          </div>
+          <div class="flex items-center">
+            <input type="checkbox" id="delete-aides" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" checked>
+            <label for="delete-aides" class="ml-2 text-gray-700">Aides</label>
+          </div>
+        </div>
+      `,
+      focusConfirm: false,
+      showCancelButton: true,
+      confirmButtonText: 'Continue',
+      cancelButtonText: 'Cancel',
+      preConfirm: () => {
+        return {
+          guests: (document.getElementById('delete-guests') as HTMLInputElement).checked,
+          drivers: (document.getElementById('delete-drivers') as HTMLInputElement).checked,
+          aides: (document.getElementById('delete-aides') as HTMLInputElement).checked
+        };
+      }
+    });
+    
+    // If canceled or no types selected
+    if (!dependentTypes || (!dependentTypes.guests && !dependentTypes.drivers && !dependentTypes.aides)) {
+      return;
+    }
+    
+    // Collect only dependent access code IDs to delete based on selected types
+    const codeIdsToDelete: string[] = [];
+    const attendeesWithDependents: {name: string, dependents: {id: string, name: string, type: string}[]}[] = [];
+    
+    selectedAttendeeData.forEach((attendee: PrimaryAttendee) => {
+      // Only add dependent codes (not the primary attendee)
+      const dependents: {id: string, name: string, type: string}[] = [];
+      
+      if (attendee.relatedCodes && attendee.relatedCodes.length > 0) {
+        attendee.relatedCodes.forEach((code: AccessCode) => {
+          if ((code.type === 'guest' && dependentTypes.guests) || 
+              (code.type === 'driver' && dependentTypes.drivers) || 
+              (code.type === 'aide' && dependentTypes.aides)) {
+            codeIdsToDelete.push(code.id);
+            dependents.push({
+              id: code.id,
+              name: code.name,
+              type: code.type
+            });
+          }
+        });
+      }
+      
+      if (dependents.length > 0) {
+        attendeesWithDependents.push({
+          name: attendee.name,
+          dependents
+        });
+      }
+    });
+    
+    // If no dependent codes to delete, show message and return
+    if (codeIdsToDelete.length === 0) {
+      await Swal.fire({
+        title: 'No Dependents Found',
+        text: 'The selected attendees have no dependent guests, aides, or drivers of the selected types to delete.',
+        icon: 'info',
+        confirmButtonColor: '#3085d6'
+      });
+      return;
+    }
+    
+    // Create type labels for confirmation message
+    const typeLabels = [];
+    if (dependentTypes.guests) typeLabels.push('Guests');
+    if (dependentTypes.drivers) typeLabels.push('Drivers');
+    if (dependentTypes.aides) typeLabels.push('Aides');
+    const typeString = typeLabels.join(', ');
+    
+    // Show confirmation dialog
+    const result = await Swal.fire({
+      title: 'Delete Dependent Access Codes',
+      html: `
+        <p>Are you sure you want to delete <strong>${codeIdsToDelete.length}</strong> dependent access codes?</p>
+        <p class="text-sm text-gray-600">This will remove all <strong>${typeString}</strong> associated with the selected attendees, but keep the primary attendees.</p>
+        <p class="text-red-600 mt-2">This action cannot be undone!</p>
+        <div class="mt-4 text-left">
+          <p class="font-semibold">The following dependents will be deleted:</p>
+          <ul class="mt-2 max-h-40 overflow-y-auto">
+            ${attendeesWithDependents.map((a: any) => `
+              <li class="mb-2">
+                <p class="font-medium">${a.name}</p>
+                <ul class="ml-4 text-sm text-gray-600">
+                  ${a.dependents.map((d: any) => `<li>• ${d.name} (${d.type})</li>`).join('')}
+                </ul>
+              </li>
+            `).join('')}
+          </ul>
+        </div>
+      `,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, delete dependents',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      reverseButtons: true
+    });
+    
+    if (!result.isConfirmed) return;
+    
+    try {
+      setDeleting(true);
+      
+      // Call the API to delete the access codes
+      const response = await fetch(`/api/admin/events/${eventId}/access-codes/delete`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          codeIds: codeIdsToDelete
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to delete dependent access codes');
+      }
+      
+      // Show success message
+      Swal.fire({
+        title: 'Deleted Successfully',
+        text: `${data.count} dependent access codes have been deleted.`,
+        icon: 'success',
+        confirmButtonColor: '#3085d6'
+      });
+      
+      // Clear selection
+      setSelectedAttendees([]);
+      setSelectAll(false);
+      
+      // Refresh the data
+      refreshData();
+      
+    } catch (error) {
+      console.error('Error deleting dependent access codes:', error);
+      Swal.fire({
+        title: 'Error',
+        text: error instanceof Error ? error.message : 'Failed to delete dependent access codes',
+        icon: 'error',
+        confirmButtonColor: '#3085d6'
+      });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const toggleExpanded = (id: string) => {
     setPrimaryAttendees(prev => 
-      prev.map(attendee => 
+      prev.map((attendee: PrimaryAttendee) => 
         attendee.id === id 
           ? { ...attendee, isExpanded: !attendee.isExpanded } 
           : attendee
@@ -600,7 +870,7 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
     
     // Also update filtered attendees to reflect the change
     setFilteredAttendees(prev => 
-      prev.map(attendee => 
+      prev.map((attendee: PrimaryAttendee) => 
         attendee.id === id 
           ? { ...attendee, isExpanded: !attendee.isExpanded } 
           : attendee
@@ -690,7 +960,7 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
                 </label>
                 <select
                   value={filterOptions.admitted}
-                  onChange={(e) => handleFilterChange('admitted', e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleFilterChange('admitted', e.target.value)}
                   className="w-full p-2 border rounded-md"
                 >
                   <option value="all">All Attendees</option>
@@ -705,7 +975,7 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
                 </label>
                 <select
                   value={filterOptions.hasTable}
-                  onChange={(e) => handleFilterChange('hasTable', e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleFilterChange('hasTable', e.target.value)}
                   className="w-full p-2 border rounded-md"
                 >
                   <option value="all">All Tables</option>
@@ -720,7 +990,7 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
                 </label>
                 <select
                   value={filterOptions.qrSent}
-                  onChange={(e) => handleFilterChange('qrSent', e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleFilterChange('qrSent', e.target.value)}
                   className="w-full p-2 border rounded-md"
                 >
                   <option value="all">All QR Codes</option>
@@ -774,6 +1044,15 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
                   <Send className="h-4 w-4 mr-1" />
                   Send Both
                 </button>
+
+                <button
+                  onClick={handleDeleteDependents}
+                  disabled={deleting}
+                  className="flex items-center px-3 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
+                >
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  Delete Dependents
+                </button>
               </div>
             </div>
           </div>
@@ -797,7 +1076,7 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
         {filteredAttendees.length > 0 ? (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {paginatedAttendees.map(attendee => (
+              {paginatedAttendees.map((attendee: PrimaryAttendee) => (
                 <div
                   key={attendee.id}
                   className={`border rounded-lg overflow-hidden ${
@@ -883,7 +1162,7 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
                         <Users className="h-4 w-4 mr-1 text-gray-500" />
                         Associated Guests
                       </h4>
-                      {attendee.relatedCodes.map(guest => (
+                      {attendee.relatedCodes.map((guest: AccessCode) => (
                         <div key={guest.id} className="flex items-center justify-between py-2 border-b last:border-b-0">
                           <div className="flex items-center">
                             <User className="h-4 w-4 mr-2 text-gray-500 flex-shrink-0" />
@@ -917,7 +1196,7 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
                     Previous
                   </button>
                   
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNum => (
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum: number) => (
                     <button
                       key={pageNum}
                       onClick={() => handlePageChange(pageNum)}
