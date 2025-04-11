@@ -827,6 +827,21 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
         })
       });
       
+      // Check if response is OK before trying to parse JSON
+      if (!response.ok) {
+        const contentType = response.headers.get('content-type');
+        
+        // If response is JSON, parse it for the error message
+        if (contentType && contentType.includes('application/json')) {
+          const data = await response.json();
+          throw new Error(data.error || `Failed with status: ${response.status}`);
+        } else {
+          // If not JSON, use the status text
+          throw new Error(`Failed with status: ${response.status} - ${response.statusText}`);
+        }
+      }
+      
+      // Parse JSON response only if we know it's valid
       const data = await response.json();
       
       if (!response.ok) {
