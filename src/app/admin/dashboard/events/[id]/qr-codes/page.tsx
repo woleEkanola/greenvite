@@ -67,6 +67,7 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
   const [totalPages, setTotalPages] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [pageSizeOptions] = useState([10, 20, 50, 100])
+  const [sendMethod, setSendMethod] = useState('both') // 'both', 'email', 'whatsapp'
   const [rsvpSummary, setRsvpSummary] = useState({
     totalInvitees: 0,
     primaryAttendees: 0,
@@ -413,7 +414,7 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
     setTotalPages(newTotalPages)
   }
 
-  const handleSendQRCodes = async () => {
+  const handleSendQRCodes = async (method = sendMethod) => {
     if (selectedAttendees.length === 0) {
       Swal.fire({
         title: 'No Attendees Selected',
@@ -452,6 +453,24 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
                 formattedPhone = `+234${formattedPhone.startsWith('0') ? formattedPhone.substring(1) : formattedPhone}`;
               }
               
+              // Determine the default method based on the current method parameter and available contact info
+              let defaultMethod = method;
+              
+              // If the selected method isn't possible with the available contact info, adjust it
+              if (defaultMethod === 'email' && !attendee.email) {
+                defaultMethod = attendee.phone ? 'whatsapp' : 'none';
+              } else if (defaultMethod === 'whatsapp' && !attendee.phone) {
+                defaultMethod = attendee.email ? 'email' : 'none';
+              } else if (defaultMethod === 'both' && (!attendee.email || !attendee.phone)) {
+                if (attendee.email && !attendee.phone) {
+                  defaultMethod = 'email';
+                } else if (!attendee.email && attendee.phone) {
+                  defaultMethod = 'whatsapp';
+                } else {
+                  defaultMethod = 'none';
+                }
+              }
+              
               return `
               <div class="grid grid-cols-4 gap-2 mb-3 text-left">
                 <div class="text-sm">${attendee.name}</div>
@@ -467,12 +486,14 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
                 <div>
                   <select name="method_${attendee.id}" class="w-full text-sm p-1 border rounded">
                     ${attendee.email && formattedPhone 
-                      ? '<option value="both">Email & WhatsApp</option><option value="email">Email Only</option><option value="whatsapp">WhatsApp Only</option>' 
+                      ? `<option value="both" ${defaultMethod === 'both' ? 'selected' : ''}>Email & WhatsApp</option>
+                         <option value="email" ${defaultMethod === 'email' ? 'selected' : ''}>Email Only</option>
+                         <option value="whatsapp" ${defaultMethod === 'whatsapp' ? 'selected' : ''}>WhatsApp Only</option>` 
                       : attendee.email 
-                        ? '<option value="email">Email Only</option>' 
+                        ? `<option value="email" selected>Email Only</option>` 
                         : formattedPhone 
-                          ? '<option value="whatsapp">WhatsApp Only</option>' 
-                          : '<option value="none">No Contact</option>'}
+                          ? `<option value="whatsapp" selected>WhatsApp Only</option>` 
+                          : `<option value="none" selected>No Contact</option>`}
                   </select>
                 </div>
               </div>
@@ -480,6 +501,7 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
           </form>
         `,
         width: '80%',
+        focusConfirm: false,
         showCancelButton: true,
         confirmButtonText: 'Send QR Codes',
         cancelButtonText: 'Cancel',
@@ -1196,7 +1218,7 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
                 </button>
 
                 <button
-                  onClick={() => handleSendQRCodes()}
+                  onClick={() => handleSendQRCodes('email')}
                   disabled={sending}
                   className="flex items-center px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
                 >
@@ -1205,7 +1227,7 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
                 </button>
 
                 <button
-                  onClick={() => handleSendQRCodes()}
+                  onClick={() => handleSendQRCodes('whatsapp')}
                   disabled={sending}
                   className="flex items-center px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
                 >
@@ -1214,7 +1236,7 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
                 </button>
 
                 <button
-                  onClick={() => handleSendQRCodes()}
+                  onClick={() => handleSendQRCodes('both')}
                   disabled={sending}
                   className="flex items-center px-3 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50"
                 >
