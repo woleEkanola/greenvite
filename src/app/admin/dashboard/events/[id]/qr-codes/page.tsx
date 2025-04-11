@@ -643,11 +643,13 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
         didOpen: () => {
           // Add event listeners to download buttons
           const downloadButtons = document.querySelectorAll('a[download]')
-          downloadButtons.forEach((button: HTMLAnchorElement) => {
-            button.addEventListener('click', (e: MouseEvent) => {
-              // Let the default download behavior happen
-              // This is handled by the download attribute on the anchor tag
-            })
+          downloadButtons.forEach((button) => {
+            if (button instanceof HTMLAnchorElement) {
+              button.addEventListener('click', (e) => {
+                // Let the default download behavior happen
+                // This is handled by the download attribute on the anchor tag
+              })
+            }
           })
         }
       })

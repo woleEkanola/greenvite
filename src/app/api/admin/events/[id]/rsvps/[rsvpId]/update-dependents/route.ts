@@ -93,14 +93,18 @@ export async function POST(
     }
     
     // Update the RSVP to reflect the dependent status
-    const updateData = {}
+    const updateData: { 
+      hasGuest?: boolean;
+      hasDriver?: boolean;
+      hasAide?: boolean;
+    } = {};
     
     if (dependentType === 'guest') {
-      updateData['hasGuest'] = action === 'add'
+      updateData.hasGuest = action === 'add'
     } else if (dependentType === 'driver') {
-      updateData['hasDriver'] = action === 'add'
+      updateData.hasDriver = action === 'add'
     } else if (dependentType === 'aide') {
-      updateData['hasAide'] = action === 'add'
+      updateData.hasAide = action === 'add'
     }
     
     // Update the RSVP
