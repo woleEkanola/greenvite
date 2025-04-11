@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, createRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ChevronLeft, QrCode, Search, Send, Download, RefreshCw, Filter, ChevronDown, ChevronUp, Users, User, Trash2 } from 'lucide-react'
+import { ChevronLeft, QrCode, Search, Send, Download, RefreshCw, Filter, ChevronDown, ChevronUp, Users, User, Trash2, CheckCircle, XCircle, UserPlus, Car, UserCog } from 'lucide-react'
 import QRCodeLib from 'qrcode'
 import Swal from 'sweetalert2'
 import ReactDOM from 'react-dom'
@@ -61,10 +61,21 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
     hasDependents: 'all' // all, with_dependents, without_dependents
   })
   const [selectAll, setSelectAll] = useState(false)
+  const [selectAllCurrentPage, setSelectAllCurrentPage] = useState(false)
   const [isFilterOpen, setIsFilterOpen] = useState(false)
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
-  const [pageSize] = useState(20)
+  const [pageSize, setPageSize] = useState(20)
+  const [pageSizeOptions] = useState([10, 20, 50, 100])
+  const [rsvpSummary, setRsvpSummary] = useState({
+    totalInvitees: 0,
+    primaryAttendees: 0,
+    guests: 0,
+    drivers: 0,
+    aides: 0,
+    admitted: 0,
+    notAdmitted: 0
+  })
 
   // Function to fetch and process data
   const refreshData = async () => {
@@ -78,6 +89,13 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
       }
       const eventData = await eventResponse.json()
       setEvent(eventData)
+
+      // Fetch RSVP summary
+      const summaryResponse = await fetch(`/api/admin/events/${eventId}/rsvp-summary`)
+      if (summaryResponse.ok) {
+        const summaryData = await summaryResponse.json()
+        setRsvpSummary(summaryData)
+      }
 
       // Fetch access codes
       const response = await fetch(`/api/admin/events/${eventId}/access-codes`)
@@ -340,6 +358,59 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
     
     // Use a single state update for better performance
     setSelectedAttendees(newSelectAll ? filteredAttendees.map((attendee: PrimaryAttendee) => attendee.id) : []);
+  }
+  
+  // Handle selecting all attendees on the current page
+  const handleSelectAllCurrentPage = () => {
+    const newSelectAllCurrentPage = !selectAllCurrentPage;
+    setSelectAllCurrentPage(newSelectAllCurrentPage);
+    
+    if (newSelectAllCurrentPage) {
+      // Add all current page attendees to selection
+      const currentPageIds = paginatedAttendees.map(attendee => attendee.id);
+      setSelectedAttendees(prevSelected => {
+        // Combine previously selected (not on current page) with all current page attendees
+        const otherSelectedIds = prevSelected.filter(id => !currentPageIds.includes(id));
+        return [...otherSelectedIds, ...currentPageIds];
+      });
+    } else {
+      // Remove all current page attendees from selection
+      const currentPageIds = paginatedAttendees.map(attendee => attendee.id);
+      setSelectedAttendees(prevSelected => 
+        prevSelected.filter(id => !currentPageIds.includes(id))
+      );
+    }
+  };
+
+  const paginatedAttendees = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    const end = start + pageSize;
+    return filteredAttendees.slice(start, end);
+  }, [filteredAttendees, page, pageSize]);
+
+  // Update selectAllCurrentPage state when page changes or selections change
+  useEffect(() => {
+    // Check if all attendees on current page are selected
+    const currentPageIds = paginatedAttendees.map(attendee => attendee.id);
+    const allCurrentPageSelected = currentPageIds.every(id => selectedAttendees.includes(id));
+    setSelectAllCurrentPage(allCurrentPageSelected && currentPageIds.length > 0);
+  }, [paginatedAttendees, selectedAttendees]);
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setPage(newPage);
+      // Scroll to top when changing pages
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize)
+    setPage(1) // Reset to first page when changing page size
+    
+    // Recalculate total pages
+    const newTotalPages = Math.ceil(filteredAttendees.length / newSize)
+    setTotalPages(newTotalPages)
   }
 
   const handleSendQRCodes = async () => {
@@ -907,20 +978,6 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
     );
   };
 
-  const paginatedAttendees = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    const end = start + pageSize;
-    return filteredAttendees.slice(start, end);
-  }, [filteredAttendees, page, pageSize]);
-
-  const handlePageChange = (newPage: number) => {
-    if (newPage >= 1 && newPage <= totalPages) {
-      setPage(newPage);
-      // Scroll to top when changing pages
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
@@ -946,6 +1003,68 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
         <p className="text-gray-600 mt-1">
           Generate and send QR codes for attendee check-in
         </p>
+      </div>
+
+      {/* RSVP Summary Section */}
+      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <h2 className="text-lg font-semibold mb-4">RSVP Summary</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-blue-50 p-4 rounded-lg">
+            <div className="flex items-center">
+              <Users className="h-5 w-5 text-blue-600 mr-2" />
+              <span className="text-sm font-medium text-gray-700">Total Invitees</span>
+            </div>
+            <p className="text-2xl font-bold text-blue-700 mt-2">{rsvpSummary.totalInvitees}</p>
+          </div>
+          
+          <div className="bg-green-50 p-4 rounded-lg">
+            <div className="flex items-center">
+              <User className="h-5 w-5 text-green-600 mr-2" />
+              <span className="text-sm font-medium text-gray-700">Primary Attendees</span>
+            </div>
+            <p className="text-2xl font-bold text-green-700 mt-2">{rsvpSummary.primaryAttendees}</p>
+          </div>
+          
+          <div className="bg-purple-50 p-4 rounded-lg">
+            <div className="flex items-center">
+              <UserPlus className="h-5 w-5 text-purple-600 mr-2" />
+              <span className="text-sm font-medium text-gray-700">Guests</span>
+            </div>
+            <p className="text-2xl font-bold text-purple-700 mt-2">{rsvpSummary.guests}</p>
+          </div>
+          
+          <div className="bg-yellow-50 p-4 rounded-lg">
+            <div className="flex items-center">
+              <Car className="h-5 w-5 text-yellow-600 mr-2" />
+              <span className="text-sm font-medium text-gray-700">Drivers</span>
+            </div>
+            <p className="text-2xl font-bold text-yellow-700 mt-2">{rsvpSummary.drivers}</p>
+          </div>
+          
+          <div className="bg-indigo-50 p-4 rounded-lg">
+            <div className="flex items-center">
+              <UserCog className="h-5 w-5 text-indigo-600 mr-2" />
+              <span className="text-sm font-medium text-gray-700">Aides</span>
+            </div>
+            <p className="text-2xl font-bold text-indigo-700 mt-2">{rsvpSummary.aides}</p>
+          </div>
+          
+          <div className="bg-green-50 p-4 rounded-lg">
+            <div className="flex items-center">
+              <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
+              <span className="text-sm font-medium text-gray-700">Admitted</span>
+            </div>
+            <p className="text-2xl font-bold text-green-700 mt-2">{rsvpSummary.admitted}</p>
+          </div>
+          
+          <div className="bg-red-50 p-4 rounded-lg">
+            <div className="flex items-center">
+              <XCircle className="h-5 w-5 text-red-600 mr-2" />
+              <span className="text-sm font-medium text-gray-700">Not Admitted</span>
+            </div>
+            <p className="text-2xl font-bold text-red-700 mt-2">{rsvpSummary.notAdmitted}</p>
+          </div>
+        </div>
       </div>
 
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
@@ -977,6 +1096,20 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
               Filters
             </button>
           </div>
+        </div>
+        
+        {/* Select All on Current Page Checkbox */}
+        <div className="mb-4 flex items-center">
+          <input
+            type="checkbox"
+            id="select-all-current-page"
+            checked={selectAllCurrentPage}
+            onChange={handleSelectAllCurrentPage}
+            className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+          />
+          <label htmlFor="select-all-current-page" className="ml-2 text-sm font-medium text-gray-700">
+            Select All on Current Page ({paginatedAttendees.length} attendees)
+          </label>
         </div>
 
         {isFilterOpen && (
@@ -1230,7 +1363,23 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
             
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="flex justify-center mt-6">
+              <div className="flex flex-col md:flex-row justify-between items-center mt-6">
+                <div className="flex items-center mb-4 md:mb-0">
+                  <label htmlFor="page-size" className="mr-2 text-sm text-gray-600">
+                    Attendees per page:
+                  </label>
+                  <select
+                    id="page-size"
+                    value={pageSize}
+                    onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                    className="border rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {pageSizeOptions.map(size => (
+                      <option key={size} value={size}>{size}</option>
+                    ))}
+                  </select>
+                </div>
+                
                 <nav className="flex items-center space-x-2">
                   <button
                     onClick={() => handlePageChange(page - 1)}
