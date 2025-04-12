@@ -68,6 +68,7 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
   const [pageSize, setPageSize] = useState(20)
   const [pageSizeOptions] = useState([10, 20, 50, 100])
   const [sendMethod, setSendMethod] = useState('both') // 'both', 'email', 'whatsapp'
+  const [assigningTables, setAssigningTables] = useState(false)
   const [rsvpSummary, setRsvpSummary] = useState({
     totalInvitees: 0,
     primaryAttendees: 0,
@@ -247,10 +248,10 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
       setPrimaryAttendees(primaryAttendees)
       
       // Apply filters
-      applyFilters(primaryAttendees)
+      const filtered = applyFilters(primaryAttendees)
       
       // Calculate total pages
-      setTotalPages(Math.ceil(primaryAttendees.length / pageSize))
+      setTotalPages(Math.ceil(filtered.length / pageSize))
     } catch (error) {
       console.error('Error fetching data:', error)
       Swal.fire({
@@ -270,10 +271,11 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
 
   // Apply filters whenever access codes or filter options change
   useEffect(() => {
-    applyFilters()
+    const filtered = applyFilters()
+    setFilteredAttendees(filtered)
   }, [primaryAttendees, filterOptions, searchQuery])
 
-  const applyFilters = (attendees: PrimaryAttendee[] = primaryAttendees) => {
+  const applyFilters = (attendees: PrimaryAttendee[] = primaryAttendees): PrimaryAttendee[] => {
     let filtered = [...attendees]
 
     // Filter by admission status
@@ -320,7 +322,7 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
       )
     }
 
-    setFilteredAttendees(filtered)
+    return filtered
   }
 
   const handleFilterChange = (field: string, value: string) => {
@@ -406,15 +408,16 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
   };
 
   const handlePageSizeChange = (newSize: number) => {
-    setPageSize(newSize)
-    setPage(1) // Reset to first page when changing page size
+    setPageSize(newSize);
+    setPage(1); // Reset to first page when changing page size
     
-    // Recalculate total pages
-    const newTotalPages = Math.ceil(filteredAttendees.length / newSize)
-    setTotalPages(newTotalPages)
-  }
+    // Recalculate total pages and update filtered attendees
+    const filtered = applyFilters(primaryAttendees);
+    const newTotalPages = Math.ceil(filtered.length / newSize);
+    setTotalPages(newTotalPages);
+  };
 
-  const handleSendQRCodes = async (method = sendMethod) => {
+  const handleSendQRCodes = async (e?: React.MouseEvent, method = sendMethod) => {
     if (selectedAttendees.length === 0) {
       Swal.fire({
         title: 'No Attendees Selected',
@@ -970,23 +973,79 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
   };
 
   const toggleExpanded = (id: string) => {
-    setPrimaryAttendees(prev => 
-      prev.map((attendee: PrimaryAttendee) => 
+    setPrimaryAttendees(prevAttendees => 
+      prevAttendees.map(attendee => 
         attendee.id === id 
           ? { ...attendee, isExpanded: !attendee.isExpanded } 
           : attendee
       )
     );
-    
-    // Also update filtered attendees to reflect the change
-    setFilteredAttendees(prev => 
-      prev.map((attendee: PrimaryAttendee) => 
-        attendee.id === id 
-          ? { ...attendee, isExpanded: !attendee.isExpanded } 
-          : attendee
-      )
-    );
-  };
+  }
+
+  // Handle auto-assign tables
+  const handleAutoAssignTables = async () => {
+    if (selectedAttendees.length === 0) {
+      Swal.fire({
+        title: 'No Attendees Selected',
+        text: 'Please select at least one attendee to assign tables.',
+        icon: 'warning',
+        confirmButtonColor: '#f59e0b'
+      });
+      return;
+    }
+
+    try {
+      setAssigningTables(true);
+      
+      // Show loading modal
+      Swal.fire({
+        title: 'Auto-Assigning Tables',
+        html: 'Please wait while we assign tables to the selected attendees...',
+        allowOutsideClick: false,
+        didOpen: () => {
+          Swal.showLoading();
+        }
+      });
+
+      // Call API to auto-assign tables
+      const response = await fetch(`/api/admin/events/${eventId}/auto-assign-tables`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          attendeeIds: selectedAttendees
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to auto-assign tables');
+      }
+
+      const data = await response.json();
+      
+      // Refresh data to show updated table assignments
+      await refreshData();
+      
+      // Show success message
+      Swal.fire({
+        title: 'Tables Assigned',
+        text: `Successfully assigned tables to ${data.assignedCount} attendees.`,
+        icon: 'success',
+        confirmButtonColor: '#10b981'
+      });
+    } catch (error) {
+      console.error('Error auto-assigning tables:', error);
+      Swal.fire({
+        title: 'Error',
+        text: 'Failed to auto-assign tables. Please try again.',
+        icon: 'error',
+        confirmButtonColor: '#ef4444'
+      });
+    } finally {
+      setAssigningTables(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -1021,7 +1080,7 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
           </button>
           
           <button
-            onClick={handleSendQRCodes}
+            onClick={(e) => handleSendQRCodes(e)}
             disabled={selectedAttendees.length === 0 || sending}
             className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-green-300"
           >
@@ -1235,7 +1294,7 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
                 </button>
 
                 <button
-                  onClick={() => handleSendQRCodes('email')}
+                  onClick={() => handleSendQRCodes(undefined, 'email')}
                   disabled={sending}
                   className="flex items-center px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
                 >
@@ -1244,7 +1303,7 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
                 </button>
 
                 <button
-                  onClick={() => handleSendQRCodes('whatsapp')}
+                  onClick={() => handleSendQRCodes(undefined, 'whatsapp')}
                   disabled={sending}
                   className="flex items-center px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
                 >
@@ -1253,7 +1312,7 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
                 </button>
 
                 <button
-                  onClick={() => handleSendQRCodes('both')}
+                  onClick={() => handleSendQRCodes(undefined, 'both')}
                   disabled={sending}
                   className="flex items-center px-3 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50"
                 >
