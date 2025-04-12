@@ -31,6 +31,11 @@ interface AccessCode {
   };
 }
 
+interface HallAdmissionRecord {
+  codeId: string;
+  admittedAt: string;
+}
+
 export default function MobileAccessPage({ params }: { params: { id: string } }) {
   const { data: session } = useSession();
   const router = useRouter();
@@ -39,7 +44,10 @@ export default function MobileAccessPage({ params }: { params: { id: string } })
   const [filteredCodes, setFilteredCodes] = useState<AccessCode[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
-  const [admitting, setAdmitting] = useState<string | null>(null);
+  const [admittingGate, setAdmittingGate] = useState<string | null>(null);
+  const [admittingHall, setAdmittingHall] = useState<string | null>(null);
+  const [admissionMode, setAdmissionMode] = useState<'gate' | 'hall'>('gate');
+  const [hallAdmissions, setHallAdmissions] = useState<HallAdmissionRecord[]>([]);
 
   useEffect(() => {
     const fetchEventAndCodes = async () => {
@@ -85,28 +93,32 @@ export default function MobileAccessPage({ params }: { params: { id: string } })
     }
   };
 
-  // Mark access code as admitted
-  const markAsAdmitted = async (codeId: string) => {
+  // Mark access code as admitted at gate
+  const markAsGateAdmitted = async (codeId: string) => {
     try {
-      setAdmitting(codeId);
-      const response = await fetch(`/api/admin/events/${params.id}/access-codes/admit`, {
+      setAdmittingGate(codeId);
+      const response = await fetch(`/api/admin/events/${params.id}/access-codes/admit-gate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ codeId })
       });
       
       if (!response.ok) {
-        throw new Error('Failed to mark as admitted');
+        throw new Error('Failed to mark as admitted at gate');
       }
       
       const data = await response.json();
-      toast.success(data.message || 'Marked as admitted successfully');
+      toast.success(data.message || 'Marked as admitted at gate successfully');
       
       // Update the local state
       setAccessCodes(prevCodes => 
         prevCodes.map(code => 
           code.id === codeId 
-            ? { ...code, isAdmitted: true, admittedAt: new Date().toISOString() } 
+            ? { 
+                ...code, 
+                isAdmitted: true, 
+                admittedAt: new Date().toISOString()
+              } 
             : code
         )
       );
@@ -114,15 +126,58 @@ export default function MobileAccessPage({ params }: { params: { id: string } })
       setFilteredCodes(prevCodes => 
         prevCodes.map(code => 
           code.id === codeId 
-            ? { ...code, isAdmitted: true, admittedAt: new Date().toISOString() } 
+            ? { 
+                ...code, 
+                isAdmitted: true, 
+                admittedAt: new Date().toISOString()
+              } 
             : code
         )
       );
     } catch (error) {
-      console.error('Error marking as admitted:', error);
-      toast.error('Failed to mark as admitted');
+      console.error('Error marking as admitted at gate:', error);
+      toast.error('Failed to mark as admitted at gate');
     } finally {
-      setAdmitting(null);
+      setAdmittingGate(null);
+    }
+  };
+
+  // Mark access code as admitted to hall
+  const markAsHallAdmitted = async (codeId: string) => {
+    try {
+      setAdmittingHall(codeId);
+      const response = await fetch(`/api/admin/events/${params.id}/access-codes/admit-hall`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ codeId })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        
+        // If the guest hasn't been admitted at the gate yet
+        if (errorData.requiresGateAdmission) {
+          toast.error('Attendee must be admitted at the gate first');
+          // Switch to gate admission mode
+          setAdmissionMode('gate');
+          return;
+        }
+        
+        throw new Error('Failed to mark as admitted to hall');
+      }
+      
+      const data = await response.json();
+      toast.success(data.message || 'Marked as admitted to hall successfully');
+      
+      // Update the local state for hall admission
+      const now = new Date().toISOString();
+      setHallAdmissions(prev => [...prev, { codeId, admittedAt: now }]);
+      
+    } catch (error) {
+      console.error('Error marking as admitted to hall:', error);
+      toast.error('Failed to mark as admitted to hall');
+    } finally {
+      setAdmittingHall(null);
     }
   };
 
@@ -155,6 +210,44 @@ export default function MobileAccessPage({ params }: { params: { id: string } })
 
   // Render a mobile card for an access code
   const renderAccessCard = (code: AccessCode) => {
+    const isAdmitting = admittingGate === code.id || admittingHall === code.id;
+    const isGateAdmitted = code.isAdmitted;
+    const isHallAdmitted = hallAdmissions.some(record => record.codeId === code.id);
+    
+    // Determine if button should be disabled based on admission mode
+    const isDisabled = 
+      (admissionMode === 'gate' && isGateAdmitted) || 
+      (admissionMode === 'hall' && (isHallAdmitted || !isGateAdmitted)) ||
+      isAdmitting;
+    
+    // Determine button text based on admission mode and status
+    const getButtonText = () => {
+      if (isAdmitting) return 'Processing...';
+      
+      if (admissionMode === 'gate') {
+        return isGateAdmitted ? 'Gate: Admitted' : 'Admit at Gate';
+      } else {
+        if (!isGateAdmitted) return 'Needs Gate Admission';
+        return isHallAdmitted ? 'Hall: Admitted' : 'Admit to Hall';
+      }
+    };
+    
+    // Get button color based on mode and status
+    const getButtonClass = () => {
+      if (isAdmitting) return 'bg-gray-200 text-gray-700 cursor-wait';
+      
+      if (admissionMode === 'gate') {
+        return isGateAdmitted 
+          ? 'bg-green-100 text-green-700 cursor-not-allowed' 
+          : 'bg-green-600 text-white hover:bg-green-700';
+      } else {
+        if (!isGateAdmitted) return 'bg-gray-100 text-gray-400 cursor-not-allowed';
+        return isHallAdmitted 
+          ? 'bg-blue-100 text-blue-700 cursor-not-allowed' 
+          : 'bg-blue-600 text-white hover:bg-blue-700';
+      }
+    };
+    
     return (
       <div key={code.id} className="bg-white rounded-lg border border-dashed border-gray-300 overflow-hidden mb-4 p-6">
         <div className="text-center">
@@ -166,23 +259,21 @@ export default function MobileAccessPage({ params }: { params: { id: string } })
             <p className="text-sm text-gray-500 mb-4">Table {code.table.name}</p>
           )}
           
+          <div className="flex justify-between mb-4">
+            <div className={`text-sm rounded-full px-3 py-1 ${code.isAdmitted ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+              Gate: {code.isAdmitted ? 'Admitted' : 'Pending'}
+            </div>
+            <div className={`text-sm rounded-full px-3 py-1 ${isHallAdmitted ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+              Hall: {isHallAdmitted ? 'Admitted' : 'Pending'}
+            </div>
+          </div>
+          
           <button
-            onClick={() => markAsAdmitted(code.id)}
-            disabled={code.isAdmitted || admitting === code.id}
-            className={`mt-4 w-full py-2 px-4 rounded-lg border border-gray-300 text-center font-medium ${
-              code.isAdmitted 
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                : admitting === code.id
-                  ? 'bg-gray-200 text-gray-700 cursor-wait'
-                  : 'bg-white text-gray-700 hover:bg-gray-50'
-            }`}
-            style={{ fontFamily: 'cursive' }}
+            onClick={() => admissionMode === 'gate' ? markAsGateAdmitted(code.id) : markAsHallAdmitted(code.id)}
+            disabled={isDisabled}
+            className={`mt-4 w-full py-2 px-4 rounded-lg font-medium ${getButtonClass()}`}
           >
-            {code.isAdmitted 
-              ? 'Admitted' 
-              : admitting === code.id 
-                ? 'Processing...' 
-                : 'Admit'}
+            {getButtonText()}
           </button>
         </div>
       </div>
@@ -199,8 +290,32 @@ export default function MobileAccessPage({ params }: { params: { id: string } })
 
   return (
     <div className="min-h-screen bg-white flex flex-col items-center p-4 max-w-md mx-auto">
+      {/* Admission Mode Toggle */}
+      <div className="w-full mb-4 flex border border-gray-300 rounded-lg overflow-hidden">
+        <button
+          onClick={() => setAdmissionMode('gate')}
+          className={`flex-1 py-2 text-center font-medium ${
+            admissionMode === 'gate' 
+              ? 'bg-green-600 text-white' 
+              : 'bg-white text-gray-700 hover:bg-gray-50'
+          }`}
+        >
+          Gate Admission
+        </button>
+        <button
+          onClick={() => setAdmissionMode('hall')}
+          className={`flex-1 py-2 text-center font-medium ${
+            admissionMode === 'hall' 
+              ? 'bg-blue-600 text-white' 
+              : 'bg-white text-gray-700 hover:bg-gray-50'
+          }`}
+        >
+          Hall Admission
+        </button>
+      </div>
+      
       {/* Search Input - 30% of available height */}
-      <div className="w-full mb-4" style={{ height: '30vh' }}>
+      <div className="w-full mb-4" style={{ height: '25vh' }}>
         <div className="border border-dashed border-gray-300 rounded-lg p-4 mb-2 flex flex-col justify-center h-4/5">
           <p className="text-center text-gray-500 text-sm mb-2">Type here to search</p>
           <input
@@ -215,14 +330,13 @@ export default function MobileAccessPage({ params }: { params: { id: string } })
         <button
           onClick={handleSearch}
           className="w-full py-2 border border-gray-300 rounded-lg text-center font-medium h-1/5"
-          style={{ fontFamily: 'cursive' }}
         >
           Search
         </button>
       </div>
       
       {/* Results - Remaining height */}
-      <div className="w-full" style={{ height: '70vh', overflowY: 'auto' }}>
+      <div className="w-full" style={{ height: '65vh', overflowY: 'auto' }}>
         {filteredCodes.length > 0 ? (
           filteredCodes.map(code => renderAccessCard(code))
         ) : (

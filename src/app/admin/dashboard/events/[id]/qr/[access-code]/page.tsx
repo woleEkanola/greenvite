@@ -47,7 +47,10 @@ export default function AttendeeDetailsPage({ params }: { params: { id: string, 
   const [attendee, setAttendee] = useState<Attendee | null>(null)
   const [event, setEvent] = useState<any>(null)
   const [associatedAttendees, setAssociatedAttendees] = useState<AssociatedAttendee[]>([])
-  const [admitting, setAdmitting] = useState(false)
+  const [admittingGate, setAdmittingGate] = useState(false)
+  const [admittingHall, setAdmittingHall] = useState(false)
+  const [isHallAdmitted, setIsHallAdmitted] = useState(false)
+  const [hallAdmittedAt, setHallAdmittedAt] = useState<string | null>(null)
   
   useEffect(() => {
     const fetchData = async () => {
@@ -153,48 +156,121 @@ export default function AttendeeDetailsPage({ params }: { params: { id: string, 
     return null;
   }
   
-  const handleAdmit = async () => {
-    if (!attendee) return
-    
+  // Handle gate admission
+  const handleGateAdmit = async () => {
     try {
-      setAdmitting(true)
+      if (!attendee) return
       
-      const response = await fetch(`/api/admin/events/${eventId}/attendees/${attendee.id}/admit`, {
+      setAdmittingGate(true)
+      
+      const response = await fetch(`/api/admin/events/${eventId}/access-codes/admit-gate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
-        }
+        },
+        body: JSON.stringify({ codeId: attendee.id })
       })
       
       if (!response.ok) {
-        throw new Error('Failed to admit attendee')
+        throw new Error('Failed to admit attendee at gate')
       }
       
       const data = await response.json()
       
-      // Update the attendee state with the new data
-      setAttendee({
-        ...attendee,
-        attended: true,
-        attendedAt: new Date().toISOString()
+      // Update the attendee state
+      setAttendee(prev => {
+        if (!prev) return null
+        return {
+          ...prev,
+          attended: true,
+          attendedAt: new Date().toISOString()
+        }
       })
       
+      // Show success message
       Swal.fire({
-        title: 'Success',
-        text: 'Attendee has been admitted',
         icon: 'success',
-        timer: 2000,
-        showConfirmButton: false
+        title: 'Success',
+        text: 'Attendee has been admitted at the gate',
+        confirmButtonColor: '#10B981'
       })
+      
     } catch (error) {
-      console.error('Error admitting attendee:', error)
+      console.error('Error admitting attendee at gate:', error)
       Swal.fire({
+        icon: 'error',
         title: 'Error',
-        text: 'Failed to admit attendee',
-        icon: 'error'
+        text: 'Failed to admit attendee at gate',
+        confirmButtonColor: '#EF4444'
       })
     } finally {
-      setAdmitting(false)
+      setAdmittingGate(false)
+    }
+  }
+  
+  // Handle hall admission
+  const handleHallAdmit = async () => {
+    try {
+      if (!attendee) return
+      
+      setAdmittingHall(true)
+      
+      const response = await fetch(`/api/admin/events/${eventId}/access-codes/admit-hall`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ codeId: attendee.id })
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        
+        // If the guest hasn't been admitted at the gate yet
+        if (errorData.requiresGateAdmission) {
+          Swal.fire({
+            icon: 'warning',
+            title: 'Gate Admission Required',
+            text: 'Attendee must be admitted at the gate first',
+            confirmButtonText: 'Admit at Gate',
+            showCancelButton: true,
+            confirmButtonColor: '#10B981',
+            cancelButtonColor: '#9CA3AF'
+          }).then((result) => {
+            if (result.isConfirmed) {
+              handleGateAdmit()
+            }
+          })
+          return
+        }
+        
+        throw new Error(errorData.error || 'Failed to admit attendee to hall')
+      }
+      
+      const data = await response.json()
+      
+      // Update local state for hall admission
+      setIsHallAdmitted(true)
+      setHallAdmittedAt(new Date().toISOString())
+      
+      // Show success message
+      Swal.fire({
+        icon: 'success',
+        title: 'Success',
+        text: 'Attendee has been admitted to the hall',
+        confirmButtonColor: '#10B981'
+      })
+      
+    } catch (error) {
+      console.error('Error admitting attendee to hall:', error)
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'Failed to admit attendee to hall',
+        confirmButtonColor: '#EF4444'
+      })
+    } finally {
+      setAdmittingHall(false)
     }
   }
   
@@ -308,9 +384,18 @@ export default function AttendeeDetailsPage({ params }: { params: { id: string, 
                   
                   {attendee.attended && attendee.attendedAt && (
                     <div>
-                      <div className="text-sm font-medium text-gray-500">Admitted At</div>
+                      <div className="text-sm font-medium text-gray-500">Gate Admission</div>
                       <div className="text-gray-800">
                         {new Date(attendee.attendedAt).toLocaleString()}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {isHallAdmitted && hallAdmittedAt && (
+                    <div>
+                      <div className="text-sm font-medium text-gray-500">Hall Admission</div>
+                      <div className="text-gray-800">
+                        {new Date(hallAdmittedAt).toLocaleString()}
                       </div>
                     </div>
                   )}
@@ -318,27 +403,47 @@ export default function AttendeeDetailsPage({ params }: { params: { id: string, 
               </div>
             </div>
             
-            {!attendee.attended && (
-              <div className="mt-8">
+            <div className="mt-8 flex flex-col sm:flex-row gap-3">
+              {!attendee.attended && (
                 <button
-                  onClick={handleAdmit}
-                  disabled={admitting}
-                  className="w-full md:w-auto px-6 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={handleGateAdmit}
+                  disabled={admittingGate}
+                  className="w-full sm:w-auto px-6 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {admitting ? (
+                  {admittingGate ? (
                     <>
                       <Loader2 className="inline-block h-4 w-4 mr-2 animate-spin" />
-                      Admitting...
+                      Admitting at Gate...
                     </>
                   ) : (
                     <>
                       <CheckCircle className="inline-block h-4 w-4 mr-2" />
-                      Admit Attendee
+                      Admit at Gate
                     </>
                   )}
                 </button>
-              </div>
-            )}
+              )}
+              
+              {!isHallAdmitted && (
+                <button
+                  onClick={handleHallAdmit}
+                  disabled={admittingHall || !attendee.attended}
+                  className="w-full sm:w-auto px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {admittingHall ? (
+                    <>
+                      <Loader2 className="inline-block h-4 w-4 mr-2 animate-spin" />
+                      Admitting to Hall...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="inline-block h-4 w-4 mr-2" />
+                      Admit to Hall
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
           </div>
         </div>
         

@@ -2,9 +2,32 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { generateRandomCode } from '@/lib/utils'
 
-// GET: Fetch access codes for a specific event
+// Helper function to convert array of objects to CSV
+function convertToCSV(objArray: any[]) {
+  if (objArray.length === 0) return '';
+  
+  const fields = Object.keys(objArray[0]);
+  
+  // Create header row
+  const csvRows = [fields.join(',')];
+  
+  // Create data rows
+  for (const obj of objArray) {
+    const values = fields.map(field => {
+      const value = obj[field];
+      // Handle strings with commas by wrapping in quotes
+      return typeof value === 'string' && value.includes(',') 
+        ? `"${value.replace(/"/g, '""')}"` 
+        : value === null || value === undefined ? '' : value;
+    });
+    csvRows.push(values.join(','));
+  }
+  
+  return csvRows.join('\n');
+}
+
+// GET: Export access codes as CSV
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -48,16 +71,11 @@ export async function GET(
     const url = new URL(request.url)
     const searchParams = url.searchParams
     const searchTerm = searchParams.get('search') || undefined
-    const page = parseInt(searchParams.get('page') || '1')
-    const limit = parseInt(searchParams.get('limit') || '10')
+    const format = searchParams.get('format') || 'csv'
     const admitted = searchParams.get('admitted') || undefined
     const admissionType = searchParams.get('admissionType') || undefined
     
-    // Calculate pagination - skip pagination if limit is very large (e.g., 1000)
-    const skipPagination = limit >= 1000
-    const skip = skipPagination ? 0 : (page - 1) * limit
-    
-    // Fetch access codes for this event
+    // Build the where clause
     const whereClause: any = {
       rsvp: {
         registrationCode: {
@@ -84,54 +102,44 @@ export async function GET(
     }
     
     // For hall admission, we don't have a database field yet, so we'll just filter by gate admission
-    // In a future update, we can add proper hall admission filtering
     if (admissionType === 'gate') {
       whereClause.isAdmitted = true
     }
-    // For hall admission, we'll just use gate admission for now since we don't have a hall admission field
-    // This is a placeholder for future implementation
+    // For hall admission, we'll just use gate admission for now
     else if (admissionType === 'hall') {
       whereClause.isAdmitted = true
-      // In the future: whereClause.isHallAdmitted = true
     }
     
-    // Fetch access codes with pagination (or without if skipPagination is true)
-    const [accessCodes, totalCount] = await Promise.all([
-      prisma.accessCode.findMany({
-        where: whereClause,
-        include: {
-          rsvp: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              phone: true,
-              hasGuest: true,
-              hasDriver: true,
-              hasAide: true
-            }
-          },
-          table: {
-            select: {
-              id: true,
-              name: true,
-              capacity: true
-            }
+    // Fetch all access codes matching the criteria
+    const accessCodes = await prisma.accessCode.findMany({
+      where: whereClause,
+      include: {
+        rsvp: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            hasGuest: true,
+            hasDriver: true,
+            hasAide: true
           }
         },
-        orderBy: {
-          createdAt: 'desc'
-        },
-        skip: skipPagination ? undefined : skip,
-        take: skipPagination ? undefined : limit
-      }),
-      prisma.accessCode.count({
-        where: whereClause
-      })
-    ])
+        table: {
+          select: {
+            id: true,
+            name: true,
+            capacity: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    })
     
-    // Process the access codes to include primary attendee information for non-primary codes
-    const processedAccessCodes = await Promise.all(
+    // Process the data for export
+    const exportData = await Promise.all(
       accessCodes.map(async (code) => {
         let primaryAttendee = null
         
@@ -144,35 +152,52 @@ export async function GET(
             },
             select: {
               id: true,
-              name: true,
-              code: true
+              name: true
             }
           })
           
           if (primary) {
-            primaryAttendee = primary
+            primaryAttendee = primary.name
           }
         }
         
+        // Format the data for export
         return {
-          ...code,
-          primaryAttendee
+          Name: code.name,
+          Code: code.code,
+          Email: code.rsvp?.email || '',
+          Phone: code.rsvp?.phone || '',
+          Type: code.type.charAt(0).toUpperCase() + code.type.slice(1),
+          Table: code.table?.name || 'Not Assigned',
+          AdmittedAt: code.admittedAt ? new Date(code.admittedAt).toLocaleString() : '',
+          PrimaryAttendee: primaryAttendee || ''
         }
       })
     )
     
+    // Generate CSV
+    if (format === 'csv') {
+      const csv = convertToCSV(exportData);
+      
+      // Set headers for CSV download
+      const headers = new Headers();
+      headers.set('Content-Type', 'text/csv');
+      headers.set('Content-Disposition', `attachment; filename="admitted-guests-${new Date().toISOString().split('T')[0]}.csv"`);
+      
+      return new NextResponse(csv, {
+        status: 200,
+        headers
+      });
+    }
+    
+    // Default to JSON if format is not recognized
     return NextResponse.json({ 
       success: true,
-      accessCodes: processedAccessCodes,
-      stats: {
-        total: totalCount,
-        admitted: accessCodes.filter(code => code.isAdmitted).length,
-        notAdmitted: accessCodes.filter(code => !code.isAdmitted).length
-      }
+      data: exportData
     })
     
   } catch (error) {
-    console.error('Error fetching access codes:', error)
-    return NextResponse.json({ error: 'Failed to fetch access codes' }, { status: 500 })
+    console.error('Error exporting access codes:', error)
+    return NextResponse.json({ error: 'Failed to export access codes' }, { status: 500 })
   }
 }

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Swal from 'sweetalert2'
-import { Download, Search, Send, UserPlus, UserMinus, Edit, Users } from 'lucide-react'
+import { Download, Search, Send, UserPlus, UserMinus, Edit, Users, Table2 } from 'lucide-react'
 import DataTable from '@/components/DataTable'
 import debounce from 'lodash/debounce'
 import toast from 'react-hot-toast'
@@ -56,6 +56,8 @@ export default function EventRsvpsPage({ params }: { params: { id: string } }) {
   const [exporting, setExporting] = useState(false)
   const [managingRsvp, setManagingRsvp] = useState<Rsvp | null>(null)
   const [processingAction, setProcessingAction] = useState(false)
+  const [tables, setTables] = useState<any[]>([])
+  const [assigningTables, setAssigningTables] = useState(false)
   const [summary, setSummary] = useState({
     totalInvitees: 0,
     totalPrimary: 0,
@@ -83,6 +85,23 @@ export default function EventRsvpsPage({ params }: { params: { id: string } }) {
     }
 
     fetchEvent()
+    
+    // Fetch tables
+    const fetchTables = async () => {
+      try {
+        const response = await fetch(`/api/admin/events/${params.id}/tables`)
+        if (response.ok) {
+          const data = await response.json()
+          setTables(data.tables || [])
+        } else {
+          console.error('Failed to fetch tables')
+        }
+      } catch (error) {
+        console.error('Error fetching tables:', error)
+      }
+    }
+    
+    fetchTables()
   }, [params.id])
 
   // Fetch RSVPs
@@ -410,6 +429,9 @@ export default function EventRsvpsPage({ params }: { params: { id: string } }) {
         handleManageGuests(updatedRsvp)
       }
       
+      // Refresh summary data
+      fetchSummary()
+      
     } catch (error) {
       console.error('Error adding dependent:', error)
       toast.error(error instanceof Error ? error.message : 'Failed to add dependent')
@@ -419,13 +441,7 @@ export default function EventRsvpsPage({ params }: { params: { id: string } }) {
   }
   
   // Handle removing a guest
-  const handleRemoveGuest = async (codeId: string, rsvpId?: string, dependentType?: string) => {
-    if (!rsvpId || !dependentType) {
-      // If we don't have the RSVP ID or dependent type, we can't proceed
-      toast.error('Missing RSVP ID or dependent type')
-      return
-    }
-
+  const handleRemoveGuest = async (codeId: string, rsvpId: string, dependentType: string) => {
     // Show confirmation dialog
     const result = await Swal.fire({
       title: 'Remove Dependent?',
@@ -474,6 +490,9 @@ export default function EventRsvpsPage({ params }: { params: { id: string } }) {
         setManagingRsvp(updatedRsvp)
         handleManageGuests(updatedRsvp)
       }
+      
+      // Refresh summary data
+      fetchSummary()
 
     } catch (error) {
       console.error('Error removing dependent:', error)
@@ -482,6 +501,207 @@ export default function EventRsvpsPage({ params }: { params: { id: string } }) {
       setProcessingAction(false)
     }
   }
+
+  // Handle auto-assigning tables
+  const handleAutoAssignTables = async () => {
+    // Get all RSVPs with access codes
+    const rsvpsWithCodes = rsvps.filter(rsvp => rsvp.accessCodes && rsvp.accessCodes.length > 0)
+    
+    if (rsvpsWithCodes.length === 0) {
+      toast.error('No RSVPs with access codes found. Generate access codes first.')
+      return
+    }
+    
+    // Show modal to configure auto-assignment
+    const { value: formValues, isConfirmed } = await Swal.fire({
+      title: 'Auto-Assign Tables',
+      html: `
+        <div class="text-left">
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-1">Select Tables</label>
+            <div class="flex items-center mb-2">
+              <input type="checkbox" id="select-all-tables" class="mr-2">
+              <label for="select-all-tables" class="text-sm font-medium">Select All Tables</label>
+            </div>
+            <div class="max-h-40 overflow-y-auto border rounded p-2">
+              ${tables.map(table => `
+                <div class="flex items-center mb-2">
+                  <input type="checkbox" id="table-${table.id}" name="tables" value="${table.id}" class="mr-2 table-checkbox">
+                  <label for="table-${table.id}" class="text-sm">
+                    ${table.name} (${table.accessCodes?.length || 0}/${table.capacity})
+                  </label>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+          
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-1">Keep Groups Together</label>
+            <div class="flex items-center">
+              <input type="checkbox" id="keep-groups" name="keepGroups" checked class="mr-2">
+              <label for="keep-groups" class="text-sm">Keep primary attendees with their guests on the same table</label>
+            </div>
+          </div>
+          
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-1">Include Attendee Types</label>
+            <div class="flex flex-wrap gap-2">
+              <div class="flex items-center">
+                <input type="checkbox" id="type-primary" name="types" value="primary" checked class="mr-1">
+                <label for="type-primary" class="text-sm">Primary</label>
+              </div>
+              <div class="flex items-center">
+                <input type="checkbox" id="type-guest" name="types" value="guest" checked class="mr-1">
+                <label for="type-guest" class="text-sm">Guest</label>
+              </div>
+              <div class="flex items-center">
+                <input type="checkbox" id="type-driver" name="types" value="driver" checked class="mr-1">
+                <label for="type-driver" class="text-sm">Driver</label>
+              </div>
+              <div class="flex items-center">
+                <input type="checkbox" id="type-aide" name="types" value="aide" checked class="mr-1">
+                <label for="type-aide" class="text-sm">Aide</label>
+              </div>
+            </div>
+          </div>
+          
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-1">Assignment Options</label>
+            <div class="flex items-center">
+              <input type="checkbox" id="only-unassigned" name="onlyUnassigned" checked class="mr-2">
+              <label for="only-unassigned" class="text-sm">Only assign attendees without a table</label>
+            </div>
+          </div>
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonText: 'Assign Tables',
+      confirmButtonColor: '#4CAF50',
+      cancelButtonColor: '#9CA3AF',
+      didOpen: () => {
+        // Add functionality for "Select All" checkbox
+        const selectAllCheckbox = document.getElementById('select-all-tables') as HTMLInputElement;
+        const tableCheckboxes = document.querySelectorAll('.table-checkbox') as NodeListOf<HTMLInputElement>;
+        
+        // Function to update "Select All" state based on individual checkboxes
+        const updateSelectAllCheckbox = () => {
+          const allChecked = Array.from(tableCheckboxes).every(checkbox => checkbox.checked);
+          const someChecked = Array.from(tableCheckboxes).some(checkbox => checkbox.checked);
+          
+          selectAllCheckbox.checked = allChecked;
+          selectAllCheckbox.indeterminate = someChecked && !allChecked;
+        };
+        
+        // Handle "Select All" checkbox click
+        selectAllCheckbox.addEventListener('change', () => {
+          const isChecked = selectAllCheckbox.checked;
+          tableCheckboxes.forEach(checkbox => {
+            checkbox.checked = isChecked;
+          });
+        });
+        
+        // Handle individual checkbox clicks
+        tableCheckboxes.forEach(checkbox => {
+          checkbox.addEventListener('change', updateSelectAllCheckbox);
+        });
+      },
+      preConfirm: () => {
+        const tableCheckboxes = document.querySelectorAll('.table-checkbox') as NodeListOf<HTMLInputElement>;
+        
+        const selectedTables = Array.from(tableCheckboxes).filter(checkbox => checkbox.checked).map(
+          (el) => el.value
+        );
+        
+        if (selectedTables.length === 0) {
+          Swal.showValidationMessage('Please select at least one table');
+          return false;
+        }
+        
+        const selectedTypes = Array.from(document.querySelectorAll('input[name="types"]:checked')).map(
+          (el) => (el as HTMLInputElement).value
+        );
+        
+        if (selectedTypes.length === 0) {
+          Swal.showValidationMessage('Please select at least one attendee type');
+          return false;
+        }
+        
+        return {
+          tableIds: selectedTables,
+          keepGroupsTogether: (document.getElementById('keep-groups') as HTMLInputElement).checked,
+          includeTypes: selectedTypes,
+          onlyUnassigned: (document.getElementById('only-unassigned') as HTMLInputElement).checked
+        };
+      }
+    });
+    
+    if (!isConfirmed || !formValues) return;
+    
+    try {
+      setAssigningTables(true);
+      
+      // Call the API to auto-assign tables
+      const response = await fetch(`/api/admin/events/${params.id}/access-codes/auto-assign-tables`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(formValues)
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to auto-assign tables');
+      }
+      
+      const data = await response.json();
+      
+      // Show success message
+      Swal.fire({
+        title: 'Tables Assigned',
+        html: `
+          <p>${data.message}</p>
+          <div class="mt-4 text-left">
+            <h3 class="font-medium mb-2">Table Assignments:</h3>
+            <div class="max-h-60 overflow-y-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr>
+                    <th class="text-left py-2">Table</th>
+                    <th class="text-right py-2">Assigned</th>
+                    <th class="text-right py-2">Remaining</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${data.tableAssignments.map((table: any) => `
+                    <tr>
+                      <td class="py-1">${table.name}</td>
+                      <td class="text-right py-1">${table.finalOccupancy}/${table.initialCapacity}</td>
+                      <td class="text-right py-1">${table.remainingCapacity}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `,
+        icon: 'success'
+      });
+      
+      // Refresh the RSVPs to show the new table assignments
+      fetchRsvps(search, pagination.page);
+      
+    } catch (error) {
+      console.error('Error auto-assigning tables:', error);
+      Swal.fire({
+        title: 'Error',
+        text: error instanceof Error ? error.message : 'Failed to auto-assign tables',
+        icon: 'error'
+      });
+    } finally {
+      setAssigningTables(false);
+    }
+  };
 
   // Table columns
   const columns = [
@@ -580,6 +800,14 @@ export default function EventRsvpsPage({ params }: { params: { id: string } }) {
         />
       </div>
       <div className="flex gap-2 ml-4">
+        <button
+          onClick={handleAutoAssignTables}
+          disabled={loading || assigningTables}
+          className="inline-flex items-center px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-md hover:bg-amber-700 disabled:bg-amber-300 transition-colors"
+        >
+          <Table2 className="h-4 w-4 mr-2" />
+          {assigningTables ? 'Assigning...' : 'Auto-Assign Tables'}
+        </button>
         <button
           onClick={() => router.push(`/admin/dashboard/events/${params.id}/tables`)}
           className="inline-flex items-center px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-md hover:bg-emerald-700 transition-colors"

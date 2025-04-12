@@ -2,8 +2,26 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
+import { format } from 'date-fns'
 import Link from 'next/link'
-import { Calendar, MapPin, Clock, Users, Mail, CheckSquare, Table } from 'lucide-react'
+import { 
+  BarChart, 
+  Users, 
+  Mail, 
+  MessageSquare, 
+  Calendar, 
+  MapPin, 
+  Clock, 
+  Edit, 
+  Trash2, 
+  QrCode,
+  Table2,
+  CheckSquare,
+  Table
+} from 'lucide-react'
 
 export default function EventDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter()
@@ -230,6 +248,27 @@ export default function EventDetailPage({ params }: { params: { id: string } }) 
             </Link>
           </div>
         </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <Link href={`/admin/dashboard/events/${params.id}/qr-codes`} className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow p-6 flex flex-col items-center justify-center text-center">
+          <QrCode className="h-12 w-12 text-emerald-600 mb-4" />
+          <h3 className="text-lg font-semibold mb-2">QR Codes</h3>
+          <p className="text-gray-600">Generate and manage QR codes for your guests</p>
+        </Link>
+
+        <Link href={`/admin/dashboard/events/${params.id}/guests`} className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow p-6 flex flex-col items-center justify-center text-center">
+          <Users className="h-12 w-12 text-blue-600 mb-4" />
+          <h3 className="text-lg font-semibold mb-2">Admitted Guests</h3>
+          <p className="text-gray-600">View all admitted guests and their details</p>
+        </Link>
+        
+        <Link href={`/admin/dashboard/events/${params.id}/tables`} className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow p-6 flex flex-col items-center justify-center text-center">
+          <Table2 className="h-12 w-12 text-purple-600 mb-4" />
+          <h3 className="text-lg font-semibold mb-2">Tables</h3>
+          <p className="text-gray-600">Create and manage seating arrangements</p>
+        </Link>
       </div>
 
       {/* Quick Actions */}
