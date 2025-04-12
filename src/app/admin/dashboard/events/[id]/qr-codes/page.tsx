@@ -744,19 +744,7 @@ export default function QRCodesPage({ params }: { params: { id: string } }) {
         width: '80%',
         showCloseButton: true,
         showConfirmButton: false,
-        confirmButtonColor: '#4CAF50',
-        didOpen: () => {
-          // Add event listeners to download buttons
-          const downloadButtons = document.querySelectorAll('a[download]')
-          downloadButtons.forEach((button) => {
-            if (button instanceof HTMLAnchorElement) {
-              button.addEventListener('click', (e) => {
-                // Let the default download behavior happen
-                // This is handled by the download attribute on the anchor tag
-              })
-            }
-          })
-        }
+        confirmButtonColor: '#4CAF50'
       })
       
     } catch (error) {

@@ -56,6 +56,8 @@ export default function EventRsvpsPage({ params }: { params: { id: string } }) {
   const [exporting, setExporting] = useState(false)
   const [managingRsvp, setManagingRsvp] = useState<Rsvp | null>(null)
   const [processingAction, setProcessingAction] = useState(false)
+  const [tables, setTables] = useState<any[]>([])
+  const [assigningTables, setAssigningTables] = useState(false)
   const [summary, setSummary] = useState({
     totalInvitees: 0,
     totalPrimary: 0,
@@ -427,6 +429,9 @@ export default function EventRsvpsPage({ params }: { params: { id: string } }) {
         handleManageGuests(updatedRsvp)
       }
       
+      // Refresh summary data
+      fetchSummary()
+      
     } catch (error) {
       console.error('Error adding dependent:', error)
       toast.error(error instanceof Error ? error.message : 'Failed to add dependent')
@@ -436,13 +441,7 @@ export default function EventRsvpsPage({ params }: { params: { id: string } }) {
   }
   
   // Handle removing a guest
-  const handleRemoveGuest = async (codeId: string, rsvpId?: string, dependentType?: string) => {
-    if (!rsvpId || !dependentType) {
-      // If we don't have the RSVP ID or dependent type, we can't proceed
-      toast.error('Missing RSVP ID or dependent type')
-      return
-    }
-
+  const handleRemoveGuest = async (codeId: string, rsvpId: string, dependentType: string) => {
     // Show confirmation dialog
     const result = await Swal.fire({
       title: 'Remove Dependent?',
@@ -491,6 +490,9 @@ export default function EventRsvpsPage({ params }: { params: { id: string } }) {
         setManagingRsvp(updatedRsvp)
         handleManageGuests(updatedRsvp)
       }
+      
+      // Refresh summary data
+      fetchSummary()
 
     } catch (error) {
       console.error('Error removing dependent:', error)

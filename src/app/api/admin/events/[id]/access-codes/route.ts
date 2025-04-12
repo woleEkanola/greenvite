@@ -53,8 +53,9 @@ export async function GET(
     const admitted = searchParams.get('admitted') || undefined
     const admissionType = searchParams.get('admissionType') || undefined
     
-    // Calculate pagination
-    const skip = (page - 1) * limit
+    // Calculate pagination - skip pagination if limit is very large (e.g., 1000)
+    const skipPagination = limit >= 1000
+    const skip = skipPagination ? 0 : (page - 1) * limit
     
     // Fetch access codes for this event
     const whereClause: any = {
@@ -94,7 +95,7 @@ export async function GET(
       // In the future: whereClause.isHallAdmitted = true
     }
     
-    // Fetch access codes with pagination
+    // Fetch access codes with pagination (or without if skipPagination is true)
     const [accessCodes, totalCount] = await Promise.all([
       prisma.accessCode.findMany({
         where: whereClause,
@@ -121,8 +122,8 @@ export async function GET(
         orderBy: {
           createdAt: 'desc'
         },
-        skip,
-        take: limit
+        skip: skipPagination ? undefined : skip,
+        take: skipPagination ? undefined : limit
       }),
       prisma.accessCode.count({
         where: whereClause

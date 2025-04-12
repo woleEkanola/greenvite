@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { format } from 'date-fns';
-import { Search, UserCheck, RefreshCw, Send, Filter, X, ChevronDown, ChevronRight, Trash2, Table } from 'lucide-react';
+import { Search, UserCheck, RefreshCw, Send, Filter, X, ChevronDown, ChevronRight, Trash2, Table, Eye, CheckCircle } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import Swal from 'sweetalert2';
@@ -98,13 +98,12 @@ export default function EventAccessCodesPage({ params }: { params: { id: string 
   // Fetch access codes
   const fetchAccessCodes = async () => {
     try {
-      const response = await fetch(`/api/admin/events/${params.id}/access-codes`);
+      // Use a large limit to effectively disable pagination
+      const response = await fetch(`/api/admin/events/${params.id}/access-codes?limit=1000`);
       if (!response.ok) {
         throw new Error('Failed to fetch access codes');
       }
       const data = await response.json();
-      
-      console.log('Raw access codes from API:', data.accessCodes);
       
       // If no access codes, set empty arrays
       if (!data.accessCodes || data.accessCodes.length === 0) {
@@ -113,14 +112,30 @@ export default function EventAccessCodesPage({ params }: { params: { id: string 
         return;
       }
       
-      // Log the types of access codes received to help debug
-      const types = data.accessCodes.map((code: AccessCode) => code.type);
-      const uniqueTypes = [...new Set(types)];
-      console.log('Access code types found:', uniqueTypes);
+      // Ensure all access codes have the required properties
+      const processedCodes = data.accessCodes.map((code: AccessCode) => ({
+        ...code,
+        // Ensure these properties exist to avoid null/undefined errors during filtering
+        type: code.type || '',
+        name: code.name || '',
+        code: code.code || '',
+        isAdmitted: !!code.isAdmitted,
+        isSent: !!code.isSent,
+        tableId: code.tableId || null,
+        rsvp: {
+          ...code.rsvp,
+          name: code.rsvp?.name || '',
+          email: code.rsvp?.email || '',
+          phone: code.rsvp?.phone || null,
+          hasGuest: !!code.rsvp?.hasGuest,
+          hasDriver: !!code.rsvp?.hasDriver,
+          hasAide: !!code.rsvp?.hasAide
+        }
+      }));
       
-      // Set the raw access codes directly without organizing
-      setAccessCodes(data.accessCodes);
-      setFilteredCodes(data.accessCodes);
+      // Set the processed access codes
+      setAccessCodes(processedCodes);
+      setFilteredCodes(processedCodes);
     } catch (error) {
       console.error('Error fetching access codes:', error);
       toast.error('Failed to fetch access codes');
@@ -477,9 +492,6 @@ export default function EventAccessCodesPage({ params }: { params: { id: string 
 
   // Apply filters
   useEffect(() => {
-    console.log('Applying filters:', { searchTerm, sentFilter, typeFilter, tableFilter, specificTableFilter, admissionFilter });
-    console.log('Original access codes count:', accessCodes.length);
-    
     if (!accessCodes || accessCodes.length === 0) {
       setFilteredCodes([]);
       return;
@@ -490,12 +502,21 @@ export default function EventAccessCodesPage({ params }: { params: { id: string 
     // Apply search filter
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(code => 
-        (code.rsvp?.name?.toLowerCase()?.includes(term) || false) || 
-        (code.code?.toLowerCase()?.includes(term) || false) ||
-        (code.rsvp?.email?.toLowerCase()?.includes(term) || false)
-      );
-      console.log('After search filter count:', filtered.length);
+      filtered = filtered.filter(code => {
+        // Check code fields
+        const codeMatches = code.code && code.code.toLowerCase().includes(term);
+        const nameMatches = code.name && code.name.toLowerCase().includes(term);
+        
+        // Check RSVP fields if they exist
+        const rsvpNameMatches = code.rsvp && code.rsvp.name && code.rsvp.name.toLowerCase().includes(term);
+        const rsvpEmailMatches = code.rsvp && code.rsvp.email && code.rsvp.email.toLowerCase().includes(term);
+        const rsvpPhoneMatches = code.rsvp && code.rsvp.phone && code.rsvp.phone.toLowerCase().includes(term);
+        
+        // Check table name if assigned
+        const tableNameMatches = code.table && code.table.name && code.table.name.toLowerCase().includes(term);
+        
+        return codeMatches || nameMatches || rsvpNameMatches || rsvpEmailMatches || rsvpPhoneMatches || tableNameMatches;
+      });
     }
     
     // Apply sent filter
@@ -503,36 +524,31 @@ export default function EventAccessCodesPage({ params }: { params: { id: string 
       filtered = filtered.filter(code => 
         sentFilter === 'sent' ? code.isSent : !code.isSent
       );
-      console.log('After sent filter count:', filtered.length);
     }
     
-    // Apply type filter with case-insensitive comparison
+    // Apply type filter
     if (typeFilter !== 'all') {
-      console.log('Before type filter - codes:', filtered);
-      console.log(`Filtering for type: ${typeFilter}`);
-      
-      // Log all the types in the filtered array to debug
-      const typesBeforeFilter = filtered.map(code => code.type);
-      console.log('Types before filter:', typesBeforeFilter);
-      
       filtered = filtered.filter(code => {
-        // Case insensitive comparison
-        const codeType = code.type?.toLowerCase() || '';
+        // Handle possible null or undefined types
+        if (!code.type) return false;
+        
+        // Ensure case-insensitive comparison
+        const codeType = code.type.toLowerCase();
         const filterType = typeFilter.toLowerCase();
-        const matches = codeType === filterType;
-        console.log(`Code ${code.id} type: ${code.type} (${codeType}), matches ${typeFilter} (${filterType}): ${matches}`);
-        return matches;
+        
+        return codeType === filterType;
       });
-      
-      console.log('After type filter count:', filtered.length);
-      console.log('After type filter - codes:', filtered);
     }
     
     // Apply table assignment filter
     if (tableFilter !== 'all') {
-      filtered = filtered.filter(code => 
-        tableFilter === 'assigned' ? !!code.tableId : !code.tableId
-      );
+      filtered = filtered.filter(code => {
+        if (tableFilter === 'assigned') {
+          return code.tableId !== null && code.tableId !== undefined && code.tableId !== '';
+        } else { // 'unassigned'
+          return !code.tableId || code.tableId === '' || code.tableId === null;
+        }
+      });
     }
     
     // Apply specific table filter
@@ -547,7 +563,6 @@ export default function EventAccessCodesPage({ params }: { params: { id: string 
       );
     }
     
-    console.log('Final filtered codes count:', filtered.length);
     setFilteredCodes(filtered);
   }, [accessCodes, searchTerm, sentFilter, typeFilter, tableFilter, specificTableFilter, admissionFilter]);
 
@@ -897,8 +912,8 @@ export default function EventAccessCodesPage({ params }: { params: { id: string 
       {/* Main content */}
       <div className="bg-white shadow-sm rounded-lg overflow-hidden">
         {/* Desktop view - Table */}
-        <div className="hidden md:block overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
+        <div className="hidden md:block overflow-x-auto max-w-full">
+          <table className="w-full divide-y divide-gray-200 table-fixed">
             <thead className="bg-gray-50">
               <tr>
                 <th scope="col" className="w-12 px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
@@ -910,13 +925,13 @@ export default function EventAccessCodesPage({ params }: { params: { id: string 
                   />
                 </th>
                 <th scope="col" className="w-12 px-3 py-3.5 text-left text-sm font-semibold text-gray-900"></th>
-                <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Name</th>
-                <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Code</th>
-                <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Type</th>
-                <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Table</th>
-                <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Sent</th>
-                <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Admitted</th>
-                <th scope="col" className="relative py-3.5 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
+                <th scope="col" className="w-1/5 px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Name</th>
+                <th scope="col" className="w-1/6 px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Code</th>
+                <th scope="col" className="w-1/8 px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Type</th>
+                <th scope="col" className="w-1/6 px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Table</th>
+                <th scope="col" className="w-1/8 px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Sent</th>
+                <th scope="col" className="w-1/8 px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Admitted</th>
+                <th scope="col" className="w-1/8 relative py-3.5 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
                   <span className="sr-only">Actions</span>
                 </th>
               </tr>
@@ -925,7 +940,7 @@ export default function EventAccessCodesPage({ params }: { params: { id: string 
               {filteredCodes.length > 0 ? (
                 filteredCodes.map((code: AccessCode) => (
                   <tr key={code.id} className={selectedCodes.includes(code.id) ? 'bg-emerald-50' : ''}>
-                    <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                    <td className="px-3 py-4 text-sm text-gray-500">
                       <input
                         type="checkbox"
                         className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
@@ -933,22 +948,22 @@ export default function EventAccessCodesPage({ params }: { params: { id: string 
                         onChange={() => toggleCodeSelection(code.id)}
                       />
                     </td>
-                    <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                    <td className="px-3 py-4 text-sm text-gray-500">
                       {/* No expand/collapse button needed with flat structure */}
                     </td>
-                    <td className="whitespace-nowrap px-3 py-4 text-sm font-medium text-gray-900">
+                    <td className="px-3 py-4 text-sm font-medium text-gray-900 truncate">
                       {code.rsvp?.name || 'Unknown'} <span className="text-xs text-gray-500 ml-1">({code.type || 'Unknown'})</span>
                     </td>
-                    <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                    <td className="px-3 py-4 text-sm text-gray-500 truncate">
                       {code.code || 'N/A'}
                     </td>
-                    <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                    <td className="px-3 py-4 text-sm text-gray-500">
                       {code.type || 'Unknown'}
                     </td>
-                    <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                    <td className="px-3 py-4 text-sm text-gray-500">
                       {code.table ? code.table.name : 'Not Assigned'}
                     </td>
-                    <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                    <td className="px-3 py-4 text-sm text-gray-500">
                       {code.isSent ? (
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                           Sent
@@ -959,7 +974,7 @@ export default function EventAccessCodesPage({ params }: { params: { id: string 
                         </span>
                       )}
                     </td>
-                    <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                    <td className="px-3 py-4 text-sm text-gray-500">
                       {code.isAdmitted ? (
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                           Admitted
@@ -971,20 +986,23 @@ export default function EventAccessCodesPage({ params }: { params: { id: string 
                       )}
                     </td>
                     <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                      <button
-                        onClick={() => viewGuestDetails(code)}
-                        className="text-emerald-600 hover:text-emerald-900 mr-4"
-                      >
-                        View
-                      </button>
-                      {!code.isAdmitted && (
+                      <div className="flex justify-end space-x-2">
                         <button
-                          onClick={() => markAsAdmitted(code.id)}
-                          className="text-emerald-600 hover:text-emerald-900 mr-4"
+                          onClick={() => setSelectedGuest(code)}
+                          className="text-gray-400 hover:text-gray-500"
                         >
-                          Admit
+                          <Eye className="h-4 w-4" />
                         </button>
-                      )}
+                        
+                        {!code.isAdmitted && (
+                          <button
+                            onClick={() => markAsAdmitted(code.id)}
+                            className="text-amber-400 hover:text-amber-500"
+                          >
+                            <CheckCircle className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
