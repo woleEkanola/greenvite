@@ -44,6 +44,7 @@ export default function EventTablesPage({ params }: { params: { id: string } }) 
   const [tables, setTables] = useState<Table[]>([])
   const [filteredTables, setFilteredTables] = useState<Table[]>([])
   const [searchTerm, setSearchTerm] = useState('')
+  const [vacancyFilter, setVacancyFilter] = useState('all') // 'all', 'vacant', 'full'
   const [hosts, setHosts] = useState<Host[]>([])
   
   // Form states
@@ -113,46 +114,64 @@ export default function EventTablesPage({ params }: { params: { id: string } }) 
   }, [params.id])
 
   useEffect(() => {
-    if (!searchTerm.trim()) {
+    if (!searchTerm.trim() && vacancyFilter === 'all') {
       setFilteredTables(tables);
       return;
     }
     
-    const lowerCaseSearch = searchTerm.toLowerCase();
-    const filtered = tables.filter(table => {
-      // Search by table name
-      if (table.name.toLowerCase().includes(lowerCaseSearch)) {
+    // First filter by search term
+    let filtered = tables;
+    
+    if (searchTerm.trim()) {
+      const lowerCaseSearch = searchTerm.toLowerCase();
+      filtered = tables.filter(table => {
+        // Search by table name
+        if (table.name.toLowerCase().includes(lowerCaseSearch)) {
+          return true;
+        }
+        
+        // Search by host name
+        if (table.hosts.some(host => 
+          host.name.toLowerCase().includes(lowerCaseSearch) || 
+          host.email.toLowerCase().includes(lowerCaseSearch)
+        )) {
+          return true;
+        }
+        
+        // Search by guest name or email if guests are loaded
+        if (table.guests && table.guests.some(guest => 
+          guest.name.toLowerCase().includes(lowerCaseSearch) ||
+          guest.rsvpName.toLowerCase().includes(lowerCaseSearch) ||
+          guest.rsvpEmail.toLowerCase().includes(lowerCaseSearch)
+        )) {
+          return true;
+        }
+        
+        // Search by capacity or occupancy
+        if (table.capacity.toString().includes(lowerCaseSearch) || 
+            (table.occupancy && table.occupancy.toString().includes(lowerCaseSearch))) {
+          return true;
+        }
+        
+        return false;
+      });
+    }
+    
+    // Then filter by vacancy status
+    if (vacancyFilter !== 'all') {
+      filtered = filtered.filter(table => {
+        const occupancy = table.occupancy || 0;
+        if (vacancyFilter === 'vacant') {
+          return occupancy < table.capacity; // Has at least one vacant seat
+        } else if (vacancyFilter === 'full') {
+          return occupancy >= table.capacity; // No vacant seats
+        }
         return true;
-      }
-      
-      // Search by host name
-      if (table.hosts.some(host => 
-        host.name.toLowerCase().includes(lowerCaseSearch) || 
-        host.email.toLowerCase().includes(lowerCaseSearch)
-      )) {
-        return true;
-      }
-      
-      // Search by guest name or email if guests are loaded
-      if (table.guests && table.guests.some(guest => 
-        guest.name.toLowerCase().includes(lowerCaseSearch) ||
-        guest.rsvpName.toLowerCase().includes(lowerCaseSearch) ||
-        guest.rsvpEmail.toLowerCase().includes(lowerCaseSearch)
-      )) {
-        return true;
-      }
-      
-      // Search by capacity or occupancy
-      if (table.capacity.toString().includes(lowerCaseSearch) || 
-          (table.occupancy && table.occupancy.toString().includes(lowerCaseSearch))) {
-        return true;
-      }
-      
-      return false;
-    });
+      });
+    }
     
     setFilteredTables(filtered);
-  }, [searchTerm, tables]);
+  }, [tables, searchTerm, vacancyFilter]);
 
   // Handle table form submission
   const handleTableSubmit = async (e: React.FormEvent) => {
@@ -416,7 +435,7 @@ export default function EventTablesPage({ params }: { params: { id: string } }) 
       
       {/* Search and actions bar */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-        <div className="w-full md:w-1/3">
+        <div className="w-full md:w-2/3 flex gap-2">
           <input
             type="text"
             placeholder="Search tables by name, host, guest..."
@@ -424,6 +443,15 @@ export default function EventTablesPage({ params }: { params: { id: string } }) 
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
+          <select
+            value={vacancyFilter}
+            onChange={(e) => setVacancyFilter(e.target.value)}
+            className="px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all">All Tables</option>
+            <option value="vacant">Has Vacant Seats</option>
+            <option value="full">Full Tables</option>
+          </select>
         </div>
         
         <div className="flex gap-2">

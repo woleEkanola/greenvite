@@ -517,10 +517,14 @@ export default function EventRsvpsPage({ params }: { params: { id: string } }) {
         <div class="text-left">
           <div class="mb-4">
             <label class="block text-sm font-medium text-gray-700 mb-1">Select Tables</label>
+            <div class="flex items-center mb-2">
+              <input type="checkbox" id="select-all-tables" class="mr-2">
+              <label for="select-all-tables" class="text-sm font-medium">Select All Tables</label>
+            </div>
             <div class="max-h-40 overflow-y-auto border rounded p-2">
               ${tables.map(table => `
                 <div class="flex items-center mb-2">
-                  <input type="checkbox" id="table-${table.id}" name="tables" value="${table.id}" class="mr-2">
+                  <input type="checkbox" id="table-${table.id}" name="tables" value="${table.id}" class="mr-2 table-checkbox">
                   <label for="table-${table.id}" class="text-sm">
                     ${table.name} (${table.accessCodes?.length || 0}/${table.capacity})
                   </label>
@@ -572,9 +576,38 @@ export default function EventRsvpsPage({ params }: { params: { id: string } }) {
       confirmButtonText: 'Assign Tables',
       confirmButtonColor: '#4CAF50',
       cancelButtonColor: '#9CA3AF',
+      didOpen: () => {
+        // Add functionality for "Select All" checkbox
+        const selectAllCheckbox = document.getElementById('select-all-tables') as HTMLInputElement;
+        const tableCheckboxes = document.querySelectorAll('.table-checkbox') as NodeListOf<HTMLInputElement>;
+        
+        // Function to update "Select All" state based on individual checkboxes
+        const updateSelectAllCheckbox = () => {
+          const allChecked = Array.from(tableCheckboxes).every(checkbox => checkbox.checked);
+          const someChecked = Array.from(tableCheckboxes).some(checkbox => checkbox.checked);
+          
+          selectAllCheckbox.checked = allChecked;
+          selectAllCheckbox.indeterminate = someChecked && !allChecked;
+        };
+        
+        // Handle "Select All" checkbox click
+        selectAllCheckbox.addEventListener('change', () => {
+          const isChecked = selectAllCheckbox.checked;
+          tableCheckboxes.forEach(checkbox => {
+            checkbox.checked = isChecked;
+          });
+        });
+        
+        // Handle individual checkbox clicks
+        tableCheckboxes.forEach(checkbox => {
+          checkbox.addEventListener('change', updateSelectAllCheckbox);
+        });
+      },
       preConfirm: () => {
-        const selectedTables = Array.from(document.querySelectorAll('input[name="tables"]:checked')).map(
-          (el) => (el as HTMLInputElement).value
+        const tableCheckboxes = document.querySelectorAll('.table-checkbox') as NodeListOf<HTMLInputElement>;
+        
+        const selectedTables = Array.from(tableCheckboxes).filter(checkbox => checkbox.checked).map(
+          (el) => el.value
         );
         
         if (selectedTables.length === 0) {
