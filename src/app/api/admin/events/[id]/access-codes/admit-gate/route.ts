@@ -60,6 +60,10 @@ export async function POST(
             eventId: params.id
           }
         }
+      },
+      include: {
+        rsvp: true,
+        table: true
       }
     })
     
@@ -74,6 +78,10 @@ export async function POST(
       data: {
         isAdmitted: true,
         admittedAt: now
+      },
+      include: {
+        table: true,
+        rsvp: true
       }
     })
     
@@ -84,8 +92,15 @@ export async function POST(
         id: updatedCode.id,
         code: updatedCode.code,
         isAdmitted: updatedCode.isAdmitted,
-        admittedAt: updatedCode.admittedAt
-      }
+        admittedAt: updatedCode.admittedAt,
+        tableId: updatedCode.tableId,
+        tableName: updatedCode.table?.name,
+        rsvpId: updatedCode.rsvpId,
+        rsvpEmail: updatedCode.rsvp?.email,
+        rsvpPhone: updatedCode.rsvp?.phone,
+        name: updatedCode.name
+      },
+      hasTable: !!updatedCode.tableId
     })
     
   } catch (error) {

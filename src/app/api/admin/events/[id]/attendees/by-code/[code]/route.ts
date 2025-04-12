@@ -68,6 +68,17 @@ export async function GET(
     const attendee = await prisma.invite.findFirst({
       where: {
         code: code
+      },
+      include: {
+        registrationCode: {
+          include: {
+            rsvp: {
+              include: {
+                accessCodes: true
+              }
+            }
+          }
+        }
       }
     });
 
@@ -78,6 +89,9 @@ export async function GET(
       );
     }
 
+    // Get access code if available
+    const accessCode = attendee.registrationCode?.rsvp?.accessCodes?.[0];
+    
     // Format the attendee data
     const formattedAttendee = {
       id: attendee.id,
@@ -86,6 +100,10 @@ export async function GET(
       phone: attendee.phone,
       code: attendee.code,
       status: attendee.status,
+      attended: accessCode?.isAdmitted || false,
+      attendedAt: accessCode?.admittedAt || null,
+      isHallAdmitted: accessCode?.isHallAdmitted || false,
+      hallAdmittedAt: accessCode?.hallAdmittedAt || null,
       createdAt: attendee.createdAt,
       updatedAt: attendee.updatedAt
     };

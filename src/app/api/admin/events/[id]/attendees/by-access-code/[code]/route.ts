@@ -136,6 +136,8 @@ export async function GET(
       tableName: accessCode.table?.name || null,
       attended: accessCode.isAdmitted,
       attendedAt: accessCode.admittedAt,
+      isHallAdmitted: accessCode.isHallAdmitted,
+      hallAdmittedAt: accessCode.hallAdmittedAt,
       createdAt: accessCode.createdAt,
       updatedAt: accessCode.updatedAt
     };

@@ -60,6 +60,10 @@ export async function POST(
             eventId: params.id
           }
         }
+      },
+      include: {
+        rsvp: true,
+        table: true
       }
     })
     
@@ -75,21 +79,47 @@ export async function POST(
       }, { status: 400 })
     }
     
-    // For hall admission, we'll use a different approach since we don't have the isHallAdmitted field yet
-    // We'll create a record in a custom table or use metadata to track hall admission
+    // Update the access code to mark as hall admitted
+    const updatedAccessCode = await prisma.accessCode.update({
+      where: {
+        id: codeId
+      },
+      data: {
+        isHallAdmitted: true,
+        hallAdmittedAt: new Date()
+      },
+      include: {
+        table: true,
+        rsvp: true
+      }
+    })
     
-    // For now, we'll just return success and let the client-side handle the UI state
-    // In a future update, we can add proper hall admission tracking in the database
+    // Log the updated access code for debugging
+    console.log('Successfully updated hall admission status:', {
+      id: updatedAccessCode.id,
+      code: updatedAccessCode.code,
+      isHallAdmitted: updatedAccessCode.isHallAdmitted,
+      hallAdmittedAt: updatedAccessCode.hallAdmittedAt
+    });
     
     return NextResponse.json({ 
       success: true,
       message: 'Guest admitted to hall successfully',
       accessCode: {
-        id: accessCode.id,
-        code: accessCode.code,
-        isAdmitted: accessCode.isAdmitted,
-        admittedAt: accessCode.admittedAt
-      }
+        id: updatedAccessCode.id,
+        code: updatedAccessCode.code,
+        isAdmitted: updatedAccessCode.isAdmitted,
+        admittedAt: updatedAccessCode.admittedAt,
+        isHallAdmitted: updatedAccessCode.isHallAdmitted,
+        hallAdmittedAt: updatedAccessCode.hallAdmittedAt,
+        tableId: updatedAccessCode.tableId,
+        tableName: updatedAccessCode.table?.name,
+        rsvpId: updatedAccessCode.rsvpId,
+        rsvpEmail: updatedAccessCode.rsvp?.email,
+        rsvpPhone: updatedAccessCode.rsvp?.phone,
+        name: updatedAccessCode.name
+      },
+      hasTable: !!updatedAccessCode.tableId
     })
     
   } catch (error) {
