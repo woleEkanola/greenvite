@@ -274,224 +274,203 @@ export default function AttendeeDetailsPage({ params }: { params: { id: string, 
     }
   }
   
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 p-6">
-        <div className="flex justify-center items-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-          <span className="ml-2 text-lg">Loading attendee details...</span>
-        </div>
-      </div>
-    )
-  }
-  
-  if (!attendee) {
-    return (
-      <div className="min-h-screen bg-gray-50 p-6">
-        <div className="mb-6">
-          <Link href={`/admin/dashboard/events/${eventId}/guests`} className="flex items-center text-blue-600 hover:text-blue-800">
-            <ChevronLeft className="h-4 w-4 mr-1" />
-            Back to Guest List
-          </Link>
-        </div>
-        
-        <div className="bg-white rounded-lg shadow-md p-8 text-center">
-          <XCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">Attendee Not Found</h2>
-          <p className="text-gray-600 mb-6">
-            The access code "{accessCode}" is not valid or the attendee does not exist.
-          </p>
-          <Link 
-            href={`/admin/dashboard/events/${eventId}/guests`}
-            className="inline-block px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
-          >
-            Return to Guest List
-          </Link>
-        </div>
-      </div>
-    )
-  }
-  
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="mb-6">
-        <Link href={`/admin/dashboard/events/${eventId}/guests`} className="flex items-center text-blue-600 hover:text-blue-800">
-          <ChevronLeft className="h-4 w-4 mr-1" />
-          Back to Guest List
-        </Link>
-      </div>
-      
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main Attendee Card */}
-        <div className="lg:col-span-2 bg-white rounded-lg shadow-md overflow-hidden">
-          <div className="p-6 border-b">
-            <div className="flex justify-between items-center">
-              <h2 className="text-2xl font-bold text-gray-800">{attendee.name}</h2>
-              <div className={`px-3 py-1 rounded-full text-sm font-medium ${
-                attendee.attended ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-              }`}>
-                {attendee.attended ? 'Admitted' : 'Not Admitted'}
-              </div>
-            </div>
-            <div className="text-sm text-gray-500 mt-1">
-              Code: <span className="font-mono font-medium">{attendee.code}</span>
-            </div>
+    <div className="min-h-screen bg-gray-100 px-4 py-6 sm:px-6">
+      {loading ? (
+        <div className="flex justify-center items-center min-h-[80vh]">
+          <div className="text-center">
+            <Loader2 className="h-12 w-12 animate-spin text-emerald-500 mx-auto mb-4" />
+            <p className="text-lg text-gray-600">Loading attendee details...</p>
+          </div>
+        </div>
+      ) : attendee ? (
+        <div className="max-w-lg mx-auto space-y-6">
+          {/* Header */}
+          <div className="flex flex-col items-center mb-6">
+            <Link href={`/admin/dashboard/events/${eventId}/access-codes`} className="text-blue-600 hover:text-blue-800 flex items-center self-start mb-4">
+              <ChevronLeft className="h-5 w-5 mr-1" />
+              Back to Access Codes
+            </Link>
+            <h1 className="text-2xl font-bold text-center text-gray-900">{event?.title || 'Event'}</h1>
+            <p className="text-gray-500 text-center mt-1">Attendee Details</p>
           </div>
           
-          <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <h3 className="text-lg font-semibold mb-4">Contact Information</h3>
-                <div className="space-y-3">
+          {/* Attendee Card */}
+          <div className="bg-white rounded-lg shadow-md overflow-hidden">
+            <div className="bg-emerald-500 p-4">
+              <h2 className="text-xl font-semibold text-white text-center">
+                {attendee.name}
+              </h2>
+            </div>
+            
+            <div className="p-6">
+              {/* Status Badges */}
+              <div className="flex flex-wrap justify-center gap-2 mb-6">
+                <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+                  attendee.attended ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                }`}>
+                  {attendee.attended ? 'Admitted at Gate' : 'Not Admitted'}
+                </div>
+                
+                <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+                  isHallAdmitted ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
+                }`}>
+                  {isHallAdmitted ? 'Admitted to Hall' : 'Not in Hall'}
+                </div>
+                
+                {attendee.tableId && (
+                  <div className="px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800">
+                    Table: {attendee.tableName || 'Assigned'}
+                  </div>
+                )}
+              </div>
+              
+              {/* Attendee Details */}
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 gap-4">
+                  <div className="border rounded-md p-3 bg-gray-50">
+                    <p className="text-sm font-medium text-gray-500">Code</p>
+                    <p className="text-lg font-semibold">{attendee.code}</p>
+                  </div>
+                  
                   {attendee.email && (
-                    <div>
-                      <div className="text-sm font-medium text-gray-500">Email</div>
-                      <div className="text-gray-800">{attendee.email}</div>
+                    <div className="border rounded-md p-3 bg-gray-50">
+                      <p className="text-sm font-medium text-gray-500">Email</p>
+                      <p className="text-base break-all">{attendee.email}</p>
                     </div>
                   )}
                   
                   {attendee.phone && (
-                    <div>
-                      <div className="text-sm font-medium text-gray-500">Phone</div>
-                      <div className="text-gray-800">{attendee.phone}</div>
+                    <div className="border rounded-md p-3 bg-gray-50">
+                      <p className="text-sm font-medium text-gray-500">Phone</p>
+                      <p className="text-base">{attendee.phone}</p>
                     </div>
                   )}
-                </div>
-              </div>
-              
-              <div>
-                <h3 className="text-lg font-semibold mb-4">Event Information</h3>
-                <div className="space-y-3">
-                  <div>
-                    <div className="text-sm font-medium text-gray-500">RSVP Status</div>
-                    <div className={`inline-block px-2 py-1 rounded-md text-sm font-medium ${
-                      attendee.rsvpStatus === 'attending' ? 'bg-green-100 text-green-800' :
-                      attendee.rsvpStatus === 'not_attending' ? 'bg-red-100 text-red-800' :
-                      'bg-yellow-100 text-yellow-800'
-                    }`}>
-                      {attendee.rsvpStatus === 'attending' ? 'Attending' :
-                       attendee.rsvpStatus === 'not_attending' ? 'Not Attending' :
-                       'Pending'}
-                    </div>
-                  </div>
                   
-                  <div>
-                    <div className="text-sm font-medium text-gray-500">Table Assignment</div>
-                    <div className="text-gray-800">
-                      {attendee.tableName ? attendee.tableName : 'Not Assigned'}
+                  {attendee.tableName && (
+                    <div className="border rounded-md p-3 bg-gray-50">
+                      <p className="text-sm font-medium text-gray-500">Table</p>
+                      <p className="text-base">{attendee.tableName}</p>
                     </div>
-                  </div>
+                  )}
                   
                   {attendee.attended && attendee.attendedAt && (
-                    <div>
-                      <div className="text-sm font-medium text-gray-500">Gate Admission</div>
-                      <div className="text-gray-800">
+                    <div className="border rounded-md p-3 bg-gray-50">
+                      <p className="text-sm font-medium text-gray-500">Admitted At</p>
+                      <p className="text-base">
                         {new Date(attendee.attendedAt).toLocaleString()}
-                      </div>
-                    </div>
-                  )}
-                  
-                  {isHallAdmitted && hallAdmittedAt && (
-                    <div>
-                      <div className="text-sm font-medium text-gray-500">Hall Admission</div>
-                      <div className="text-gray-800">
-                        {new Date(hallAdmittedAt).toLocaleString()}
-                      </div>
+                      </p>
                     </div>
                   )}
                 </div>
               </div>
-            </div>
-            
-            <div className="mt-8 flex flex-col sm:flex-row gap-3">
-              {!attendee.attended && (
-                <button
-                  onClick={handleGateAdmit}
-                  disabled={admittingGate}
-                  className="w-full sm:w-auto px-6 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {admittingGate ? (
-                    <>
-                      <Loader2 className="inline-block h-4 w-4 mr-2 animate-spin" />
-                      Admitting at Gate...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle className="inline-block h-4 w-4 mr-2" />
-                      Admit at Gate
-                    </>
-                  )}
-                </button>
-              )}
               
-              {!isHallAdmitted && (
-                <button
-                  onClick={handleHallAdmit}
-                  disabled={admittingHall || !attendee.attended}
-                  className="w-full sm:w-auto px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {admittingHall ? (
-                    <>
-                      <Loader2 className="inline-block h-4 w-4 mr-2 animate-spin" />
-                      Admitting to Hall...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle className="inline-block h-4 w-4 mr-2" />
-                      Admit to Hall
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-        
-        {/* Associated Attendees Card */}
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
-          <div className="p-4 border-b">
-            <div className="flex items-center">
-              <Users className="h-5 w-5 text-blue-500 mr-2" />
-              <h3 className="text-lg font-semibold">Associated Attendees</h3>
+              {/* Action Buttons */}
+              <div className="mt-8 flex flex-col gap-3">
+                {!attendee.attended && (
+                  <button
+                    onClick={handleGateAdmit}
+                    disabled={admittingGate}
+                    className="w-full px-6 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {admittingGate ? (
+                      <>
+                        <Loader2 className="inline-block h-5 w-5 mr-2 animate-spin" />
+                        Admitting at Gate...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="inline-block h-5 w-5 mr-2" />
+                        Admit at Gate
+                      </>
+                    )}
+                  </button>
+                )}
+                
+                {!isHallAdmitted && (
+                  <button
+                    onClick={handleHallAdmit}
+                    disabled={admittingHall || !attendee.attended}
+                    className="w-full px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {admittingHall ? (
+                      <>
+                        <Loader2 className="inline-block h-5 w-5 mr-2 animate-spin" />
+                        Admitting to Hall...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="inline-block h-5 w-5 mr-2" />
+                        Admit to Hall
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
           
-          <div className="p-4">
-            {associatedAttendees.length > 0 ? (
-              <div className="space-y-4">
-                {associatedAttendees.map(associate => (
-                  <div key={associate.id} className="border rounded-md p-3 hover:bg-gray-50">
-                    <Link href={`/admin/dashboard/events/${eventId}/qr/${associate.code}`}>
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <div className="font-medium">
-                            {associate.cleanName}
-                            {associate.relationshipType && (
-                              <span className="ml-1 text-xs px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full">
-                                {associate.relationshipType}
-                              </span>
-                            )}
+          {/* Associated Attendees Card */}
+          <div className="bg-white rounded-lg shadow-md overflow-hidden">
+            <div className="bg-blue-500 p-4">
+              <div className="flex items-center justify-center">
+                <Users className="h-5 w-5 text-white mr-2" />
+                <h3 className="text-lg font-semibold text-white">Associated Attendees</h3>
+              </div>
+            </div>
+            
+            <div className="p-4">
+              {associatedAttendees.length > 0 ? (
+                <div className="space-y-3">
+                  {associatedAttendees.map(associate => (
+                    <div key={associate.id} className="border rounded-md p-3 hover:bg-gray-50">
+                      <Link href={`/admin/dashboard/events/${eventId}/qr/${associate.code}`}>
+                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+                          <div>
+                            <div className="font-medium">
+                              {associate.cleanName}
+                              {associate.relationshipType && (
+                                <span className="ml-1 text-xs px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full">
+                                  {associate.relationshipType}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-sm text-gray-500">Code: {associate.code}</div>
                           </div>
-                          <div className="text-sm text-gray-500">Code: {associate.code}</div>
+                          <div className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            associate.attended ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {associate.attended ? 'Admitted' : 'Not Admitted'}
+                          </div>
                         </div>
-                        <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          associate.attended ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                        }`}>
-                          {associate.attended ? 'Admitted' : 'Not Admitted'}
-                        </div>
-                      </div>
-                    </Link>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-6 text-gray-500">
-                <p>No associated attendees found</p>
-              </div>
-            )}
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-6 text-gray-500">
+                  <p>No associated attendees found</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="max-w-lg mx-auto text-center py-12">
+          <XCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Attendee Not Found</h2>
+          <p className="text-gray-600 mb-6">
+            We couldn't find an attendee with the provided code. Please check the code and try again.
+          </p>
+          <Link
+            href={`/admin/dashboard/events/${eventId}/access-codes`}
+            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            <ChevronLeft className="h-4 w-4 mr-2" />
+            Back to Access Codes
+          </Link>
+        </div>
+      )}
     </div>
   )
 }

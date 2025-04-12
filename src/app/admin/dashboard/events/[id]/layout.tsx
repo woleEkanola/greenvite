@@ -37,8 +37,12 @@ export default function EventDashboardLayout({
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [eventTitle, setEventTitle] = useState('')
 
-  // Check if the current route is the access-mobile page
+  // Check if the current route is the access-mobile page or QR code page
   const isAccessMobilePage = pathname.includes('access-mobile')
+  const isQrCodePage = pathname.includes('/qr/')
+
+  // Hide sidebar for both access-mobile and QR code pages
+  const hideSidebar = isAccessMobilePage || isQrCodePage
 
   const isActive = (path: string) => {
     return pathname === path || pathname.startsWith(`${path}/`)
@@ -86,8 +90,8 @@ export default function EventDashboardLayout({
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* Sidebar - hidden for access-mobile route */}
-      {!isAccessMobilePage && (
+      {/* Sidebar - hidden for access-mobile and QR code routes */}
+      {!hideSidebar && (
         <aside className={`fixed top-0 left-0 h-full bg-white shadow-lg transition-all duration-300 z-20
                       ${isSidebarOpen ? 'w-64' : 'w-20'}`}>
           <div className="p-4 border-b">
@@ -274,11 +278,11 @@ export default function EventDashboardLayout({
         </aside>
       )}
 
-      {/* Main Content - full width for access-mobile */}
-      <main className={`transition-all duration-300 ${!isAccessMobilePage ? (isSidebarOpen ? 'ml-64' : 'ml-20') : 'ml-0'}`}>
+      {/* Main Content - full width for access-mobile and QR code pages */}
+      <main className={`transition-all duration-300 ${!hideSidebar ? (isSidebarOpen ? 'ml-64' : 'ml-20') : 'ml-0'}`}>
         {/* Page Content */}
-        <div className={`${isAccessMobilePage ? '' : 'py-6'}`}>
-          <div className={`${isAccessMobilePage ? '' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8'}`}>
+        <div className={`${hideSidebar ? '' : 'py-6'}`}>
+          <div className={`${hideSidebar ? '' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8'}`}>
             {children}
           </div>
         </div>
