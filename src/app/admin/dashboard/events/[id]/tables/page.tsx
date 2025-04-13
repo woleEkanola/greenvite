@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { PlusCircle, Edit, Trash2, Users, X, Table2, PieChart, UserCheck, UserX } from 'lucide-react'
+import { PlusCircle, Edit, Trash2, Users, X, Table2, PieChart, UserCheck, UserX, LayoutGrid, List, Search, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Swal from 'sweetalert2'
 import BulkTableCreator from '@/components/admin/BulkTableCreator'
@@ -48,6 +48,7 @@ export default function EventTablesPage({ params }: { params: { id: string } }) 
   const [hosts, setHosts] = useState<Host[]>([])
   const [tableStats, setTableStats] = useState<any>(null)
   const [loadingStats, setLoadingStats] = useState(true)
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid')
   
   // Form states
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -578,133 +579,263 @@ export default function EventTablesPage({ params }: { params: { id: string } }) 
       {/* Search and actions bar */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
         <div className="w-full md:w-2/3 flex gap-2">
-          <input
-            type="text"
-            placeholder="Search tables by name, host, guest..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+          <div className="relative flex-1">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search className="h-5 w-5 text-gray-400" />
+            </div>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm"
+              placeholder="Search tables..."
+            />
+          </div>
+          
           <select
             value={vacancyFilter}
             onChange={(e) => setVacancyFilter(e.target.value)}
-            className="px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="block w-32 py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm"
           >
             <option value="all">All Tables</option>
-            <option value="vacant">Has Vacant Seats</option>
-            <option value="full">Full Tables</option>
+            <option value="vacant">Has Vacancy</option>
+            <option value="full">Full</option>
+            <option value="empty">Empty</option>
           </select>
         </div>
         
-        <div className="flex gap-2">
+        {/* View mode toggle */}
+        <div className="flex items-center space-x-2 ml-2">
           <button
-            onClick={() => {
-              setIsModalOpen(true)
-              setIsEditMode(false)
-              resetForm()
-            }}
-            className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors flex items-center"
+            onClick={() => setViewMode('grid')}
+            className={`p-2 rounded-md ${viewMode === 'grid' ? 'bg-emerald-100 text-emerald-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+            title="Grid View"
           >
-            <PlusCircle size={18} className="mr-2" />
-            Add Table
+            <LayoutGrid size={18} />
           </button>
           <button
-            onClick={() => setIsBulkModalOpen(true)}
-            className="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 transition-colors flex items-center"
+            onClick={() => setViewMode('table')}
+            className={`p-2 rounded-md ${viewMode === 'table' ? 'bg-emerald-100 text-emerald-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+            title="Table View"
           >
-            <Table2 size={18} className="mr-2" />
-            Bulk Create
+            <List size={18} />
           </button>
         </div>
       </div>
-      
-      {/* Search results summary */}
-      {searchTerm && (
-        <div className="mb-4 text-sm text-gray-600">
-          Found {filteredTables.length} {filteredTables.length === 1 ? 'table' : 'tables'} matching "{searchTerm}"
-          {filteredTables.length === 0 && (
-            <button 
-              onClick={() => setSearchTerm('')}
-              className="ml-2 text-blue-500 hover:underline"
-            >
-              Clear search
-            </button>
-          )}
+
+      {/* Tables display */}
+      {loading ? (
+        <div className="text-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-emerald-500" />
+          <p className="mt-2 text-gray-500">Loading tables...</p>
         </div>
-      )}
-      
-      {/* Tables list */}
-      <div className="mb-6 flex justify-between items-center">
-        <h2 className="text-xl font-semibold">Tables ({filteredTables.length})</h2>
-      </div>
-      
-      {filteredTables.length === 0 ? (
-        <div className="bg-white rounded-lg shadow p-6 text-center">
-          <p className="text-gray-500 py-8">
-            No tables have been created yet. Click the "Add Table" button to create your first table.
-          </p>
+      ) : filteredTables.length === 0 ? (
+        <div className="bg-white rounded-lg shadow-md p-8 text-center">
+          <p className="text-gray-500">No tables found. Create your first table!</p>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      ) : viewMode === 'grid' ? (
+        // Grid view
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredTables.map(table => (
-            <div 
-              key={table.id} 
-              className="bg-white rounded-lg shadow overflow-hidden"
-              style={{ borderTop: `4px solid ${table.color}` }}
-            >
-              <div className="p-4">
-                <div className="flex justify-between items-start mb-2">
-                  <h3 className="text-lg font-semibold">{table.name}</h3>
-                  <div className="flex space-x-2">
-                    <button 
+            <div key={table.id} className="bg-white rounded-lg shadow-md overflow-hidden">
+              <div className="p-4 border-b bg-emerald-600 text-white">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center">
+                    <div 
+                      className="h-4 w-4 rounded-full mr-2 border border-white" 
+                      style={{ backgroundColor: table.color || '#000000' }}
+                    ></div>
+                    <h3 className="text-lg font-semibold">{table.name}</h3>
+                  </div>
+                  <div className="flex space-x-1">
+                    <button
                       onClick={() => handleEditTable(table)}
-                      className="text-gray-500 hover:text-blue-500 transition-colors"
-                      title="Edit table"
+                      className="p-1 rounded-full hover:bg-white/20 transition-colors"
+                      title="Edit Table"
                     >
-                      <Edit size={18} />
+                      <Edit size={16} />
                     </button>
-                    <button 
+                    <button
                       onClick={() => handleDeleteTable(table.id)}
-                      className="text-gray-500 hover:text-red-500 transition-colors"
-                      title="Delete table"
+                      className="p-1 rounded-full hover:bg-white/20 transition-colors"
+                      title="Delete Table"
                     >
-                      <Trash2 size={18} />
-                    </button>
-                    <button 
-                      onClick={() => handleManageHosts(table)}
-                      className="text-gray-500 hover:text-purple-500 transition-colors"
-                      title="Manage hosts"
-                    >
-                      <Users size={18} />
-                    </button>
-                    <button 
-                      onClick={() => handleViewTableOccupants(table)}
-                      className="text-gray-500 hover:text-green-500 transition-colors"
-                      title="View occupants"
-                    >
-                      <Users size={18} />
+                      <Trash2 size={16} />
                     </button>
                   </div>
                 </div>
-                <p className="text-sm text-gray-600">Capacity: {table.capacity} seats</p>
-                <p className="text-sm text-gray-600">Occupancy: {table.occupancy || 0} / {table.capacity}</p>
-                <div className="mt-3">
-                  <p className="text-sm font-medium text-gray-700 mb-1">Hosts:</p>
-                  {table.hosts.length > 0 ? (
-                    <ul className="text-sm text-gray-600">
-                      {table.hosts.map(host => (
-                        <li key={host.id} className="mb-1">
-                          {host.name} ({host.role})
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-sm text-gray-500 italic">No hosts assigned</p>
-                  )}
+              </div>
+              
+              <div className="p-4">
+                <div className="flex justify-between mb-2">
+                  <span className="text-gray-600">Capacity:</span>
+                  <span className="font-medium">{table.capacity}</span>
                 </div>
+                <div className="flex justify-between mb-2">
+                  <span className="text-gray-600">Occupancy:</span>
+                  <span className="font-medium">{table.occupancy || 0}</span>
+                </div>
+                <div className="flex justify-between mb-4">
+                  <span className="text-gray-600">Vacancy:</span>
+                  <span className={`font-medium ${table.vacancy === 0 ? 'text-red-500' : 'text-green-500'}`}>
+                    {table.vacancy || 0}
+                  </span>
+                </div>
+                
+                <div className="relative pt-1">
+                  <div className="overflow-hidden h-2 mb-4 text-xs flex rounded bg-gray-200">
+                    <div 
+                      style={{ 
+                        width: `${table.capacity > 0 ? (table.occupancy / table.capacity) * 100 : 0}%`,
+                        backgroundColor: table.vacancy === 0 ? '#ef4444' : table.occupancy === 0 ? '#9ca3af' : '#f59e0b'
+                      }} 
+                      className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center rounded"
+                    ></div>
+                  </div>
+                </div>
+                
+                <div className="flex flex-col sm:flex-row justify-between space-y-2 sm:space-y-0 sm:space-x-2">
+                  <button
+                    onClick={() => handleManageHosts(table)}
+                    className="flex-1 inline-flex justify-center items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500"
+                  >
+                    <Users className="h-4 w-4 mr-1" />
+                    Hosts ({table.hosts?.length || 0})
+                  </button>
+                  <button
+                    onClick={() => handleViewTableOccupants(table)}
+                    className="flex-1 inline-flex justify-center items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500"
+                  >
+                    <Users className="h-4 w-4 mr-1" />
+                    Occupants
+                  </button>
+                </div>
+              </div>
+              
+              {/* Status badge */}
+              <div className="absolute top-0 right-0 mt-2 mr-2">
+                {table.vacancy === 0 ? (
+                  <span className="px-2 py-1 inline-flex text-xs leading-4 font-semibold rounded-full bg-red-100 text-red-800">
+                    Full
+                  </span>
+                ) : table.occupancy === 0 ? (
+                  <span className="px-2 py-1 inline-flex text-xs leading-4 font-semibold rounded-full bg-gray-100 text-gray-800">
+                    Empty
+                  </span>
+                ) : (
+                  <span className="px-2 py-1 inline-flex text-xs leading-4 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                    {table.vacancy} Free
+                  </span>
+                )}
               </div>
             </div>
           ))}
+        </div>
+      ) : (
+        // Table view
+        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Name
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Capacity
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Occupancy
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Vacancy
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Hosts
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredTables.map(table => (
+                  <tr key={table.id}>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div className="h-4 w-4 rounded-full mr-2" style={{ backgroundColor: table.color || '#000000' }}></div>
+                        <div className="text-sm font-medium text-gray-900">{table.name}</div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {table.capacity}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {table.occupancy || 0}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`text-sm ${table.vacancy === 0 ? 'text-red-500 font-medium' : 'text-green-500 font-medium'}`}>
+                        {table.vacancy || 0}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {table.vacancy === 0 ? (
+                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                          Full
+                        </span>
+                      ) : table.occupancy === 0 ? (
+                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+                          Empty
+                        </span>
+                      ) : (
+                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                          Partial
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {table.hosts?.length || 0}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <div className="flex justify-end space-x-2">
+                        <button
+                          onClick={() => handleViewTableOccupants(table)}
+                          className="text-indigo-600 hover:text-indigo-900"
+                          title="View Occupants"
+                        >
+                          <Users size={16} />
+                        </button>
+                        <button
+                          onClick={() => handleManageHosts(table)}
+                          className="text-purple-600 hover:text-purple-900"
+                          title="Manage Hosts"
+                        >
+                          <Users size={16} />
+                        </button>
+                        <button
+                          onClick={() => handleEditTable(table)}
+                          className="text-blue-600 hover:text-blue-900"
+                          title="Edit Table"
+                        >
+                          <Edit size={16} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteTable(table.id)}
+                          className="text-red-600 hover:text-red-900"
+                          title="Delete Table"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
       
