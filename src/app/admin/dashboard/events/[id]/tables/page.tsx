@@ -637,7 +637,7 @@ export default function EventTablesPage({ params }: { params: { id: string } }) 
         // Grid view
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredTables.map(table => (
-            <div key={table.id} className="bg-white rounded-lg shadow-md overflow-hidden">
+            <div key={table.id} className="bg-white rounded-lg shadow-md overflow-hidden relative">
               <div className="p-4 border-b bg-emerald-600 text-white">
                 <div className="flex justify-between items-center">
                   <div className="flex items-center">
@@ -715,15 +715,15 @@ export default function EventTablesPage({ params }: { params: { id: string } }) 
               {/* Status badge */}
               <div className="absolute top-0 right-0 mt-2 mr-2">
                 {table.vacancy === 0 ? (
-                  <span className="px-2 py-1 inline-flex text-xs leading-4 font-semibold rounded-full bg-red-100 text-red-800">
+                  <span className="px-2 inline-flex text-xs leading-4 font-semibold rounded-full bg-red-100 text-red-800">
                     Full
                   </span>
                 ) : table.occupancy === 0 ? (
-                  <span className="px-2 py-1 inline-flex text-xs leading-4 font-semibold rounded-full bg-gray-100 text-gray-800">
+                  <span className="px-2 inline-flex text-xs leading-4 font-semibold rounded-full bg-gray-100 text-gray-800">
                     Empty
                   </span>
                 ) : (
-                  <span className="px-2 py-1 inline-flex text-xs leading-4 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                  <span className="px-2 inline-flex text-xs leading-4 font-semibold rounded-full bg-yellow-100 text-yellow-800">
                     {table.vacancy} Free
                   </span>
                 )}
