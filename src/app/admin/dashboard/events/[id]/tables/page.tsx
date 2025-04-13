@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { PlusCircle, Edit, Trash2, Users, X, Table2 } from 'lucide-react'
+import { PlusCircle, Edit, Trash2, Users, X, Table2, PieChart, UserCheck, UserX } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Swal from 'sweetalert2'
 import BulkTableCreator from '@/components/admin/BulkTableCreator'
@@ -46,6 +46,8 @@ export default function EventTablesPage({ params }: { params: { id: string } }) 
   const [searchTerm, setSearchTerm] = useState('')
   const [vacancyFilter, setVacancyFilter] = useState('all') // 'all', 'vacant', 'full'
   const [hosts, setHosts] = useState<Host[]>([])
+  const [tableStats, setTableStats] = useState<any>(null)
+  const [loadingStats, setLoadingStats] = useState(true)
   
   // Form states
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -101,11 +103,32 @@ export default function EventTablesPage({ params }: { params: { id: string } }) 
       }
       const hostsData = await hostsResponse.json()
       setHosts(hostsData.hosts || [])
+      
+      // Fetch table statistics
+      await fetchTableStats()
     } catch (error) {
       console.error('Error fetching data:', error)
       toast.error('Failed to load data')
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Fetch table statistics
+  const fetchTableStats = async () => {
+    try {
+      setLoadingStats(true)
+      const statsResponse = await fetch(`/api/admin/events/${params.id}/tables/stats`)
+      if (!statsResponse.ok) {
+        throw new Error('Failed to fetch table statistics')
+      }
+      const statsData = await statsResponse.json()
+      setTableStats(statsData.stats)
+    } catch (error) {
+      console.error('Error fetching table statistics:', error)
+      toast.error('Failed to load table statistics')
+    } finally {
+      setLoadingStats(false)
     }
   }
 
@@ -408,30 +431,149 @@ export default function EventTablesPage({ params }: { params: { id: string } }) 
   }
 
   return (
-    <div>
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-        <h1 className="text-2xl font-bold">Tables</h1>
-        <div className="flex flex-wrap gap-2">
+    <div className="container mx-auto px-4 py-8">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">Tables for {event?.title || 'Event'}</h1>
+        <div className="flex gap-2">
           <button
             onClick={() => setIsBulkModalOpen(true)}
-            className="bg-emerald-500 text-white px-3 py-2 rounded-md hover:bg-emerald-600 transition-colors flex items-center"
+            className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors flex items-center gap-1"
           >
-            <Table2 className="h-5 w-5 mr-1" />
+            <PlusCircle size={16} />
             <span>Bulk Create</span>
           </button>
           <button
-            onClick={() => {
-              resetForm()
-              setIsModalOpen(true)
-              setIsEditMode(false)
-            }}
-            className="bg-emerald-500 text-white px-3 py-2 rounded-md hover:bg-emerald-600 transition-colors flex items-center"
+            onClick={() => setIsModalOpen(true)}
+            className="bg-emerald-500 text-white px-4 py-2 rounded-md hover:bg-emerald-600 transition-colors flex items-center gap-1"
           >
-            <PlusCircle className="h-5 w-5 mr-1" />
+            <PlusCircle size={16} />
             <span>Add Table</span>
           </button>
         </div>
       </div>
+      
+      {/* Table Statistics Dashboard */}
+      {!loading && tableStats && (
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <PieChart className="h-5 w-5 text-blue-500" />
+              Table Statistics
+            </h2>
+            <button 
+              onClick={fetchTableStats} 
+              className="text-sm text-blue-500 hover:text-blue-700"
+              disabled={loadingStats}
+            >
+              {loadingStats ? 'Refreshing...' : 'Refresh'}
+            </button>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Tables breakdown */}
+            <div className="bg-gray-50 rounded-lg p-4">
+              <h3 className="text-sm font-medium text-gray-500 mb-2">Tables</h3>
+              <div className="flex justify-between mb-2">
+                <span className="text-gray-600">Total Tables:</span>
+                <span className="font-semibold">{tableStats.tables.total}</span>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center">
+                  <div className="w-full bg-gray-200 rounded-full h-2.5">
+                    <div className="bg-green-500 h-2.5 rounded-full" style={{ 
+                      width: `${tableStats.tables.total > 0 ? (tableStats.tables.full / tableStats.tables.total) * 100 : 0}%` 
+                    }}></div>
+                  </div>
+                  <span className="ml-2 text-sm text-gray-600">{tableStats.tables.full} Full</span>
+                </div>
+                <div className="flex items-center">
+                  <div className="w-full bg-gray-200 rounded-full h-2.5">
+                    <div className="bg-yellow-500 h-2.5 rounded-full" style={{ 
+                      width: `${tableStats.tables.total > 0 ? (tableStats.tables.partiallyOccupied / tableStats.tables.total) * 100 : 0}%` 
+                    }}></div>
+                  </div>
+                  <span className="ml-2 text-sm text-gray-600">{tableStats.tables.partiallyOccupied} Partial</span>
+                </div>
+                <div className="flex items-center">
+                  <div className="w-full bg-gray-200 rounded-full h-2.5">
+                    <div className="bg-gray-400 h-2.5 rounded-full" style={{ 
+                      width: `${tableStats.tables.total > 0 ? (tableStats.tables.empty / tableStats.tables.total) * 100 : 0}%` 
+                    }}></div>
+                  </div>
+                  <span className="ml-2 text-sm text-gray-600">{tableStats.tables.empty} Empty</span>
+                </div>
+              </div>
+            </div>
+            
+            {/* Seats breakdown */}
+            <div className="bg-gray-50 rounded-lg p-4">
+              <h3 className="text-sm font-medium text-gray-500 mb-2">Seats</h3>
+              <div className="flex justify-between mb-2">
+                <span className="text-gray-600">Total Capacity:</span>
+                <span className="font-semibold">{tableStats.seats.totalCapacity}</span>
+              </div>
+              <div className="relative pt-1">
+                <div className="flex mb-2 items-center justify-between">
+                  <div>
+                    <span className="text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-green-600 bg-green-200">
+                      Occupied: {tableStats.seats.occupied}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-blue-600 bg-blue-200">
+                      Vacant: {tableStats.seats.vacant}
+                    </span>
+                  </div>
+                </div>
+                <div className="overflow-hidden h-6 mb-4 text-xs flex rounded bg-gray-200">
+                  <div style={{ width: `${tableStats.seats.occupancyRate}%` }} className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-green-500">
+                    {Math.round(tableStats.seats.occupancyRate)}%
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Invitees breakdown */}
+            <div className="bg-gray-50 rounded-lg p-4">
+              <h3 className="text-sm font-medium text-gray-500 mb-2">Invitees</h3>
+              <div className="flex justify-between mb-2">
+                <span className="text-gray-600">Total Invitees:</span>
+                <span className="font-semibold">{tableStats.invitees.total}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 mb-4">
+                <div className="bg-green-100 p-3 rounded-lg text-center">
+                  <div className="flex items-center justify-center mb-1">
+                    <UserCheck className="h-4 w-4 text-green-600 mr-1" />
+                    <span className="text-sm font-medium text-green-600">Assigned</span>
+                  </div>
+                  <p className="text-2xl font-bold text-green-700">{tableStats.invitees.assigned}</p>
+                </div>
+                <div className="bg-amber-100 p-3 rounded-lg text-center">
+                  <div className="flex items-center justify-center mb-1">
+                    <UserX className="h-4 w-4 text-amber-600 mr-1" />
+                    <span className="text-sm font-medium text-amber-600">Unassigned</span>
+                  </div>
+                  <p className="text-2xl font-bold text-amber-700">{tableStats.invitees.unassigned}</p>
+                </div>
+              </div>
+              <div className="text-xs text-gray-500">
+                <div className="flex justify-between mb-1">
+                  <span>Admitted with table:</span>
+                  <span className="font-medium">{tableStats.admission.admittedWithTable}</span>
+                </div>
+                <div className="flex justify-between mb-1">
+                  <span>Admitted without table:</span>
+                  <span className="font-medium">{tableStats.admission.admittedWithoutTable}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Hall admitted:</span>
+                  <span className="font-medium">{tableStats.admission.hallAdmittedWithTable + tableStats.admission.hallAdmittedWithoutTable}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* Search and actions bar */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
