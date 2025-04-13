@@ -19,7 +19,8 @@ import {
   Send,
   MessageSquare,
   Globe,
-  Map
+  Map,
+  UserCheck
 } from 'lucide-react'
 import { signOut, useSession } from 'next-auth/react'
 
@@ -40,9 +41,10 @@ export default function EventDashboardLayout({
   // Check if the current route is the access-mobile page or QR code page
   const isAccessMobilePage = pathname.includes('access-mobile')
   const isQrCodePage = pathname.includes('/qr/')
+  const isAccessdPage = pathname.includes('/accessd')
 
   // Hide sidebar for both access-mobile and QR code pages
-  const hideSidebar = isAccessMobilePage || isQrCodePage
+  const hideSidebar = isAccessMobilePage || isQrCodePage || isAccessdPage
 
   const isActive = (path: string) => {
     return pathname === path || pathname.startsWith(`${path}/`)
@@ -260,6 +262,19 @@ export default function EventDashboardLayout({
                 >
                   <QrCode className="h-5 w-5 min-w-5" />
                   {isSidebarOpen && <span className="ml-3">QR Codes</span>}
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href={`/admin/dashboard/events/${params.id}/accessd`}
+                  className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
+                    isActive(`/admin/dashboard/events/${params.id}/accessd`)
+                      ? 'bg-emerald-500 text-white'
+                      : 'hover:bg-gray-100'
+                  }`}
+                >
+                  <UserCheck className="h-5 w-5 min-w-5" />
+                  {isSidebarOpen && <span className="ml-3">Mobile Access</span>}
                 </Link>
               </li>
             </ul>
