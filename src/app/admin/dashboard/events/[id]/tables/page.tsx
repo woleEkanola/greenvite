@@ -686,7 +686,7 @@ export default function EventTablesPage({ params }: { params: { id: string } }) 
                   <div className="overflow-hidden h-2 mb-4 text-xs flex rounded bg-gray-200">
                     <div 
                       style={{ 
-                        width: `${table.capacity > 0 ? (table.occupancy / table.capacity) * 100 : 0}%`,
+                        width: `${table.capacity > 0 ? ((table.occupancy || 0) / table.capacity) * 100 : 0}%`,
                         backgroundColor: table.vacancy === 0 ? '#ef4444' : table.occupancy === 0 ? '#9ca3af' : '#f59e0b'
                       }} 
                       className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center rounded"

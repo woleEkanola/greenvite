@@ -4,10 +4,8 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import axios from 'axios'
 
-// Helper function to check event access
 async function canAccessEvent(userId: string, eventId: string): Promise<boolean> {
   try {
-    // Check if the event exists
     const event = await prisma.event.findUnique({
       where: { id: eventId }
     });
@@ -16,12 +14,10 @@ async function canAccessEvent(userId: string, eventId: string): Promise<boolean>
       return false;
     }
 
-    // Check if the user is the event owner
     if (event.ownerId === userId) {
       return true;
     }
 
-    // Check if the user is an admin of the event
     const eventAdmin = await prisma.eventAdmin.findFirst({
       where: {
         eventId,
@@ -40,7 +36,6 @@ async function canAccessEvent(userId: string, eventId: string): Promise<boolean>
   }
 }
 
-// Helper function to process template
 function processTemplate(template: string, name: string, code: string, eventLink: string, isHtml: boolean = false): string {
   if (!template) return '';
   
@@ -54,7 +49,6 @@ function processTemplate(template: string, name: string, code: string, eventLink
     .replace(/\{\{\{code\}\}\}/g, code)
     .replace(/\{\(code\)\}/g, code);
   
-  // Replace event link
   if (eventLink) {
     const linkWithCode = `${eventLink}?code=${code}`;
     processed = processed
@@ -67,7 +61,6 @@ function processTemplate(template: string, name: string, code: string, eventLink
   return processed;
 }
 
-// POST /api/admin/events/[id]/invites/send-batch
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -83,7 +76,6 @@ export async function POST(
     
     const eventId = params.id
     
-    // Check if user has access to this event
     if (!session.user.id) {
       return new NextResponse(
         JSON.stringify({ error: 'Invalid user session' }),
@@ -99,7 +91,6 @@ export async function POST(
       )
     }
 
-    // Parse request body
     const body = await request.json()
     const { 
       recipients,
@@ -111,7 +102,6 @@ export async function POST(
       eventLink
     } = body
 
-    // Log the request parameters for debugging
     console.log('Invite batch send request parameters:', {
       recipientsCount: recipients?.length,
       hasEmailSubject: !!emailSubject,
@@ -122,7 +112,6 @@ export async function POST(
       eventLink
     });
 
-    // Validate required fields
     if (!recipients || !Array.isArray(recipients) || recipients.length === 0) {
       return new NextResponse(
         JSON.stringify({ error: 'No recipients provided' }),
@@ -130,7 +119,6 @@ export async function POST(
       )
     }
 
-    // Get the event details
     const event = await prisma.event.findUnique({
       where: { id: eventId },
       select: { 
@@ -146,31 +134,17 @@ export async function POST(
       )
     }
 
-    // Define the base URL for API calls
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    
-    // Define the default image URL
     const defaultImageUrl = `${baseUrl}/jessegeorge.jpg`;
-    
-    // Prepare the event link if not provided
     const finalEventLink = eventLink || `${baseUrl}/rsvp/${event.slug || eventId}`;
-    
+
     console.log('Environment configuration:', {
       baseUrl,
       nodeEnv: process.env.NODE_ENV,
       defaultImageUrl,
       finalEventLink
     });
-    
-    // For internal API calls, we need to use the correct URL based on environment
-    // In production, we need to use the same server for internal API calls
-    const internalApiBaseUrl = process.env.NODE_ENV === 'production' 
-      ? process.env.INTERNAL_API_URL || baseUrl // Use INTERNAL_API_URL if available, otherwise baseUrl
-      : baseUrl; // In development, just use baseUrl
-    
-    console.log(`Using internal API base URL: ${internalApiBaseUrl}`);
 
-    // Fetch the image if available
     let imageBuffer: Buffer | null = null;
     if (event.imageUrl) {
       try {
@@ -185,7 +159,6 @@ export async function POST(
       }
     }
 
-    // Process each recipient
     const results = [];
     const errorDetails = [];
 
@@ -193,7 +166,6 @@ export async function POST(
       try {
         console.log(`Processing recipient: ${recipient.name}, email: ${recipient.email}, phone: ${recipient.phone}`);
         
-        // Check if the template uses the {{code}} placeholder
         const usesCodePlaceholder = 
           (emailContent && (
             emailContent.includes('{{code}}') || 
@@ -210,10 +182,8 @@ export async function POST(
         
         let code: string;
         
-        // If the template uses the code placeholder, get an available registration code
         if (usesCodePlaceholder) {
           try {
-            // Find an available registration code for this event
             const registrationCode = await prisma.registrationCode.findFirst({
               where: {
                 eventId,
@@ -222,7 +192,6 @@ export async function POST(
             });
             
             if (!registrationCode) {
-              // If no available code is found, create a new one
               const newCode = await prisma.registrationCode.create({
                 data: {
                   code: Math.random().toString(36).substring(2, 8).toUpperCase(),
@@ -231,14 +200,12 @@ export async function POST(
                 }
               });
               code = newCode.code;
-              
               console.log(`Created new registration code: ${code}`);
             } else {
               code = registrationCode.code;
               console.log(`Using existing registration code: ${code}`);
             }
             
-            // Mark the code as 'invite-sent'
             await prisma.registrationCode.update({
               where: { code },
               data: { status: 'invite-sent' }
@@ -250,17 +217,14 @@ export async function POST(
             throw new Error(`Failed to handle registration code: ${codeError instanceof Error ? codeError.message : 'Unknown error'}`);
           }
         } else {
-          // If not using the code placeholder, generate a random code for tracking
           code = Math.random().toString(36).substring(2, 8).toUpperCase();
           console.log(`Generated random tracking code (not a registration code): ${code}`);
         }
 
-        // Process the templates with the recipient's name and code
         const processedEmailSubject = processTemplate(emailSubject, recipient.name, code, finalEventLink, false);
         const processedEmailContent = processTemplate(emailContent, recipient.name, code, finalEventLink, true);
         const processedWhatsappContent = processTemplate(whatsappContent, recipient.name, code, finalEventLink, false);
         
-        // Create an invite record in the database
         const invite = await prisma.invite.create({
           data: {
             name: recipient.name,
@@ -279,109 +243,84 @@ export async function POST(
         let emailSuccess = false;
         let emailError = null;
         
-        // Only attempt to send email if the recipient type is 'email' or 'both'
         if (recipient.type === 'email' || recipient.type === 'both') {
           try {
             console.log(`Sending email to ${recipient.email}`);
             
-            const emailResponse = await fetch(`${internalApiBaseUrl}/api/admin/email`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                to: recipient.email,
-                subject: processedEmailSubject,
-                html: processedEmailContent,
-                imageUrl: event.imageUrl || defaultImageUrl
-              })
-            });
+            const { sendEmail: sendEmailCentralized } = await import('@/lib/communications');
+            const result = await sendEmailCentralized(
+              recipient.email,
+              recipient.name,
+              code,
+              processedEmailSubject,
+              processedEmailContent,
+              finalEventLink,
+              imageBuffer || undefined,
+              event.imageUrl || defaultImageUrl
+            );
             
-            const emailResult = await emailResponse.json();
-            emailSuccess = emailResponse.ok && emailResult.success;
+            emailSuccess = result;
             
             if (!emailSuccess) {
-              emailError = emailResult.error || 'Unknown email error';
+              emailError = 'Failed to send email';
               console.error(`Error sending email to ${recipient.email}:`, emailError);
-              
-              // If this is a fetch error, log it but don't fail the entire batch
-              if (emailResult.errorType === 'FETCH_ERROR') {
-                console.log(`Fetch error detected when sending email to ${recipient.email} - continuing with batch`);
-                // We'll still mark this as a success to prevent the entire batch from failing
-                emailSuccess = true;
-                emailError = `Fetch error: ${emailResult.details || 'Network issue'}`;
-              }
             }
           } catch (error) {
             console.error(`Error sending email to ${recipient.email}:`, error);
             emailError = error instanceof Error ? error.message : 'Unknown error';
-            
-            // If this is a fetch error, log it but don't fail the entire batch
-            if (emailError.includes('fetch failed') || emailError.includes('network error')) {
-              console.log(`Fetch error detected when sending email to ${recipient.email} - continuing with batch`);
-              // We'll still mark this as a success to prevent the entire batch from failing
-              emailSuccess = true;
-              emailError = `Fetch error: ${emailError}`;
-            }
+            emailSuccess = false;
           }
         } else {
-          // If recipient type is 'whatsapp', skip email sending and mark as not applicable
           console.log(`Skipping email for ${recipient.name} - WhatsApp only selected`);
-          emailSuccess = true; // Mark as success so WhatsApp will be sent
+          emailSuccess = true;
           emailError = 'Not applicable - WhatsApp only';
         }
         
         let whatsappSuccess = false;
         let whatsappError = null;
 
-        // Modified condition: Send WhatsApp if type is 'whatsapp' or 'both' and phone exists
-        // Removed dependency on emailSuccess for WhatsApp-only messages
         if ((recipient.type === 'whatsapp' || recipient.type === 'both') && recipient.phone) {
           try {
             console.log(`Sending WhatsApp to ${recipient.phone}`);
             
-            const whatsappResponse = await fetch(`${internalApiBaseUrl}/api/admin/whatsapp`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                phone: recipient.phone,
-                message: processedWhatsappContent,
-                imageUrl: includeImageInWhatsApp ? (event.imageUrl || defaultImageUrl) : null
-              })
-            });
+            const { sendWhatsApp: sendWhatsAppCentralized, getInstanceForEvent } = await import('@/lib/communications');
             
-            const whatsappResult = await whatsappResponse.json();
-            whatsappSuccess = whatsappResponse.ok && whatsappResult.success;
+            let instanceName: string | undefined;
+            let rateLimitConfig: import('@/lib/evolution-api/types').RateLimitConfig | undefined;
+            
+            const instanceInfo = await getInstanceForEvent(eventId);
+            if (instanceInfo) {
+              instanceName = instanceInfo.instanceName;
+              rateLimitConfig = instanceInfo.rateLimitConfig;
+            }
+            
+            const imageUrlToSend = includeImageInWhatsApp ? (event.imageUrl || defaultImageUrl) : undefined;
+            
+            const result = await sendWhatsAppCentralized(
+              recipient.phone,
+              recipient.name,
+              code,
+              processedWhatsappContent,
+              finalEventLink,
+              imageBuffer || undefined,
+              imageUrlToSend,
+              instanceName,
+              rateLimitConfig
+            );
+            
+            whatsappSuccess = result;
             
             if (!whatsappSuccess) {
-              whatsappError = whatsappResult.error || 'Unknown WhatsApp error';
+              whatsappError = 'Failed to send WhatsApp message';
               console.error(`Error sending WhatsApp to ${recipient.phone}:`, whatsappError);
-              
-              // If this is a fetch error, log it but don't fail the entire batch
-              if (whatsappResult.errorType === 'FETCH_ERROR') {
-                console.log(`Fetch error detected when sending WhatsApp to ${recipient.phone} - continuing with batch`);
-                // We'll still mark this as a success to prevent the entire batch from failing
-                whatsappSuccess = true;
-                whatsappError = `Fetch error: ${whatsappResult.details || 'Network issue'}`;
-              }
             }
           } catch (error) {
             console.error(`Error sending WhatsApp to ${recipient.phone}:`, error);
             whatsappError = error instanceof Error ? error.message : 'Unknown error';
-            
-            // If this is a fetch error, log it but don't fail the entire batch
-            if (whatsappError.includes('fetch failed') || whatsappError.includes('network error')) {
-              console.log(`Fetch error detected when sending WhatsApp to ${recipient.phone} - continuing with batch`);
-              // We'll still mark this as a success to prevent the entire batch from failing
-              whatsappSuccess = true;
-              whatsappError = `Fetch error: ${whatsappError}`;
-            }
+            whatsappSuccess = false;
           }
         }
 
-        // Update the invite status
         await prisma.invite.update({
           where: { id: invite.id },
           data: {
@@ -392,7 +331,6 @@ export async function POST(
           }
         });
 
-        // Add to results
         results.push({
           id: invite.id,
           name: recipient.name,
@@ -407,7 +345,6 @@ export async function POST(
         console.error(`Error processing recipient ${recipient.name}:`, error);
         errorDetails.push(`Failed to process ${recipient.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
         
-        // Add to results with error
         results.push({
           name: recipient.name,
           email: recipient.email,
@@ -418,11 +355,9 @@ export async function POST(
       }
     }
 
-    // Calculate success and failure counts
     const successCount = results.filter(r => r.success).length;
     const failureCount = results.length - successCount;
 
-    // Update batch status
     await prisma.batch.update({
       where: { id: batchId },
       data: {

@@ -134,6 +134,18 @@ export default function DashboardLayout({
                   Events
                 </Link>
               </li>
+              <li>
+                <Link
+                  href="/admin/dashboard/evolution"
+                  className={`block px-4 py-2 rounded-lg transition-colors ${
+                    isActive('/admin/dashboard/evolution')
+                      ? 'bg-emerald-500 text-white'
+                      : 'hover:bg-gray-100'
+                  }`}
+                >
+                  WhatsApp
+                </Link>
+              </li>
             </ul>
 
             <div className="mt-8 pt-6 border-t border-gray-200">

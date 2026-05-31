@@ -21,7 +21,7 @@ export async function GET(
       );
     }
 
-    // Fetch the event with owner and admins
+    // Fetch the event with owner, admins, and evolution instance
     const event = await prisma.event.findUnique({
       where: { id: eventId },
       include: {
@@ -47,6 +47,7 @@ export async function GET(
             },
           },
         },
+        evolutionInstance: true,
       },
     });
 
@@ -152,7 +153,7 @@ export async function PUT(
     }
 
     // Parse the request body
-    const { title, description, location, startDate, endDate, imageUrl, status, slug, ownerId } = await request.json();
+    const { title, description, location, startDate, endDate, imageUrl, status, slug, ownerId, evolutionInstanceId } = await request.json();
 
     // Validate required fields
     if (!title || !startDate || !endDate) {
@@ -217,6 +218,7 @@ export async function PUT(
         status,
         slug,
         ...(newOwnerId && { ownerId: newOwnerId }),
+        ...(evolutionInstanceId !== undefined && { evolutionInstanceId: evolutionInstanceId || null }),
       },
       include: {
         owner: {
@@ -242,6 +244,59 @@ export async function PUT(
           },
         },
       },
+    });
+
+    return NextResponse.json(updatedEvent);
+  } catch (error) {
+    console.error('Error updating event:', error);
+    return NextResponse.json(
+      { error: 'Failed to update event' },
+      { status: 500 }
+    );
+  }
+}
+
+// PATCH /api/admin/events/[id] - Partially update an event (e.g., evolutionInstanceId)
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const eventId = params.id;
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await request.json();
+
+    const existingEvent = await prisma.event.findUnique({
+      where: { id: eventId },
+    });
+
+    if (!existingEvent) {
+      return NextResponse.json({ error: 'Event not found' }, { status: 404 });
+    }
+
+    const isOwner = existingEvent.ownerId === session.user.id;
+    const isAdmin = await prisma.eventAdmin.findFirst({
+      where: { eventId, userId: session.user.id },
+    });
+
+    if (!isOwner && !isAdmin) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const updateData: any = {};
+    if (body.evolutionInstanceId !== undefined) {
+      updateData.evolutionInstanceId = body.evolutionInstanceId || null;
+    }
+
+    const updatedEvent = await prisma.event.update({
+      where: { id: eventId },
+      data: updateData,
+      include: { evolutionInstance: true },
     });
 
     return NextResponse.json(updatedEvent);

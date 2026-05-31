@@ -2,30 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import nodemailer from 'nodemailer';
+import { sendEmail as sendEmailResend } from '@/lib/resend-email';
 import axios from 'axios';
 
 const prisma = new PrismaClient();
 
-// Configure email transporter
-const emailTransporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT) || 587,
-  secure: process.env.SMTP_SECURE === 'true',
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASSWORD,
-  },
-  tls: {
-    // Do not fail on invalid certificates
-    rejectUnauthorized: false
-  },
-  connectionTimeout: 10000, // 10 seconds
-  greetingTimeout: 10000,   // 10 seconds
-  socketTimeout: 15000      // 15 seconds
-});
-
-// Function to send SMS using Africa's Talking
 async function sendSMSAfricasTalking(phone: string, name: string, message: string): Promise<boolean> {
   try {
     console.log(`Sending SMS via Africa's Talking to ${name} (${phone})`)
@@ -35,27 +16,21 @@ async function sendSMSAfricasTalking(phone: string, name: string, message: strin
       return false;
     }
     
-    // Format the phone number if needed (remove spaces, add country code if missing)
     let formattedPhone = phone.replace(/\s+/g, '')
     if (!formattedPhone.startsWith('+')) {
-      // Default to Nigeria country code if not specified
       formattedPhone = '+234' + formattedPhone.replace(/^0+/, '')
     }
     
-    // Replace placeholders in the message
     const personalizedMessage = message
       .replace(/{{name}}/g, name)
     
-    // Initialize the SDK
     const africastalking = require('africastalking')({
       apiKey: process.env.AT_API_KEY,
       username: process.env.AT_USERNAME,
     });
 
-    // Get the SMS service
     const sms = africastalking.SMS;
     
-    // Validate the phone number format
     if (!formattedPhone.startsWith('+234') || formattedPhone.length !== 14) {
       console.error(`Invalid phone number format: ${phone} (formatted to ${formattedPhone}). Must be a Nigerian number in international format.`);
       return false;
@@ -63,7 +38,6 @@ async function sendSMSAfricasTalking(phone: string, name: string, message: strin
     
     console.log(`Sending SMS via Africa's Talking to: ${formattedPhone} (original: ${phone})`);
 
-    // Send SMS
     const response = await sms.send({
       to: [formattedPhone],
       message: personalizedMessage,
@@ -87,26 +61,20 @@ async function sendSMSAfricasTalking(phone: string, name: string, message: strin
   }
 }
 
-// Function to send SMS using Termii
 async function sendSMSTermii(phone: string, name: string, message: string): Promise<boolean> {
   try {
     console.log(`Sending SMS via Termii to ${name} (${phone})`)
     
-    // Format the phone number if needed (remove spaces, add country code if missing)
     let formattedPhone = phone.replace(/\s+/g, '')
     if (!formattedPhone.startsWith('+')) {
-      // Default to Nigeria country code if not specified
       formattedPhone = '+234' + formattedPhone.replace(/^0+/, '')
     }
     
-    // Remove the '+' sign for Termii as they don't expect it
     formattedPhone = formattedPhone.replace('+', '')
     
-    // Replace placeholders in the message
     const personalizedMessage = message
       .replace(/{{name}}/g, name)
     
-    // Validate the phone number format
     if (!formattedPhone.startsWith('234') || formattedPhone.length !== 13) {
       console.error(`Invalid phone number format: ${phone} (formatted to ${formattedPhone}). Must be a Nigerian number in international format without '+'.`);
       return false;
@@ -114,17 +82,15 @@ async function sendSMSTermii(phone: string, name: string, message: string): Prom
     
     console.log(`Sending SMS via Termii to: ${formattedPhone} (original: ${phone})`);
 
-    // Prepare the request payload for Termii
     const payload = {
       to: formattedPhone,
       from: process.env.TERMII_SENDER_ID,
       sms: personalizedMessage,
       type: "plain",
-      channel: "dnd", // Use DND channel to bypass Do Not Disturb
+      channel: "dnd",
       api_key: process.env.TERMII_API_KEY,
     };
 
-    // Send SMS using Termii API
     const response = await axios.post('https://api.ng.termii.com/api/sms/send', payload);
     
     console.log('Termii SMS API response:', JSON.stringify(response.data));
@@ -140,16 +106,13 @@ async function sendSMSTermii(phone: string, name: string, message: string): Prom
   }
 }
 
-// Main SMS sending function that selects the provider based on environment variable
 async function sendSMS(phone: string, name: string, message: string): Promise<boolean> {
   try {
     console.log(`Sending SMS to ${name} (${phone})`)
     
-    // Replace placeholders in the message
     const personalizedMessage = message
       .replace(/{{name}}/g, name)
     
-    // Determine which SMS provider to use based on environment variable
     const smsProvider = process.env.SMS_PROVIDER || 'africas_talking';
     
     console.log(`Using SMS provider: ${smsProvider}`);
@@ -157,7 +120,6 @@ async function sendSMS(phone: string, name: string, message: string): Promise<bo
     if (smsProvider === 'termii') {
       return sendSMSTermii(phone, name, personalizedMessage);
     } else {
-      // Default to Africa's Talking
       return sendSMSAfricasTalking(phone, name, personalizedMessage);
     }
   } catch (error) {
@@ -166,54 +128,14 @@ async function sendSMS(phone: string, name: string, message: string): Promise<bo
   }
 }
 
-// Helper function to send email
-async function sendEmail(email: string, name: string, subject: string, htmlMessage: string, imageBuffer?: Buffer): Promise<boolean> {
-  try {
-    console.log(`Sending email to ${name} (${email})`);
-    
-    // Replace placeholders in the message
-    const personalizedSubject = subject.replace(/{{name}}/g, name);
-    const personalizedMessage = htmlMessage.replace(/{{name}}/g, name);
-    
-    // Prepare email options
-    const mailOptions: any = {
-      from: process.env.SMTP_FROM || 'noreply@greenvites.online',
-      to: email,
-      subject: personalizedSubject,
-      html: personalizedMessage,
-    };
-    
-    // Add image attachment if provided
-    if (imageBuffer) {
-      mailOptions.attachments = [
-        {
-          filename: 'invitation.jpg',
-          content: imageBuffer,
-          cid: 'invitation-image', // Content ID for referencing in HTML
-        },
-      ];
-    }
-    
-    // Send email
-    const info = await emailTransporter.sendMail(mailOptions);
-    console.log('Email sent:', info.messageId);
-    return true;
-  } catch (error) {
-    console.error('Email sending error:', error);
-    return false;
-  }
-}
-
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     
-    // Check if user is authenticated
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     
-    // Parse request body
     const formData = await request.formData();
     const rsvpIds = JSON.parse(formData.get('rsvpIds') as string);
     const messageType = formData.get('messageType') as string;
@@ -221,7 +143,6 @@ export async function POST(request: NextRequest) {
     const emailMessage = formData.get('emailMessage') as string;
     const smsMessage = formData.get('smsMessage') as string;
     
-    // Get email image if provided
     let emailImageBuffer: Buffer | undefined;
     const emailImage = formData.get('emailImage') as File;
     if (emailImage) {
@@ -229,7 +150,6 @@ export async function POST(request: NextRequest) {
       emailImageBuffer = Buffer.from(arrayBuffer);
     }
     
-    // Validate required fields
     if (!rsvpIds || !Array.isArray(rsvpIds) || rsvpIds.length === 0) {
       return NextResponse.json({ error: 'No RSVPs selected' }, { status: 400 });
     }
@@ -246,7 +166,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'SMS message is required' }, { status: 400 });
     }
     
-    // Get RSVPs
     const rsvps = await prisma.rsvp.findMany({
       where: {
         id: {
@@ -258,7 +177,6 @@ export async function POST(request: NextRequest) {
       }
     });
     
-    // Send messages
     const results = {
       total: rsvps.length,
       emailsSent: 0,
@@ -268,24 +186,38 @@ export async function POST(request: NextRequest) {
     
     for (const rsvp of rsvps) {
       try {
-        // Send email if requested
         if ((messageType === 'email' || messageType === 'both') && rsvp.email) {
-          const emailSent = await sendEmail(
-            rsvp.email,
-            rsvp.name,
-            emailSubject,
-            emailMessage,
-            emailImageBuffer
-          );
+          let personalizedSubject = emailSubject.replace(/{{name}}/g, rsvp.name);
+          let personalizedHtml = emailMessage.replace(/{{name}}/g, rsvp.name);
           
-          if (emailSent) {
+          if (rsvp.registrationCode) {
+            personalizedSubject = personalizedSubject.replace(/{{code}}/g, rsvp.registrationCode.code);
+            personalizedHtml = personalizedHtml.replace(/{{code}}/g, rsvp.registrationCode.code);
+            const eventLink = process.env.EVENT_LINK || 'https://greenvites.online/jessegeorge';
+            personalizedHtml = personalizedHtml.replace(/{{link}}/g, `${eventLink}#${rsvp.registrationCode.code}`);
+          }
+          
+          const result = await sendEmailResend({
+            to: rsvp.email,
+            subject: personalizedSubject,
+            html: personalizedHtml,
+            imageUrl: emailImageBuffer ? undefined : null,
+            attachments: emailImageBuffer ? [
+              {
+                filename: 'invitation.jpg',
+                content: emailImageBuffer,
+                cid: 'invitation-image',
+              },
+            ] : [],
+          });
+          
+          if (result.success) {
             results.emailsSent++;
           } else {
             results.failed++;
           }
         }
         
-        // Send SMS if requested
         if ((messageType === 'sms' || messageType === 'both') && (rsvp as any).phone) {
           const smsSent = await sendSMS(
             (rsvp as any).phone,

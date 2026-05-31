@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeftIcon } from '@heroicons/react/24/outline';
-import { TrashIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, TrashIcon, LinkIcon, CheckIcon } from '@heroicons/react/24/outline';
+import ImageUpload from '@/components/ImageUpload';
 
 type User = {
   id: string;
@@ -50,6 +50,7 @@ export default function EditEventPage({ params }: { params: { id: string } }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [copied, setCopied] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentAdmins, setCurrentAdmins] = useState<User[]>([]);
@@ -264,7 +265,28 @@ export default function EditEventPage({ params }: { params: { id: string } }) {
 
       {success && (
         <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-          {success}
+          <p>{success}</p>
+          {formData.slug && (
+            <div className="mt-3 flex items-center gap-2">
+              <span className="text-sm text-green-800">RSVP Page:</span>
+              <code className="text-xs bg-green-50 px-2 py-1 rounded border border-green-200">
+                {typeof window !== 'undefined' ? window.location.origin : ''}/events/{formData.slug}
+              </code>
+              <button
+                type="button"
+                onClick={() => {
+                  const url = `${window.location.origin}/events/${formData.slug}`;
+                  navigator.clipboard.writeText(url);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+                className="inline-flex items-center gap-1 text-xs bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700"
+              >
+                {copied ? <CheckIcon className="h-3 w-3" /> : <LinkIcon className="h-3 w-3" />}
+                {copied ? 'Copied!' : 'Copy Link'}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -357,17 +379,13 @@ export default function EditEventPage({ params }: { params: { id: string } }) {
             />
           </div>
 
-          <div>
-            <label htmlFor="imageUrl" className="block text-sm font-medium text-gray-700">
-              Image URL
+          <div className="col-span-2">
+            <label className="block text-sm font-medium text-gray-700">
+              Event Image
             </label>
-            <input
-              type="text"
-              name="imageUrl"
-              id="imageUrl"
-              className="mt-1 focus:ring-green-500 focus:border-green-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+            <ImageUpload
               value={formData.imageUrl}
-              onChange={handleChange}
+              onChange={(url) => setFormData((prev) => ({ ...prev, imageUrl: url }))}
             />
           </div>
 

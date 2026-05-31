@@ -8,19 +8,39 @@ datasource db {
 }
 
 model User {
-  id               String            @id @default(cuid())
-  username         String            @unique
+  id               String              @id @default(cuid())
+  username         String              @unique
   password         String
-  role             String            @default("ADMIN")
-  email            String?           @unique
+  role             String              @default("ADMIN")
+  email            String?             @unique
   name             String?
-  phone            String?           @unique
-  verified         Boolean           @default(false)
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  ownedEvents      Event[]           @relation("EventOwner")
+  phone            String?             @unique
+  verified         Boolean             @default(false)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  ownedEvents      Event[]             @relation("EventOwner")
   adminEvents      EventAdmin[]
-  sentInvitations  AdminInvitation[] @relation("UserToAdminInvitation")
+  sentInvitations  AdminInvitation[]   @relation("UserToAdminInvitation")
+  evolutionInstances EvolutionInstance[]
+}
+
+model EvolutionInstance {
+  id                String   @id @default(cuid())
+  instanceName      String
+  status            String   @default("disconnected")
+  qrCode            String?  @db.Text
+  webhookSecret     String?
+  messagesPerMinute Int      @default(5)
+  delayBetweenMs    Int      @default(3000)
+  maxBurst          Int      @default(3)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  ownerId String
+  owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  events  Event[]
+
+  @@unique([instanceName, ownerId])
 }
 
 model Table {
@@ -206,6 +226,9 @@ model Event {
   showAddToCalendar Boolean       @default(true) // Whether to show the add to calendar button
   customCss         String?       @db.Text // Custom CSS for advanced customization
   isPagePublished   Boolean       @default(false) // Whether the custom page is published
+
+  evolutionInstanceId String?
+  evolutionInstance   EvolutionInstance? @relation(fields: [evolutionInstanceId], references: [id])
 }
 
 model EventAdmin {

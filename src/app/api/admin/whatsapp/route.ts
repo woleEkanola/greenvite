@@ -1,34 +1,23 @@
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import sendWhatsAppNotification from '@/lib/whatsapp'
+import { sendWhatsAppNotification, getInstanceForEvent } from '@/lib/whatsapp'
 
 export async function POST(request: Request) {
   try {
     console.log('WhatsApp API endpoint called')
     
-    // Check authentication
     const session = await getServerSession(authOptions)
-    console.log('Session received:', JSON.stringify({
-      hasSession: !!session,
-      hasUser: !!session?.user,
-      userId: session?.user?.id,
-      userName: session?.user?.name
-    }))
+    if (!session || !session.user) {
+      return new NextResponse(
+        JSON.stringify({ success: false, error: 'Unauthorized - No session or user' }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
     
-    // if (!session || !session.user) {
-    //   console.log('Authentication failed: No session or user')
-    //   return new NextResponse(
-    //     JSON.stringify({ success: false, error: 'Unauthorized - No session or user' }),
-    //     { status: 401, headers: { 'Content-Type': 'application/json' } }
-    //   )
-    // }
-    
-    // Parse request body
     const body = await request.json()
     const { phone, message, imageUrl, eventId, includeImageInWhatsApp } = body
 
-    // Log the received parameters for debugging
     console.log('WhatsApp API received parameters:', { 
       phone, 
       messageLength: message?.length, 
@@ -37,7 +26,6 @@ export async function POST(request: Request) {
       includeImageInWhatsApp
     })
 
-    // Validate required fields
     if (!phone || !message) {
       return new NextResponse(
         JSON.stringify({ 
@@ -48,18 +36,28 @@ export async function POST(request: Request) {
       )
     }
 
-    // Format phone number if needed
     const formattedPhone = phone.startsWith('+') ? phone : `+${phone}`;
     
-    // Send WhatsApp message with optional image
+    let instanceName: string | undefined;
+    let rateLimitConfig: import('@/lib/evolution-api/types').RateLimitConfig | undefined;
+    
+    if (eventId) {
+      const instanceInfo = await getInstanceForEvent(eventId);
+      if (instanceInfo) {
+        instanceName = instanceInfo.instanceName;
+        rateLimitConfig = instanceInfo.rateLimitConfig;
+      }
+    }
+
     const result = await sendWhatsAppNotification(
       formattedPhone, 
       message, 
       imageUrl, 
-      includeImageInWhatsApp !== undefined ? includeImageInWhatsApp : true
+      includeImageInWhatsApp !== undefined ? includeImageInWhatsApp : true,
+      instanceName,
+      rateLimitConfig
     )
 
-    // Log the result for debugging
     console.log('WhatsApp sending result:', result)
 
     if (!result) {
@@ -73,7 +71,7 @@ export async function POST(request: Request) {
     }
 
     return new NextResponse(
-      JSON.stringify({ success: true, result }),
+      JSON.stringify({ success: true }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     )
   } catch (error) {

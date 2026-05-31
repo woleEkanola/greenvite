@@ -13,21 +13,15 @@ const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: ['@prisma/client'],
   },
-  // Configure allowed image domains and patterns
   images: {
-    domains: [
-      'pfirenjlvylwekls.public.blob.vercel-storage.com',
-      'public.blob.vercel-storage.com',
-    ],
     remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: '*.public.blob.vercel-storage.com',
-      },
-      {
-        protocol: 'https',
-        hostname: '*.vercel-storage.com',
-      },
+      { protocol: 'https', hostname: '*.public.blob.vercel-storage.com' },
+      { protocol: 'https', hostname: '*.vercel-storage.com' },
+      { protocol: 'https', hostname: '*.ufs.sh' },
+      { protocol: 'https', hostname: '*.utfs.io' },
+      { protocol: 'https', hostname: 'uploadthing.com' },
+      { protocol: 'https', hostname: '*.amazonaws.com' },
+      { protocol: 'https', hostname: 'lh3.googleusercontent.com' },
     ],
   },
   // Webpack configuration to handle Konva library

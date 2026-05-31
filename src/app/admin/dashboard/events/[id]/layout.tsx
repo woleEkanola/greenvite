@@ -20,7 +20,8 @@ import {
   MessageSquare,
   Globe,
   Map,
-  UserCheck
+  UserCheck,
+  Smartphone
 } from 'lucide-react'
 import { signOut, useSession } from 'next-auth/react'
 
@@ -223,6 +224,19 @@ export default function EventDashboardLayout({
                 >
                   <MessageSquare className="h-5 w-5 min-w-5" />
                   {isSidebarOpen && <span className="ml-3">Message Templates</span>}
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href={`/admin/dashboard/events/${params.id}/settings`}
+                  className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
+                    isActive(`/admin/dashboard/events/${params.id}/settings`)
+                      ? 'bg-emerald-500 text-white'
+                      : 'hover:bg-gray-100'
+                  }`}
+                >
+                  <Smartphone className="h-5 w-5 min-w-5" />
+                  {isSidebarOpen && <span className="ml-3">WhatsApp Settings</span>}
                 </Link>
               </li>
               <li>
