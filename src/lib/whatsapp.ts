@@ -1,3 +1,4 @@
+import 'server-only'
 import { getInstanceForEvent, getInstanceForUser, sendWhatsAppMessage as sendEvolutionMessage, getConnectionStatus } from './evolution-api/service';
 import { MessageVersioner } from './message-versioner';
 import type { RateLimitConfig } from './evolution-api/types';
@@ -12,7 +13,7 @@ export async function sendWhatsAppNotification(
 ): Promise<boolean> {
   try {
     const effectiveImageUrl = includeImageInWhatsApp ? imageUrl : null;
-    const recipientKey = `default:${phone}`;
+    const recipientKey = `${instanceName || 'default'}:${phone}`;
 
     const result = await sendEvolutionMessage(
       instanceName || 'default',
