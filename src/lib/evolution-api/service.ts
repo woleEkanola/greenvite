@@ -60,7 +60,7 @@ export async function createInstanceForUser(
   userId: string,
   instanceName: string
 ): Promise<{ instanceName: string; qrCode: string | null; status: InstanceStatus }> {
-  const webhookUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/webhooks/evolution`;
+  const webhookUrl = `${process.env.NEXT_PUBLIC_APP_URL || (process.env.NODE_ENV === 'development' ? 'http://localhost:3000' : 'https://greenvites.online')}/api/webhooks/evolution`;
 
   const result = await evolutionClient.createInstance({
     instanceName,
