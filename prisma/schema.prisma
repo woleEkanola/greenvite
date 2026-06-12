@@ -77,6 +77,10 @@ model AccessCode {
   rsvp            Rsvp      @relation(fields: [rsvpId], references: [id])
   table           Table?    @relation(fields: [tableId], references: [id])
   souvenirs       SouvenirAssignment[]
+  
+  @@index([rsvpId])
+  @@index([tableId])
+  @@index([type])
 }
 
 model Rsvp {
@@ -92,6 +96,9 @@ model Rsvp {
   phone            String?
   accessCodes      AccessCode[]
   registrationCode RegistrationCode @relation(fields: [codeId], references: [id])
+
+  @@index([email])
+  @@index([createdAt])
 }
 
 model RegistrationCode {
@@ -105,6 +112,9 @@ model RegistrationCode {
   rsvp      Rsvp?
   eventId   String?
   event     Event?    @relation(fields: [eventId], references: [id])
+
+  @@index([eventId])
+  @@index([status])
 }
 
 model Invite {
@@ -129,6 +139,13 @@ model Invite {
   batchId            String?
   Batch              Batch?            @relation(fields: [batchId], references: [id])
   registrationCode   RegistrationCode? @relation(fields: [registrationCodeId], references: [id])
+
+  @@index([email])
+  @@index([phone])
+  @@index([code])
+  @@index([batchId])
+  @@index([status])
+  @@index([sentAt])
 }
 
 model Batch {
@@ -226,9 +243,14 @@ model Event {
   showAddToCalendar Boolean       @default(true) // Whether to show the add to calendar button
   customCss         String?       @db.Text // Custom CSS for advanced customization
   isPagePublished   Boolean       @default(false) // Whether the custom page is published
+  restrictedRsvp    Boolean       @default(true) // If true, requires registration code to RSVP
 
   evolutionInstanceId String?
-  evolutionInstance   EvolutionInstance? @relation(fields: [evolutionInstanceId], references: [id])
+  evolutionInstance   EvolutionInstance?      @relation(fields: [evolutionInstanceId], references: [id])
+
+  @@index([ownerId])
+  @@index([status])
+  @@index([startDate])
 }
 
 model EventAdmin {
