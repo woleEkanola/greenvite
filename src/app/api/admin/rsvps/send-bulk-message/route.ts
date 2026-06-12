@@ -193,7 +193,7 @@ export async function POST(request: NextRequest) {
           if (rsvp.registrationCode) {
             personalizedSubject = personalizedSubject.replace(/{{code}}/g, rsvp.registrationCode.code);
             personalizedHtml = personalizedHtml.replace(/{{code}}/g, rsvp.registrationCode.code);
-            const eventLink = process.env.EVENT_LINK || 'https://greenvites.online/jessegeorge';
+            const eventLink = process.env.EVENT_LINK || 'https://greenvite.vercel.app/jessegeorge';
             personalizedHtml = personalizedHtml.replace(/{{link}}/g, `${eventLink}#${rsvp.registrationCode.code}`);
           }
           

@@ -188,7 +188,7 @@ export default function SendInvites() {
   const [emailSubject, setEmailSubject] = useState('Invitation to Jesse Oghenekome George\'s Church Dedication')
   const [emailMessage, setEmailMessage] = useState('')
   const [whatsappMessage, setWhatsappMessage] = useState('')
-  const [eventLink, setEventLink] = useState('https://greenvites.online/jessegeorge')
+  const [eventLink, setEventLink] = useState('https://greenvite.vercel.app/jessegeorge')
   const [batchName, setBatchName] = useState(`Batch ${new Date().toISOString().split('T')[0]}`)
   const [emailImage, setEmailImage] = useState<File | null>(null)
   const [emailImagePreview, setEmailImagePreview] = useState<string | null>(null)
@@ -649,7 +649,7 @@ export default function SendInvites() {
                         className="w-full p-2 border border-gray-300 rounded-md focus:ring-emerald-500 focus:border-emerald-500"
                         value={eventLink}
                         onChange={(e) => setEventLink(e.target.value)}
-                        placeholder="https://greenvites.online/jessegeorge"
+                        placeholder="https://greenvite.vercel.app/jessegeorge"
                       />
                     </div>
                     

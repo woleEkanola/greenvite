@@ -1003,7 +1003,7 @@ The Event Team
     
     const name = previewRecipient.name || 'Guest'
     const code = 'SAMPLE123'
-    const link = event?.slug ? `https://greenvites.online/${event.slug}` : 'https://greenvites.online/event'
+    const link = event?.slug ? `https://greenvite.vercel.app/${event.slug}` : 'https://greenvite.vercel.app/event'
     
     if (previewType === 'email') {
       let content = emailTemplate

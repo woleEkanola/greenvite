@@ -142,7 +142,7 @@ async function processRequest(request: Request): Promise<Response> {
         });
 
         const isDevelopment = process.env.NODE_ENV === 'development';
-        const baseUrl = isDevelopment ? 'http://localhost:3000' : 'https://greenvites.online';
+        const baseUrl = isDevelopment ? 'http://localhost:3000' : 'https://greenvite.vercel.app';
 
         if (event?.slug) {
           eventLink = `${baseUrl}/${event.slug}`;
@@ -153,7 +153,7 @@ async function processRequest(request: Request): Promise<Response> {
         console.log(`[POST /api/admin/send-invites] Generated eventLink: ${eventLink}`);
       } catch (error) {
         console.error('[POST /api/admin/send-invites] Error generating eventLink:', error);
-        eventLink = `https://greenvites.online/event/${eventId}`;
+        eventLink = `https://greenvite.vercel.app/event/${eventId}`;
       }
     }
 

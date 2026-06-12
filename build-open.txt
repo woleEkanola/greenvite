@@ -1,0 +1,22 @@
+ ⚠ Linting is disabled
+   ▲ Next.js 14.1.0
+   - Environments: .env
+
+   Creating an optimized production build ...
+Browserslist: browsers data (caniuse-lite) is 16 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+ ✓ Compiled successfully
+   Checking validity of types ...
+Failed to compile.
+
+./src/app/events/[slug]/page.tsx:67:24
+Type error: Property 'restrictedRsvp' does not exist on type 'EventPageSettings'.
+
+[0m [90m 65 |[39m[0m
+[0m [90m 66 |[39m   useEffect(() [33m=>[39m {[0m
+[0m[31m[1m>[22m[39m[90m 67 |[39m     [36mif[39m (event [33m&&[39m event[33m.[39mrestrictedRsvp [33m===[39m [36mfalse[39m) {[0m
+[0m [90m    |[39m                        [31m[1m^[22m[39m[0m
+[0m [90m 68 |[39m       setFormData(prev [33m=>[39m ({ [33m...[39mprev[33m,[39m reg_code[33m:[39m [32m'OPEN'[39m }))[0m
+[0m [90m 69 |[39m       setShowCodeModal([36mfalse[39m)[0m
+[0m [90m 70 |[39m     } [36melse[39m [36mif[39m (event [33m&&[39m [33m![39mformData[33m.[39mreg_code) {[0m

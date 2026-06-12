@@ -1,0 +1,341 @@
+ ⚠ Linting is disabled
+   ▲ Next.js 14.1.0
+   - Environments: .env
+
+   Creating an optimized production build ...
+Browserslist: browsers data (caniuse-lite) is 16 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+ ✓ Compiled successfully
+   Checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/74) ...
+Error in WhatsApp diagnostics: n [Error]: Dynamic server usage: Page couldn't be rendered statically because it used `headers`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error
+    at s (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\chunks\1519.js:1:102044)
+    at u (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\chunks\123.js:30:29371)
+    at s (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\chunks\123.js:30:20526)
+    at d (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\app\api\admin\diagnostics\whatsapp\route.js:1:1455)
+    at C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:42490
+    at C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\server\lib\trace\tracer.js:133:36
+    at NoopContextManager.with (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:7062)
+    at ContextAPI.with (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:518)
+    at NoopTracer.startActiveSpan (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18093)
+    at ProxyTracer.startActiveSpan (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18854) {
+  description: "Page couldn't be rendered statically because it used `headers`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error",
+  digest: 'DYNAMIC_SERVER_USAGE'
+}
+Error fetching current user: n [Error]: Dynamic server usage: Page couldn't be rendered statically because it used `headers`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error
+    at s (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\chunks\1519.js:1:102044)
+    at u (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\chunks\123.js:30:29371)
+    at s (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\chunks\123.js:30:20526)
+    at d (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\app\api\admin\current-user\route.js:1:1265)
+    at C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:42490
+    at C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\server\lib\trace\tracer.js:133:36
+    at NoopContextManager.with (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:7062)
+    at ContextAPI.with (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:518)
+    at NoopTracer.startActiveSpan (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18093)
+    at ProxyTracer.startActiveSpan (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18854) {
+  description: "Page couldn't be rendered statically because it used `headers`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error",
+  digest: 'DYNAMIC_SERVER_USAGE'
+}
+Error fetching access codes: n [Error]: Dynamic server usage: Page couldn't be rendered statically because it used `headers`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error
+    at s (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\chunks\1519.js:1:102044)
+    at u (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\chunks\123.js:30:29371)
+    at s (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\chunks\123.js:30:20526)
+    at u (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\app\api\admin\access-codes\route.js:1:1262)
+    at C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:42490
+    at C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\server\lib\trace\tracer.js:133:36
+    at NoopContextManager.with (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:7062)
+    at ContextAPI.with (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:518)
+    at NoopTracer.startActiveSpan (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18093)
+    at ProxyTracer.startActiveSpan (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18854) {
+  description: "Page couldn't be rendered statically because it used `headers`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error",
+  digest: 'DYNAMIC_SERVER_USAGE'
+}
+[GET /api/admin/invites] Error: n [Error]: Dynamic server usage: Page couldn't be rendered statically because it used `headers`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error
+    at l (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\chunks\123.js:30:32283)
+    at u (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\chunks\123.js:30:29371)
+    at s (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\chunks\123.js:30:20526)
+    at l (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\app\api\admin\invites\route.js:1:1263)
+    at C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:42490
+    at C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\server\lib\trace\tracer.js:133:36
+    at NoopContextManager.with (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:7062)
+    at ContextAPI.with (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:518)
+    at NoopTracer.startActiveSpan (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18093)
+    at ProxyTracer.startActiveSpan (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18854) {
+  description: "Page couldn't be rendered statically because it used `headers`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error",
+  digest: 'DYNAMIC_SERVER_USAGE'
+}
+Error fetching leads: n [Error]: Dynamic server usage: Page couldn't be rendered statically because it used `headers`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error
+    at s (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\chunks\1519.js:1:102044)
+    at u (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\chunks\123.js:30:29371)
+    at s (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\chunks\123.js:30:20526)
+    at p (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\app\api\admin\leads\route.js:1:1264)
+    at C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:42490
+    at C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\server\lib\trace\tracer.js:133:36
+    at NoopContextManager.with (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:7062)
+    at ContextAPI.with (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:518)
+    at NoopTracer.startActiveSpan (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18093)
+    at ProxyTracer.startActiveSpan (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18854) {
+  description: "Page couldn't be rendered statically because it used `headers`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error",
+  digest: 'DYNAMIC_SERVER_USAGE'
+}
+[GET /api/admin/retrigger] Error: n [Error]: Dynamic server usage: Page couldn't be rendered statically because it used `headers`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error
+    at s (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\chunks\1519.js:1:102044)
+    at u (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\chunks\123.js:30:29371)
+    at s (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\chunks\123.js:30:20526)
+    at l (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\app\api\admin\retrigger\route.js:1:1263)
+    at C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:42490
+    at C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\server\lib\trace\tracer.js:133:36
+    at NoopContextManager.with (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:7062)
+    at ContextAPI.with (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:518)
+    at NoopTracer.startActiveSpan (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18093)
+    at ProxyTracer.startActiveSpan (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18854) {
+  description: "Page couldn't be rendered statically because it used `headers`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error",
+  digest: 'DYNAMIC_SERVER_USAGE'
+}
+   Generating static pages (18/74) 
+Error fetching stats: n [Error]: Dynamic server usage: Page couldn't be rendered statically because it used `headers`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error
+    at s (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\chunks\1519.js:1:102044)
+    at u (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\chunks\123.js:30:29371)
+    at s (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\chunks\123.js:30:20526)
+    at c (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\app\api\admin\stats\route.js:1:1264)
+    at C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:42490
+    at C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\server\lib\trace\tracer.js:133:36
+    at NoopContextManager.with (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:7062)
+    at ContextAPI.with (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:518)
+    at NoopTracer.startActiveSpan (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18093)
+    at ProxyTracer.startActiveSpan (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18854) {
+  description: "Page couldn't be rendered statically because it used `headers`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error",
+  digest: 'DYNAMIC_SERVER_USAGE'
+}
+Error fetching current user: n [Error]: Dynamic server usage: Page couldn't be rendered statically because it used `headers`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error
+    at s (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\chunks\1519.js:1:102044)
+    at u (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\chunks\123.js:30:29371)
+    at s (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\chunks\123.js:30:20526)
+    at l (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\app\api\admin\users\me\route.js:1:1263)
+    at C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:42490
+    at C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\server\lib\trace\tracer.js:133:36
+    at NoopContextManager.with (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:7062)
+    at ContextAPI.with (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:518)
+    at NoopTracer.startActiveSpan (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18093)
+    at ProxyTracer.startActiveSpan (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18854) {
+  description: "Page couldn't be rendered statically because it used `headers`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error",
+  digest: 'DYNAMIC_SERVER_USAGE'
+}
+Error fetching RSVPs: n [Error]: Dynamic server usage: Page couldn't be rendered statically because it used `headers`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error
+    at l (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\chunks\123.js:30:32283)
+    at u (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\chunks\123.js:30:29371)
+    at s (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\chunks\123.js:30:20526)
+    at l (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\app\api\admin\rsvps\route.js:1:1288)
+    at C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:42490
+    at C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\server\lib\trace\tracer.js:133:36
+    at NoopContextManager.with (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:7062)
+    at ContextAPI.with (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:518)
+    at NoopTracer.startActiveSpan (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18093)
+    at ProxyTracer.startActiveSpan (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18854) {
+  description: "Page couldn't be rendered statically because it used `headers`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error",
+  digest: 'DYNAMIC_SERVER_USAGE'
+}
+   Generating static pages (36/74) 
+Error exporting RSVPs: n [Error]: Dynamic server usage: Page couldn't be rendered statically because it used `headers`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error
+    at s (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\chunks\1519.js:1:102044)
+    at u (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\chunks\123.js:30:29371)
+    at s (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\chunks\123.js:30:20526)
+    at m (C:\Users\wolee\Documents\wole\code\greenvites\.next\server\app\api\admin\rsvps\export\route.js:1:1373)
+    at C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:42490
+    at C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\server\lib\trace\tracer.js:133:36
+    at NoopContextManager.with (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:7062)
+    at ContextAPI.with (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:518)
+    at NoopTracer.startActiveSpan (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18093)
+    at ProxyTracer.startActiveSpan (C:\Users\wolee\Documents\wole\code\greenvites\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18854) {
+  description: "Page couldn't be rendered statically because it used `headers`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error",
+  digest: 'DYNAMIC_SERVER_USAGE'
+}
+   Generating static pages (55/74) 
+ ✓ Generating static pages (74/74) 
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                                            Size     First Load JS
+┌ ○ /                                                                  4.94 kB         120 kB
+├ ○ /_not-found                                                        891 B          85.5 kB
+├ ○ /admin                                                             1.52 kB         111 kB
+├ ○ /admin/dashboard                                                   92.2 kB         208 kB
+├ ○ /admin/dashboard/access-codes                                      4.12 kB         130 kB
+├ ○ /admin/dashboard/events                                            4.93 kB         103 kB
+├ λ /admin/dashboard/events/[id]                                       3.62 kB        95.1 kB
+├ λ /admin/dashboard/events/[id]/access-codes                          7.99 kB         154 kB
+├ λ /admin/dashboard/events/[id]/access-mobile                         2.19 kB         106 kB
+├ λ /admin/dashboard/events/[id]/accessd                               4.28 kB         131 kB
+├ λ /admin/dashboard/events/[id]/event-page                            11.7 kB         160 kB
+├ λ /admin/dashboard/events/[id]/floor-plans                           4.26 kB         142 kB
+├ λ /admin/dashboard/events/[id]/floor-plans/[floorPlanId]/edit        4.24 kB         124 kB
+├ λ /admin/dashboard/events/[id]/floor-plans/create                    4.05 kB         124 kB
+├ λ /admin/dashboard/events/[id]/guests                                6.03 kB         107 kB
+├ λ /admin/dashboard/events/[id]/hosts                                 4.61 kB         118 kB
+├ λ /admin/dashboard/events/[id]/invites                               46 kB           303 kB
+├ λ /admin/dashboard/events/[id]/menu                                  4.31 kB         118 kB
+├ λ /admin/dashboard/events/[id]/message-templates                     7.05 kB         140 kB
+├ λ /admin/dashboard/events/[id]/qr-codes                              19.3 kB         140 kB
+├ λ /admin/dashboard/events/[id]/qr/[access-code]                      5.02 kB         126 kB
+├ λ /admin/dashboard/events/[id]/reg-codes                             3.04 kB         117 kB
+├ λ /admin/dashboard/events/[id]/rsvps                                 8.54 kB         122 kB
+├ λ /admin/dashboard/events/[id]/sent-invites                          7.09 kB         143 kB
+├ λ /admin/dashboard/events/[id]/settings                              1.91 kB        86.5 kB
+├ λ /admin/dashboard/events/[id]/souvenirs                             3.82 kB         117 kB
+├ λ /admin/dashboard/events/[id]/tables                                8.34 kB         122 kB
+├ λ /admin/dashboard/events/[id]/ushers                                3.71 kB         117 kB
+├ ○ /admin/dashboard/events/create                                     2.93 kB         123 kB
+├ λ /admin/dashboard/events/edit/[id]                                  4.16 kB         124 kB
+├ ○ /admin/dashboard/evolution                                         2.73 kB        97.4 kB
+├ ○ /admin/dashboard/hosts                                             4.72 kB         132 kB
+├ ○ /admin/dashboard/invites                                           7.71 kB         269 kB
+├ ○ /admin/dashboard/invites/manage                                    3.88 kB         100 kB
+├ ○ /admin/dashboard/leads                                             1.24 kB         112 kB
+├ ○ /admin/dashboard/manage-admins                                     3.27 kB         117 kB
+├ ○ /admin/dashboard/reg-codes                                         2.76 kB         116 kB
+├ ○ /admin/dashboard/retrigger                                         1.88 kB        95.7 kB
+├ ○ /admin/dashboard/rsvps                                             4.63 kB         119 kB
+├ ○ /admin/dashboard/sent-invites                                      4.83 kB         125 kB
+├ ○ /admin/dashboard/souvenirs                                         4.84 kB         132 kB
+├ ○ /admin/dashboard/tables                                            5.69 kB         150 kB
+├ λ /admin/dashboard/tables/[id]                                       3.75 kB         135 kB
+├ λ /api/admin/access-codes                                            0 B                0 B
+├ λ /api/admin/access-codes/admit                                      0 B                0 B
+├ λ /api/admin/access-codes/generate                                   0 B                0 B
+├ λ /api/admin/access-codes/send                                       0 B                0 B
+├ λ /api/admin/current-user                                            0 B                0 B
+├ λ /api/admin/diagnostics/whatsapp                                    0 B                0 B
+├ λ /api/admin/email                                                   0 B                0 B
+├ λ /api/admin/events                                                  0 B                0 B
+├ λ /api/admin/events/[id]                                             0 B                0 B
+├ λ /api/admin/events/[id]/access-codes                                0 B                0 B
+├ λ /api/admin/events/[id]/access-codes/admit                          0 B                0 B
+├ λ /api/admin/events/[id]/access-codes/admit-gate                     0 B                0 B
+├ λ /api/admin/events/[id]/access-codes/admit-hall                     0 B                0 B
+├ λ /api/admin/events/[id]/access-codes/assign-table                   0 B                0 B
+├ λ /api/admin/events/[id]/access-codes/auto-assign-tables             0 B                0 B
+├ λ /api/admin/events/[id]/access-codes/count-pending                  0 B                0 B
+├ λ /api/admin/events/[id]/access-codes/delete                         0 B                0 B
+├ λ /api/admin/events/[id]/access-codes/export                         0 B                0 B
+├ λ /api/admin/events/[id]/access-codes/generate                       0 B                0 B
+├ λ /api/admin/events/[id]/access-codes/generate-batch                 0 B                0 B
+├ λ /api/admin/events/[id]/access-codes/send                           0 B                0 B
+├ λ /api/admin/events/[id]/access-codes/send-qr                        0 B                0 B
+├ λ /api/admin/events/[id]/admins                                      0 B                0 B
+├ λ /api/admin/events/[id]/attendees/[attendeeId]/admit                0 B                0 B
+├ λ /api/admin/events/[id]/attendees/associated/[attendeeId]           0 B                0 B
+├ λ /api/admin/events/[id]/attendees/by-access-code/[code]             0 B                0 B
+├ λ /api/admin/events/[id]/attendees/by-code/[code]                    0 B                0 B
+├ λ /api/admin/events/[id]/attendees/by-registration-code/[code]       0 B                0 B
+├ λ /api/admin/events/[id]/batches                                     0 B                0 B
+├ λ /api/admin/events/[id]/batches/[batchId]                           0 B                0 B
+├ λ /api/admin/events/[id]/event-page                                  0 B                0 B
+├ λ /api/admin/events/[id]/floor-plans                                 0 B                0 B
+├ λ /api/admin/events/[id]/floor-plans/[planId]                        0 B                0 B
+├ λ /api/admin/events/[id]/hosts                                       0 B                0 B
+├ λ /api/admin/events/[id]/image                                       0 B                0 B
+├ λ /api/admin/events/[id]/invite-admins                               0 B                0 B
+├ λ /api/admin/events/[id]/invites                                     0 B                0 B
+├ λ /api/admin/events/[id]/invites/delete                              0 B                0 B
+├ λ /api/admin/events/[id]/invites/remind                              0 B                0 B
+├ λ /api/admin/events/[id]/invites/send-batch                          0 B                0 B
+├ λ /api/admin/events/[id]/menu                                        0 B                0 B
+├ λ /api/admin/events/[id]/message-templates                           0 B                0 B
+├ λ /api/admin/events/[id]/message-templates/[templateId]              0 B                0 B
+├ λ /api/admin/events/[id]/message-templates/[templateId]/set-default  0 B                0 B
+├ λ /api/admin/events/[id]/reg-codes                                   0 B                0 B
+├ λ /api/admin/events/[id]/registration-codes/generate                 0 B                0 B
+├ λ /api/admin/events/[id]/rsvp-summary                                0 B                0 B
+├ λ /api/admin/events/[id]/rsvps                                       0 B                0 B
+├ λ /api/admin/events/[id]/rsvps/[rsvpId]                              0 B                0 B
+├ λ /api/admin/events/[id]/rsvps/[rsvpId]/update-dependents            0 B                0 B
+├ λ /api/admin/events/[id]/rsvps/export                                0 B                0 B
+├ λ /api/admin/events/[id]/rsvps/summary                               0 B                0 B
+├ λ /api/admin/events/[id]/sent-invites                                0 B                0 B
+├ λ /api/admin/events/[id]/souvenirs                                   0 B                0 B
+├ λ /api/admin/events/[id]/stats                                       0 B                0 B
+├ λ /api/admin/events/[id]/tables                                      0 B                0 B
+├ λ /api/admin/events/[id]/tables/[tableId]/hosts                      0 B                0 B
+├ λ /api/admin/events/[id]/tables/bulk                                 0 B                0 B
+├ λ /api/admin/events/[id]/tables/stats                                0 B                0 B
+├ λ /api/admin/events/[id]/templates                                   0 B                0 B
+├ λ /api/admin/events/[id]/templates/[templateId]                      0 B                0 B
+├ λ /api/admin/events/[id]/update-code-status                          0 B                0 B
+├ λ /api/admin/evolution/instances                                     0 B                0 B
+├ λ /api/admin/evolution/instances/[instanceName]/disconnect           0 B                0 B
+├ λ /api/admin/evolution/instances/[instanceName]/qr                   0 B                0 B
+├ λ /api/admin/evolution/instances/[instanceName]/rate-limit           0 B                0 B
+├ λ /api/admin/evolution/instances/[instanceName]/status               0 B                0 B
+├ λ /api/admin/hosts                                                   0 B                0 B
+├ λ /api/admin/hosts/[id]                                              0 B                0 B
+├ λ /api/admin/invitations/accept                                      0 B                0 B
+├ λ /api/admin/invites                                                 0 B                0 B
+├ λ /api/admin/invites/[id]                                            0 B                0 B
+├ λ /api/admin/invites/cancel                                          0 B                0 B
+├ λ /api/admin/invites/resend                                          0 B                0 B
+├ λ /api/admin/leads                                                   0 B                0 B
+├ λ /api/admin/mark-batch-sent                                         0 B                0 B
+├ λ /api/admin/reg-codes                                               0 B                0 B
+├ λ /api/admin/resend-invites                                          0 B                0 B
+├ λ /api/admin/retrigger                                               0 B                0 B
+├ λ /api/admin/rsvps                                                   0 B                0 B
+├ λ /api/admin/rsvps/export                                            0 B                0 B
+├ λ /api/admin/rsvps/send-bulk-message                                 0 B                0 B
+├ λ /api/admin/rsvps/send-message                                      0 B                0 B
+├ λ /api/admin/send-invites                                            0 B                0 B
+├ λ /api/admin/sent-invites                                            0 B                0 B
+├ λ /api/admin/souvenirs                                               0 B                0 B
+├ λ /api/admin/souvenirs/[id]                                          0 B                0 B
+├ λ /api/admin/stats                                                   0 B                0 B
+├ λ /api/admin/tables                                                  0 B                0 B
+├ λ /api/admin/tables/[id]                                             0 B                0 B
+├ λ /api/admin/tables/[id]/hosts                                       0 B                0 B
+├ λ /api/admin/tables/[id]/souvenirs                                   0 B                0 B
+├ λ /api/admin/tables/assign                                           0 B                0 B
+├ λ /api/admin/update-code-status                                      0 B                0 B
+├ λ /api/admin/upload                                                  0 B                0 B
+├ λ /api/admin/users                                                   0 B                0 B
+├ λ /api/admin/users/[id]                                              0 B                0 B
+├ λ /api/admin/users/me                                                0 B                0 B
+├ λ /api/admin/whatsapp                                                0 B                0 B
+├ λ /api/auth/[...nextauth]                                            0 B                0 B
+├ λ /api/auth/login                                                    0 B                0 B
+├ λ /api/auth/logout                                                   0 B                0 B
+├ λ /api/events/[slug]                                                 0 B                0 B
+├ λ /api/rsvp/submit                                                   0 B                0 B
+├ λ /api/rsvp/validate-code                                            0 B                0 B
+├ λ /api/signup                                                        0 B                0 B
+├ λ /api/superadmin/events                                             0 B                0 B
+├ λ /api/superadmin/events/[id]                                        0 B                0 B
+├ λ /api/superadmin/events/[id]/admins                                 0 B                0 B
+├ λ /api/superadmin/users                                              0 B                0 B
+├ λ /api/superadmin/users/[id]                                         0 B                0 B
+├ λ /api/uploadthing                                                   0 B                0 B
+├ λ /api/verify/[user_id]                                              0 B                0 B
+├ λ /api/webhooks/evolution                                            0 B                0 B
+├ λ /api/webhooks/whatsapp                                             0 B                0 B
+├ λ /events/[slug]                                                     4.77 kB         137 kB
+├ ○ /jessegeorge                                                       4.74 kB         143 kB
+├ ○ /login                                                             2.62 kB         134 kB
+├ λ /mobile-access/[id]                                                2.77 kB         114 kB
+├ ○ /signup                                                            4.43 kB         159 kB
+├ ○ /success                                                           153 B          84.8 kB
+├ ○ /superadmin                                                        3.45 kB         110 kB
+├ ○ /superadmin/events                                                 5.55 kB         119 kB
+├ ○ /superadmin/events/create                                          2.4 kB         93.8 kB
+├ λ /superadmin/events/edit/[id]                                       2.64 kB        94.1 kB
+├ ○ /superadmin/users                                                  7.09 kB         168 kB
+└ λ /verify/[user_id]                                                  1.19 kB        85.8 kB
++ First Load JS shared by all                                          84.6 kB
+  ├ chunks/8069-7f1991430d13e86c.js                                    29.1 kB
+  ├ chunks/fd9d1056-43453c920b600497.js                                53.4 kB
+  └ other shared chunks (total)                                        2.19 kB
+
+
+ƒ Middleware                                                           75.6 kB
+
+○  (Static)   prerendered as static content
+λ  (Dynamic)  server-rendered on demand using Node.js
+

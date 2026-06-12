@@ -295,7 +295,7 @@ export default function MessageTemplatesPage() {
     const content = previewTemplate.emailContent
       .replace(/{{name}}/g, 'Sample Name')
       .replace(/{{code}}/g, 'SAMPLE123')
-      .replace(/{{link}}/g, 'https://greenvites.online/event')
+      .replace(/{{link}}/g, 'https://greenvite.vercel.app/event')
     
     return content
   }

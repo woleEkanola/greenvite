@@ -28,7 +28,7 @@ async function sendSMSAfricasTalking(phone: string, name: string, message: strin
     if (registrationCode) {
       personalizedMessage = personalizedMessage.replace(/{{code}}/g, registrationCode);
       
-      const eventLink = process.env.EVENT_LINK || 'https://greenvites.online/jessegeorge';
+      const eventLink = process.env.EVENT_LINK || 'https://greenvite.vercel.app/jessegeorge';
       personalizedMessage = personalizedMessage.replace(/{{link}}/g, `${eventLink}#${registrationCode}`);
     }
     
@@ -86,7 +86,7 @@ async function sendSMSTermii(phone: string, name: string, message: string, regis
     if (registrationCode) {
       personalizedMessage = personalizedMessage.replace(/{{code}}/g, registrationCode);
       
-      const eventLink = process.env.EVENT_LINK || 'https://greenvites.online/jessegeorge';
+      const eventLink = process.env.EVENT_LINK || 'https://greenvite.vercel.app/jessegeorge';
       personalizedMessage = personalizedMessage.replace(/{{link}}/g, `${eventLink}#${registrationCode}`);
     }
     
@@ -131,7 +131,7 @@ async function sendSMS(phone: string, name: string, message: string, registratio
     if (registrationCode) {
       personalizedMessage = personalizedMessage.replace(/{{code}}/g, registrationCode);
       
-      const eventLink = process.env.EVENT_LINK || 'https://greenvites.online/jessegeorge';
+      const eventLink = process.env.EVENT_LINK || 'https://greenvite.vercel.app/jessegeorge';
       personalizedMessage = personalizedMessage.replace(/{{link}}/g, `${eventLink}#${registrationCode}`);
     }
     
@@ -252,7 +252,7 @@ export async function POST(request: NextRequest) {
           if (registrationCode) {
             personalizedSubject = personalizedSubject.replace(/{{code}}/g, registrationCode);
             personalizedHtml = personalizedHtml.replace(/{{code}}/g, registrationCode);
-            const eventLink = process.env.EVENT_LINK || 'https://greenvites.online/jessegeorge';
+            const eventLink = process.env.EVENT_LINK || 'https://greenvite.vercel.app/jessegeorge';
             personalizedHtml = personalizedHtml.replace(/{{link}}/g, `${eventLink}#${registrationCode}`);
           }
           

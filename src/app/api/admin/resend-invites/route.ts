@@ -77,7 +77,7 @@ To confirm and secure your reservation, please click the link below and complete
 Please note: Attendance is strictly by invitation, and submitting the completed form will grant you an access code required for entry to the venue.
 
 We look forward to celebrating this special occasion with you {{link}}`;
-    const eventLink = process.env.NEXT_PUBLIC_EVENT_URL || 'https://greenvites.online/jessegeorge';
+    const eventLink = process.env.NEXT_PUBLIC_EVENT_URL || 'https://greenvite.vercel.app/jessegeorge';
 
     // Process each invite
     const results = await Promise.allSettled(invites.map(async (invite) => {
