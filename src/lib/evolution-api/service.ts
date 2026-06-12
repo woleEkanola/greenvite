@@ -60,7 +60,12 @@ export async function createInstanceForUser(
   userId: string,
   instanceName: string
 ): Promise<{ instanceName: string; qrCode: string | null; status: InstanceStatus }> {
-  const webhookUrl = `${process.env.NEXT_PUBLIC_APP_URL || (process.env.NODE_ENV === 'development' ? 'http://localhost:3000' : 'https://greenvite.vercel.app')}/api/webhooks/evolution`;
+  const publicBaseUrl = process.env.NODE_ENV === 'development'
+    ? (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000')
+    : (process.env.NEXT_PUBLIC_APP_URL && !process.env.NEXT_PUBLIC_APP_URL.includes('localhost')
+        ? process.env.NEXT_PUBLIC_APP_URL
+        : 'https://greenvite.vercel.app');
+  const webhookUrl = `${publicBaseUrl}/api/webhooks/evolution`;
 
   const result = await evolutionClient.createInstance({
     instanceName,
