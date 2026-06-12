@@ -14,6 +14,15 @@ import type {
 const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL || 'http://localhost:8080';
 const EVOLUTION_GLOBAL_API_KEY = process.env.EVOLUTION_GLOBAL_API_KEY || '';
 
+function generateToken(): string {
+  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let token = '';
+  for (let i = 0; i < 32; i++) {
+    token += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return token;
+}
+
 function getClient(config?: Partial<EvolutionApiConfig>): AxiosInstance {
   const baseUrl = config?.baseUrl || EVOLUTION_API_URL;
   const apiKey = config?.globalApiKey || EVOLUTION_GLOBAL_API_KEY;
@@ -33,21 +42,34 @@ export async function createInstance(
   config?: Partial<EvolutionApiConfig>
 ): Promise<CreateInstanceResponse> {
   const client = getClient(config);
-  const response = await client.post('/instance/create', {
-    instanceName: data.instanceName,
-    token: data.token || '',
-    webhook: data.webhookUrl
-      ? {
-          url: data.webhookUrl,
-          webhookByEvent: data.webhookByEvent ?? true,
-          events: data.events || [
-            'connection.update',
-            'messages.upsert',
-          ],
-        }
-      : undefined,
-  });
-  return response.data;
+  try {
+    const response = await client.post('/instance/create', {
+      instanceName: data.instanceName,
+      token: data.token || generateToken(),
+      webhook: data.webhookUrl
+        ? {
+            url: data.webhookUrl,
+            webhookByEvent: data.webhookByEvent ?? true,
+            events: data.events || [
+              'connection.update',
+              'messages.upsert',
+            ],
+          }
+        : undefined,
+    });
+    return response.data;
+  } catch (error: any) {
+    const detail = error?.response?.data?.response?.message
+      || error?.response?.data?.message
+      || error?.response?.data?.error
+      || error?.message;
+    console.error('Evolution API createInstance failed:', JSON.stringify({
+      status: error?.response?.status,
+      detail,
+      requestData: { instanceName: data.instanceName },
+    }));
+    throw error;
+  }
 }
 
 export async function connectInstance(
