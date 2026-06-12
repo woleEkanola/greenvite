@@ -2,7 +2,7 @@ import React from 'react'
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link'
-  size?: 'default' | 'sm' | 'lg' | 'icon'
+  size?: 'default' | 'sm' | 'lg' | 'icon' | 'xs'
   children: React.ReactNode
 }
 
@@ -28,7 +28,8 @@ export function Button({
     default: 'h-10 py-2 px-4',
     sm: 'h-9 px-3 rounded-md',
     lg: 'h-11 px-8 rounded-md',
-    icon: 'h-10 w-10'
+    icon: 'h-10 w-10',
+    xs: 'h-7 px-2 text-xs rounded-md'
   }
   
   const combinedClassName = `${baseStyles} ${variantStyles[variant]} ${sizeStyles[size]} ${className}`
