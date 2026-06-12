@@ -46,6 +46,8 @@ export async function createInstance(
     const response = await client.post('/instance/create', {
       instanceName: data.instanceName,
       token: data.token || generateToken(),
+      integration: 'WHATSAPP-BAILEYS',
+      qrcode: true,
       webhook: data.webhookUrl
         ? {
             url: data.webhookUrl,
