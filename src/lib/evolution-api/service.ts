@@ -181,7 +181,7 @@ export async function sendWhatsAppMessage(
 
     if (error?.response?.status === 429) {
       console.warn('Rate limited by Evolution API, backing off...');
-      await RateLimiter.backoff(instanceName, 30000);
+      await RateLimiter.backoff(instanceName);
     }
 
     return false;
